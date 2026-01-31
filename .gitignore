@@ -1,0 +1,11 @@
+**/*.dcd
+**/*.log
+**/*.chk
+*/__pycache__/*
+*/*/__pycache__/*
+#docs/_build
+**/.ipynb_checkpoints/*
+**/*.xml
+**/*.iml
+**/.idea/
+/docs/_build/
