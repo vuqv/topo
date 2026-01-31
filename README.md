@@ -16,6 +16,7 @@ export PYTHONPATH=$PYTHONPATH:/path/to/topo
 ```
 
 Install dependencies (e.g. conda): `conda install -c conda-forge openmm parmed` (and others from `requirements.txt`).
+`mamba` is recommemded for performance and speed to install
 
 ## Usage
 
