@@ -12,6 +12,8 @@ permissions:
   contents: read
   pages: write
   id-token: write
+  # Required for deploy-pages to read the uploaded artifact
+  actions: read
 
 concurrency:
   group: "pages"
@@ -24,10 +26,13 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
+      # If checkout fails with exit 128, add a repo-scoped PAT as secret GH_PAT and use it below
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          ref: ${{ github.sha }}
+          token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          fetch-depth: 1
           lfs: false
       - name: Setup Pages
         uses: actions/configure-pages@v4
