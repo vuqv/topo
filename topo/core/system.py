@@ -409,42 +409,11 @@ class system:
         # sort dihedral angles by the first atom index
         unique_torsions = sorted(list(unique_torsions), key=lambda x: x[0].index)
 
-        # load parameter eps_di from parameter file
-        params = model_parameters.parameters[self.model]
         # add dihedral angle to topo object
+        # topo model uses dihedral_params (from data/dihedral_params.csv) in addPeriodicTorsionForce; no residue eps_di
         self.n_torsions = 0
         for torsion in unique_torsions:
-            """
-            when there are two residues bonded to first atom of torsion mean that this torsion angle is not the first
-            angle. One residues will be in list of torsion atoms and the other is out of the list.
-            Atom not in the list of torsion atom is preceding of residue (i).
-            
-            Same as last atom of torsion angle, atom not in torsion atom list is succeeding atom, (i+4)
-            
-            When there is only one atom bonded to first or last atom in torsion angle, means this is the first or 
-            the last torsion angle.
-            """
-            if len(self.bondedTo[torsion[0]]) > 1:
-                for atom in self.bondedTo[torsion[0]]:
-                    if atom not in torsion:
-                        eps_di_preceding = params[atom.residue.name]['eps_di']
-                        weight_preceding = 1
-            else:
-                eps_di_preceding, weight_preceding = 0, 0
-
-            if len(self.bondedTo[torsion[3]]) > 1:
-                for atom in self.bondedTo[torsion[3]]:
-                    if atom not in torsion:
-                        eps_di_succeeding = params[atom.residue.name]['eps_di']
-                        weight_succeeding = 1
-            else:
-                eps_di_succeeding, weight_succeeding = 0, 0
-
-            # using weighting rule 1-1001-1: (i-1), i, (i+3), (i+4) are 1 and (i+1), (i+2) are 0
-            eps_d = (eps_di_preceding + params[torsion[0].residue.name]['eps_di'] + params[torsion[3].residue.name][
-                'eps_di'] + eps_di_succeeding) / (weight_succeeding + weight_preceding + 2)
-            # each torsion angle has torsion-specific parameter eps_d
-            self.torsions[torsion] = (eps_d, None)  # add torsion angle parameters
+            self.torsions[torsion] = (None, None)
             self.n_torsions += 1
             self.torsions_indexes.append((torsion[0].index, torsion[1].index, torsion[2].index, torsion[3].index))
 
@@ -528,23 +497,7 @@ class system:
 
         self.particles_charge = particles_charge
 
-    def setParticlesHPS(self, particles_hps):
-        """
-        Set the hydropathy scale of the particles in the system. The input can be a
-        float, to set the same hydropathy for all particles, or a list, to define
-        a unique hydropathy for each particle.
-
-        Parameters
-        ----------
-        particles_hps : float or list
-            HPS scale values to add for the particles in the TOPO system class.
-
-        Returns
-        -------
-        None
-        """
-
-        self.particles_hps = particles_hps
+    
 
     def setParticleTypeID(self, particle_id):
         self.particle_type_id = particle_id
@@ -622,86 +575,12 @@ class system:
             self.gaussianAngleForce.addAngle(angle[0].index, angle[1].index, angle[2].index)
 
 
-    def addGaussianTorsionForces(self) -> None:
-        """
-        Torsion potential in hps-ss model takes the form:
 
-        .. math::
-            U_{torsion}(\\theta) = -\\ln\\left[ U_{torsion, \\alpha}(\\theta, \\epsilon_d) + U_{torsion, \\beta}(\\theta, \\epsilon_d)\\right]
-
-        where,
-
-
-        .. math::
-
-            U_{torsion, \\alpha}(\\theta, \\epsilon_d)  &= e^{-k_{\\alpha, 1}(\\theta-\\theta_{\\alpha,1})^2-\\epsilon_d}
-                                                        + e^{-k_{\\alpha, 2}(\\theta-\\theta_{\\alpha,2})^4 + e_0}
-                                                        + e^{-k_{\\alpha, 2}(\\theta-\\theta_{\\alpha,2}+2\\pi)^4 + e_0} \\
-
-
-            U_{torsion, \\beta}(\\theta, \\epsilon_d) &= e^{-k_{\\beta,1}(\\theta-\\theta_{\\beta,1})^2+e_1+\\epsilon_d}
-                                                    + e^{-k_{\\beta,1}(\\theta-\\theta_{\\beta,1}-2\\pi)^2+e_1+\\epsilon_d} \\
-
-                                                    &+ e^{-k_{\\beta,2}(\\theta-\\theta_{\\beta,2})^4+e_2}
-                                                    + e^{-k_{\\beta,2}(\\theta-\\theta_{\\beta,2}-2\\pi)^4+e_2}
-
-        """
-
-        k_alpha1 = 47.6976 * unit.kilojoule_per_mole / unit.radian ** 2  # 11.4 kcal/mol/rad^2
-        k_alpha2 = 0.6276 * unit.kilojoule_per_mole / unit.radian ** 4  # 0.15 kcal/mol/rad^4
-        theta_alpha1 = 0.9 * unit.radian
-        theta_alpha2 = 1.02 * unit.radian
-        e_0 = 1.12968 * unit.kilojoule_per_mole  # 0.27 kcal/mol
-
-        k_beta1 = 7.5312 * unit.kilojoule_per_mole / unit.radian ** 2  # 1.8 kcal/mol/rad^2
-        k_beta2 = 2.7196 * unit.kilojoule_per_mole / unit.radian ** 4  # 0.65 kcal/mol/rad^4
-        theta_beta1 = -1.55 * unit.radian
-        theta_beta2 = -2.5 * unit.radian
-        e_1 = 0.58576 * unit.kilojoule_per_mole  # 0.14 kcal/mol
-        e_2 = 1.6736 * unit.kilojoule_per_mole  # 0.4 kcal/mol
-        # pi = np.pi
-
-        energy_function_alpha = 'exp(-k_alpha1*(theta-theta_alpha1)^2 - esp_d)'
-        energy_function_alpha += '+exp(-k_alpha2*(theta-theta_alpha2)^4 + e_0)'
-        energy_function_alpha += '+exp(-k_alpha2*(theta-theta_alpha2+2*pi)^4 + e_0)'
-
-        energy_function_beta = '+exp(-k_beta1*(theta-theta_beta1)^2 + e_1 + esp_d)'
-        energy_function_beta += '+exp(-k_beta1*(theta-theta_beta1-2*pi)^2 + e_1 + esp_d)'
-        energy_function_beta += '+exp(-k_beta2*(theta-theta_beta2)^4 + e_2)'
-        energy_function_beta += '+exp(-k_beta2*(theta-theta_beta2-2*pi)^4 + e_2)'
-
-        energy_function = '-log(' + energy_function_alpha + energy_function_beta + ')'
-        self.gaussianTorsionForce = mm.CustomTorsionForce(energy_function)
-        self.gaussianTorsionForce.addGlobalParameter("k_alpha1", k_alpha1)
-        self.gaussianTorsionForce.addGlobalParameter("theta_alpha1", theta_alpha1)
-        self.gaussianTorsionForce.addGlobalParameter("k_alpha2", k_alpha2)
-        self.gaussianTorsionForce.addGlobalParameter("theta_alpha2", theta_alpha2)
-        self.gaussianTorsionForce.addGlobalParameter("e_0", e_0)
-
-        self.gaussianTorsionForce.addGlobalParameter("k_beta1", k_beta1)
-        self.gaussianTorsionForce.addGlobalParameter("theta_beta1", theta_beta1)
-        self.gaussianTorsionForce.addGlobalParameter("k_beta2", k_beta2)
-        self.gaussianTorsionForce.addGlobalParameter("theta_beta2", theta_beta2)
-        self.gaussianTorsionForce.addGlobalParameter("e_1", e_1)
-        self.gaussianTorsionForce.addGlobalParameter("e_2", e_2)
-        self.gaussianTorsionForce.addGlobalParameter("pi", np.pi)
-
-        self.gaussianTorsionForce.addPerTorsionParameter("esp_d")
-
-        for torsion in self.torsions:
-            self.gaussianTorsionForce.addTorsion(torsion[0].index, torsion[1].index, torsion[2].index, torsion[3].index,
-                                                 (self.torsions[torsion][0],))
 
     def addPeriodicTorsionForce(self) -> None:
         """
         Torsion potential in Ed's model, which is used periodic torsion angle.
         """
-        # self.harmonicBondForce = mm.HarmonicBondForce()
-        # for bond in self.bonds:
-        #     self.harmonicBondForce.addBond(bond[0].index,
-        #                                    bond[1].index,
-        #                                    self.bonds[bond][0],
-        #                                    self.bonds[bond][1])
 
         # read the parameter for Periodic Torsion angle, which phase and force constant is depend on two middle residues type
         # print(f"current dir : {os.getcwd()}")
@@ -717,6 +596,7 @@ class system:
                 k_D_j = dihedral_params[str((str(torsion[1].residue.name), str(torsion[2].residue.name), j))][2]
                 self.periodicTorsionForce.addTorsion(torsion[0].index, torsion[1].index, torsion[2].index, torsion[3].index,
                                                      j, delta_j, k_D_j)
+                print(f"{torsion[0].residue.name}, {torsion[1].residue.name}, {torsion[2].residue.name}, {torsion[3].residue.name}, {j}: {k_D_j:.6f}\t{delta_j:.6f}")
 
 
     def addYukawaForces(self, use_pbc: bool) -> None:
@@ -783,163 +663,7 @@ class system:
         bonded_exclusions = [(b[0].index, b[1].index) for b in list(self.topology.bonds())]
         self.yukawaForce.createExclusionsFromBonds(bonded_exclusions, self.bonded_exclusions_index)
 
-    def addAshbaughHatchForces(self, use_pbc: bool) -> None:
-        """
-        HPS family used Ashbaugh-Hatch Potential instead of Wang-Frenkel
-        Creates a nonbonded force term for pairwise interaction (customize LJ 12-6 potential).
-
-        Creates an :code:`mm.CustomNonbondedForce()` object with the parameters
-        sigma and epsilon given to this method. The custom non-bonded force
-        is initialized with the formula: (note: hps here is :math:`\lambda_{ij}^{0}` in the paper)
-
-        Unlike :code:`BondForce` class, where we specify index for atoms pair to add bond, it means
-        that number of bondForces may differ from number of particle.
-        :code:`NonBondedForce` is added to all particles, hence we don't need to pass the :code:`atom index`.
-
-        .. math::
-            \\Phi_{i,j}^{vdw}(r) = step(2^{1/6}\\sigma_{ij}-r) \\times
-            \\left( 4\\epsilon\\left[\\left(\\frac{\\sigma_{ij}}{r}\\right)^{12}-
-            \\left(\\frac{\\sigma_{ij}}{r}\\right)^{6}\\right]+(1-\\lambda_{ij})\\epsilon\\right)
-
-            + \\left[1-step(2^{1/6}\\sigma_{ij}-r)\\right]\\times\\left[(\\lambda_{ij})\\times 4\\epsilon
-            \\left[\\left(\\frac{\\sigma_{ij}}{r}\\right)^{12}-\\left(\\frac{\\sigma_{ij}}{r}\\right)^6\\right]\\right]
-
-
-
-        Here, :math:`\\sigma= \\frac{(\\sigma_1+\\sigma_2)}{2}; \\lambda_{ij}^{0}=\\frac{(\\lambda_i+\\lambda_j)}{2};
-        \\epsilon = 0.8368 kj/mol`
-
-        The force object is stored at the :code:`ashbaugh_HatchForce` attribute.
-
-        epsilon : float
-            Value of the epsilon constant in the energy function.
-        sigma : float or list
-            Value of the sigma constant (in nm) in the energy function. If float the
-            same sigma value is used for every particle. If list a unique
-            parameter is given for each particle.
-        cutoff : float
-            The cutoff distance (in nm) being used for the non-bonded interactions.
-
-        Parameters
-        ----------
-
-        use_pbc : bool. Whether use PBC, cutoff periodic boundary condition
-
-        Returns
-        -------
-        None
-        """
-        print("Setting PairWise interaction ...")
-        epsilon = 0.8368 * unit.kilojoule_per_mole
-        ashbaugh_Hatch_cutoff = 2.0 * unit.nanometer
-
-        energy_function = 'step(2^(1/6)*sigma - r) *'
-        energy_function += '(4*epsilon* ((sigma/r)^12-(sigma/r)^6) + (1-hps)*epsilon )'
-        energy_function += '+(1-step(2^(1/6)*sigma-r)) * (hps*4*epsilon*((sigma/r)^12-(sigma/r)^6));'
-        energy_function += 'sigma=0.5*(sigma1+sigma2);'
-        energy_function += 'hps=0.5*(hps1+hps2)'
-        self.ashbaugh_HatchForce = mm.CustomNonbondedForce(energy_function)
-        self.ashbaugh_HatchForce.addGlobalParameter('epsilon', epsilon)
-        self.ashbaugh_HatchForce.addPerParticleParameter('sigma')
-        self.ashbaugh_HatchForce.addPerParticleParameter('hps')
-        #
-        if use_pbc:
-            print("Set cutoff Periodic ...")
-            self.ashbaugh_HatchForce.setNonbondedMethod(mm.NonbondedForce.CutoffPeriodic)
-        else:
-            print("Set cutoff NonPeriodic ...")
-            self.ashbaugh_HatchForce.setNonbondedMethod(mm.NonbondedForce.CutoffNonPeriodic)
-
-        print(f"Use cutoff distance: {ashbaugh_Hatch_cutoff}")
-        self.ashbaugh_HatchForce.setCutoffDistance(ashbaugh_Hatch_cutoff)
-
-        if isinstance(self.rf_sigma, float):
-            for i in np.arange(len(self.atoms)):
-                self.ashbaugh_HatchForce.addParticle((self.rf_sigma, self.particles_hps[i],))
-
-        # in the case each atom has different sigma para.
-        elif isinstance(self.rf_sigma, list):
-            assert self.n_atoms == len(self.rf_sigma) and self.n_atoms == len(self.particles_hps)
-            for i, atom in enumerate(self.atoms):
-                self.ashbaugh_HatchForce.addParticle((self.rf_sigma[i], self.particles_hps[i],))
-
-        # set exclusions rule
-        bonded_exclusions = [(b[0].index, b[1].index) for b in list(self.topology.bonds())]
-        self.ashbaugh_HatchForce.createExclusionsFromBonds(bonded_exclusions, self.bonded_exclusions_index)
-
-    def addWangFrenkelForces(self, use_pbc: bool):
-        """
-        MPIPI model. using TabulatedFunction for pair interaction.
-        More information about TabulatedFUnction can be found here:
-        http://docs.openmm.org/7.2.0/api-c++/generated/OpenMM.Discrete2DFunction.html
-        """
-        print("Setting PairWise interaction ...")
-        print("Cutoff for Wang-Frenkel potential is 3\u03C3")
-        wang_frenkel_cutoff = 2.5 * unit.nanometer
-
-        """
-        In the model module, we only call this function when the model is mpipi so the following condition likely to be
-        true. But to be sure, we still check here.
-        """
-        assert self.model in ['mpipi'], "Wang-Frenkel is only used in Mpipi model."
-
-        table_eps = model_parameters.parameters[self.model]['eps_ij']
-        table_eps_ravel = table_eps.ravel().tolist()
-
-        table_sigma = model_parameters.parameters[self.model]['sigma_ij']
-        table_sigma_ravel = table_sigma.ravel().tolist()
-
-        table_nu = model_parameters.parameters[self.model]['nu_ij']
-        table_nu_ravel = table_nu.ravel().tolist()
-
-        table_mu = model_parameters.parameters[self.model]['mu_ij']
-        table_mu_ravel = table_mu.ravel().tolist()
-
-        table_rc = model_parameters.parameters[self.model]['rc_ij']
-        table_rc_ravel = table_rc.ravel().tolist()
-
-        # number of atom types in model. currently with protein, there are 20.
-        n_atom_types = table_sigma.shape[0]
-
-        # eps, sigma, nu, mu, rc: load from tabular table
-        """
-        Note: here we use abs function in ((rc/r)^(2*mu)-1)^(2*nu) because otherwise, nu added by parameters is float.
-        when r>rc, produces this is negative and non-integer power of float is nan.
-        """
-        energy_function = 'step(rc-r) * eps * 2*nu*(rc/sigma)^(2*mu) * ((2*nu+1)/(2*nu*((rc/sigma)^(2*mu)-1)))^(2*nu+1)'
-        energy_function += '* ((sigma/r)^(2*mu)-1 )* abs((rc/r)^(2*mu)-1)^(2*nu);'
-        energy_function += 'eps = eps_table(id1, id2); sigma = sigma_table(id1, id2);'
-        energy_function += 'nu = nu_table(id1, id2);'
-        energy_function += 'mu = mu_table(id1, id2);'
-        energy_function += 'rc=rc_table(id1, id2)'
-
-        self.wang_Frenkel_Force = mm.CustomNonbondedForce(energy_function)
-        self.wang_Frenkel_Force.addTabulatedFunction('eps_table', mm.Discrete2DFunction(n_atom_types, n_atom_types,
-                                                                                        table_eps_ravel))
-        self.wang_Frenkel_Force.addTabulatedFunction('sigma_table',
-                                                     mm.Discrete2DFunction(n_atom_types, n_atom_types,
-                                                                           table_sigma_ravel))
-        self.wang_Frenkel_Force.addTabulatedFunction('nu_table', mm.Discrete2DFunction(n_atom_types, n_atom_types,
-                                                                                       table_nu_ravel))
-        self.wang_Frenkel_Force.addTabulatedFunction('mu_table', mm.Discrete2DFunction(n_atom_types, n_atom_types,
-                                                                                       table_mu_ravel))
-        self.wang_Frenkel_Force.addTabulatedFunction('rc_table', mm.Discrete2DFunction(n_atom_types, n_atom_types,
-                                                                                       table_rc_ravel))
-        self.wang_Frenkel_Force.addPerParticleParameter('id')
-
-        for i, atom in enumerate(self.atoms):
-            self.wang_Frenkel_Force.addParticle((self.particle_type_id[i],))
-
-        if use_pbc:
-            self.wang_Frenkel_Force.setNonbondedMethod(mm.NonbondedForce.CutoffPeriodic)
-        else:
-            self.wang_Frenkel_Force.setNonbondedMethod(mm.NonbondedForce.CutoffNonPeriodic)
-
-        self.wang_Frenkel_Force.setCutoffDistance(wang_frenkel_cutoff)
-
-        # set exclusion rule
-        bonded_exclusions = [(b[0].index, b[1].index) for b in list(self.topology.bonds())]
-        self.wang_Frenkel_Force.createExclusionsFromBonds(bonded_exclusions, self.bonded_exclusions_index)
+   
 
     def addCustomNonBondedForce(self, distance_matrix, energy_matrix, use_pbc):
         """
@@ -948,15 +672,15 @@ class system:
         print("Adding custom non-bonded force...")
         table_R_ravel = distance_matrix.ravel().tolist()
         table_eps_ravel = energy_matrix.ravel().tolist()
-        n_atom_types = distance_matrix.shape[0]
+        n_atoms = distance_matrix.shape[0]
         energy_function = 'eps*(13*(R/r)^12 - 18*(R/r)^10 + 4*(R/r)^6);'
         energy_function += 'eps = eps_table(id1, id2);'
         energy_function += 'R = R_table(id1, id2);'
 
         self.custom_non_bonded_force = mm.CustomNonbondedForce(energy_function)
-        self.custom_non_bonded_force.addTabulatedFunction('eps_table', mm.Discrete2DFunction(n_atom_types, n_atom_types,
+        self.custom_non_bonded_force.addTabulatedFunction('eps_table', mm.Discrete2DFunction(n_atoms, n_atoms,
                                                                                         table_eps_ravel))
-        self.custom_non_bonded_force.addTabulatedFunction('R_table', mm.Discrete2DFunction(n_atom_types, n_atom_types,
+        self.custom_non_bonded_force.addTabulatedFunction('R_table', mm.Discrete2DFunction(n_atoms, n_atoms,
                                                                                         table_R_ravel))
         self.custom_non_bonded_force.addPerParticleParameter('id')
         for i, atom in enumerate(self.atoms):

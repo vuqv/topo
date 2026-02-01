@@ -72,6 +72,9 @@ class models:
 
         topo_model.getBonds()
         print('Added ' + str(topo_model.n_bonds) + ' bonds')
+        # Add constraints to all bonds
+        for bond in topo_model.bonds:
+            topo_model.system.addConstraint(bond[0].index, bond[1].index, topo_model.bonds[bond][0])
 
         print("Setting alpha-carbon masses to their average residue mass.")
         topo_model.setCAMassPerResidueType()
@@ -107,8 +110,6 @@ class models:
         topo_model.getTorsions()
         topo_model.addPeriodicTorsionForce()
 
-
-
         if box_dimension:
             use_pbc = True
             if isinstance(box_dimension, list):
@@ -141,7 +142,7 @@ class models:
             distance_matrix, energy_matrix = build_nonbonded_interaction(
                 structure_file,
                 domain_def,
-                stride_output_file
+                stride_output_file # TODO: If Stride output is None, then run stride on structure_file to generate the stride output file
             )
             print(f"Built non-bonded interaction matrices: {distance_matrix.shape}, {energy_matrix.shape}")
             

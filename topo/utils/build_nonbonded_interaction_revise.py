@@ -3,6 +3,7 @@ from MDAnalysis.analysis.distances import distance_array
 import numpy as np
 import pandas as pd
 import re
+from pathlib import Path
 from collections import defaultdict
 import yaml
 from typing import Dict, List, Tuple, Set, Optional
@@ -44,6 +45,7 @@ def get_residue_mapping(universe: mda.Universe) -> Tuple[Dict[int, int], Dict[in
     return resid_to_index, index_to_resname, n_residues
 
 def parse_hydrogen_bonds(stride_output_file: str) -> List[Tuple]:
+    # TODO: If Stride output is None, then run stride on structure_file to generate the stride output file
     """
     Parse hydrogen bonds from STRIDE output file.
     
@@ -211,19 +213,24 @@ def get_ss_contact_matrix(u: mda.Universe, cutoff: float = DEFAULT_CUTOFF) -> np
 
 def load_bt_potential(bt_file: str = 'bt_potential.csv') -> pd.DataFrame:
     """
-    Load BT potential from CSV file.
-    
+    Load BT potential from CSV file. Always loads from topo/parameters/data
+    unless an absolute path is given.
+
     Args:
-        bt_file: Path to BT potential CSV file
-        
+        bt_file: Filename (e.g. 'bt_potential.csv') or absolute path to BT potential CSV.
+
     Returns:
         BT potential matrix in kJ/mol
     """
+    bt_path = Path(bt_file)
+    if not bt_path.is_absolute():
+        data_dir = Path(__file__).resolve().parent.parent / 'parameters' / 'data'
+        bt_path = data_dir / bt_path.name
     try:
-        df = pd.read_csv(bt_file, index_col=0)
+        df = pd.read_csv(bt_path, index_col=0)
         return KCAL_TO_KJ * np.abs(df - ENERGY_PARAMS['yang_shift'])
     except FileNotFoundError:
-        print(f"BT potential file not found: {bt_file}")
+        print(f"BT potential file not found: {bt_path}")
         raise
 
 def get_ss_interaction_energy(u: mda.Universe, bt_file: str = 'bt_potential.csv') -> np.ndarray:
@@ -273,10 +280,13 @@ def parse_residue_list(residue_items: List) -> List[int]:
 def read_yaml_config(filepath: str) -> Tuple[Dict, Dict, Dict]:
     """
     Read and parse YAML configuration file.
-    
+
+    Expects intra_domains and n_residues. inter_domains is optional; omit it
+    for single-domain proteins (inter_strengths will be empty).
+
     Args:
         filepath: Path to YAML configuration file
-        
+
     Returns:
         Tuple of (domain_to_residues, intra_strengths, inter_strengths)
     """
@@ -288,7 +298,8 @@ def read_yaml_config(filepath: str) -> Tuple[Dict, Dict, Dict]:
         raise
     
     intra = config['intra_domains']
-    inter = config['inter_domains']
+    # inter_domains optional: single-domain proteins have no inter-domain pairs
+    inter = config.get('inter_domains', {})
     n_residues = int(config['n_residues'])
     
     domain_to_residues = {}

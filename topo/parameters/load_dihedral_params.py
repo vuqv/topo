@@ -20,7 +20,7 @@ def load_dihedral_params():
             res2 = row["res2"]
             period = int(row["period"])
             delta = float(row["delta"])
-            k_D = float(row["k_D"])
+            k_D = float(row["k_D"])*0.756 #scaled by 0.756 for consistent with Yang code:        https://github.com/obrien-lab/cg_simtk_protein_folding/blob/dfa3a6f9a732cd0eb908934ba2acd4e1c9f6bbf5/CG_protein_parameterization/create_cg_protein_model.py#L706
             key = f"('{res1}', '{res2}', {period})"
             result[key] = [period, delta, k_D]
     return result

@@ -1,0 +1,6 @@
+n_residues: 106
+intra_domains:
+  A:
+    residues: [1-106]
+    strength: 2.5044
+

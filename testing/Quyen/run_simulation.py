@@ -14,6 +14,7 @@ from openmm import unit
 from parmed.exceptions import OpenMMWarning
 
 import topo
+from topo.reporter import topoReporter
 
 # Suppress OpenMM warnings
 warnings.filterwarnings("ignore", category=OpenMMWarning)
@@ -202,10 +203,10 @@ def main():
         mm.app.DCDReporter(f'{protein_code}.dcd', nstxout, enforcePeriodicBox=bool(pbc),
                            append=restart))
     simulation.reporters.append(
-        mm.app.StateDataReporter(f'{protein_code}.log', nstlog, step=True, time=True,
-                                 potentialEnergy=True, kineticEnergy=True, totalEnergy=True,
-                                 temperature=True, remainingTime=True, speed=True,
-                                 totalSteps=md_steps, separator='\t', append=restart))
+        topoReporter(f'{protein_code}.log', nstlog, sbmObject=cgModel, step=True, time=True,
+                     potentialEnergy=True, kineticEnergy=True, totalEnergy=True,
+                     temperature=True, remainingTime=True, speed=True,
+                     totalSteps=md_steps, separator='\t', append=restart))
     simulation.step(nsteps_remain)
 
     # write the last frame

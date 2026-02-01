@@ -1,0 +1,25 @@
+psffile = setup/P0CX28_clean_ca.psf
+prmfile = setup/P0CX28_clean_nscal1_fnn1_go_bt.xml
+secondary_structure_def = setup/secondary_struc_defs.txt
+native_cor = setup/P0CX28_clean_ca.cor
+corfile = setup/P0CX28_clean_ca.cor
+
+temp_heating = 600
+temp_prod = 300
+ppn = 1
+outname = SETINDEX
+# performed production run in 10^8 steps= 1.5 microseconds
+mdsteps = 100_000_000
+
+# equilibrium in 15 ns
+heating_steps = 1_000_000
+
+Q_threshold = 0.7
+
+use_gpu = yes
+# frequency to write dcd and checkpoint file
+nstxout = 5000
+nstlog = 5000
+# for analysis of folding pathway, set nsteps_calQ = nstxout to sim runs faster.
+nsteps_calQ = 5000
+restart = no
