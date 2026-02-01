@@ -1,7 +1,10 @@
-# Deploy static content (e.g. docs) to GitHub Pages.
+# Deploy Sphinx documentation to GitHub Pages.
 # Required: In the repo go to Settings → Pages → Build and deployment,
 # and set "Source" to "GitHub Actions". Otherwise this workflow will fail with "Get Pages site failed".
-name: Deploy static content to Pages
+#
+# The site must contain index.html at the root. This workflow builds docs in docs/
+# and uploads docs/_build/html so the deployed site has index.html and the full doc tree.
+name: Deploy docs to Pages
 
 on:
   push:
@@ -12,7 +15,6 @@ permissions:
   contents: read
   pages: write
   id-token: write
-  # Required for deploy-pages to read the uploaded artifact
   actions: read
 
 concurrency:
@@ -26,7 +28,6 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
-      # If checkout fails with exit 128, add a repo-scoped PAT as secret GH_PAT and use it below
       - name: Checkout
         uses: actions/checkout@v4
         with:
@@ -34,12 +35,32 @@ jobs:
           token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
           fetch-depth: 1
           lfs: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install sphinx
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install -e .
+
+      - name: Build Sphinx docs
+        run: |
+          cd docs
+          make html
+
       - name: Setup Pages
         uses: actions/configure-pages@v4
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: '.'
+          path: docs/_build/html
+
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4

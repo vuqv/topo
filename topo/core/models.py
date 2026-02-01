@@ -4,7 +4,7 @@
 from typing import Any
 
 from .system import system
-from ..utils.build_nonbonded_interaction_revise import build_nonbonded_interaction
+from ..utils.build_nonbonded_interaction import build_nonbonded_interaction
 
 class models:
     """

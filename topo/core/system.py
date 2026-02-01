@@ -9,8 +9,7 @@ import openmm.unit as unit
 import parmed as pmd
 import warnings
 from ..parameters import model_parameters
-# from ..parameters import globular_parameters
-# import json #for reading periodic dihedral params
+
 
 # from openmm import *
 # from openmm.app import *
@@ -596,7 +595,7 @@ class system:
                 k_D_j = dihedral_params[str((str(torsion[1].residue.name), str(torsion[2].residue.name), j))][2]
                 self.periodicTorsionForce.addTorsion(torsion[0].index, torsion[1].index, torsion[2].index, torsion[3].index,
                                                      j, delta_j, k_D_j)
-                print(f"{torsion[0].residue.name}, {torsion[1].residue.name}, {torsion[2].residue.name}, {torsion[3].residue.name}, {j}: {k_D_j:.6f}\t{delta_j:.6f}")
+                # print(f"{torsion[0].residue.name}, {torsion[1].residue.name}, {torsion[2].residue.name}, {torsion[3].residue.name}, {j}: {k_D_j:.6f}\t{delta_j:.6f}")
 
 
     def addYukawaForces(self, use_pbc: bool) -> None:
