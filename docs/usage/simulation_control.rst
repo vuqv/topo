@@ -1,92 +1,84 @@
 Simulation control options
-========================================================= 
+==========================
 
-An example of how config file of simulation looks like.
+An example of how the simulation config file (e.g. ``md.ini``) looks:
 
 .. code-block::
 
         [OPTIONS]
-        md_steps = 30_000 # number of steps
+        md_steps = 500_000   ; number of steps (underscores allowed)
         dt = 0.01 ; time step in ps
         nstxout = 1000 ; number of steps to write checkpoint = nstxout
         nstlog = 1000 ; number of steps to print log
         nstcomm = 100 ; frequency for center of mass motion removal
-        ; select HPS model, available options: hps_kr, hps_urry, hps_ss, or mpipi
-        model = hps_urry
+        ; TOPO model (only option currently)
+        model = topo
 
-        ; control temperature coupling
+        ; temperature coupling
         tcoupl = yes
-        ref_t = 310 ; Kelvin- reference temperature
-        tau_t = 0.01 ; ps^-1
+        ref_t = 310          ; Kelvin
+        tau_t = 0.01         ; ps^-1
 
-        ;pressure coupling
-        pcoupl = yes
+        ; pressure coupling
+        pcoupl = no
         ref_p = 1
         frequency_p = 25
 
-        ; Periodic boundary condition: if pcoupl is yes then pbc must be yes.
+        ; periodic boundary condition
         pbc = yes
-        ; if pbc=yes, then use box_dimension option to specify box_dimension = x or [x, y, z], unit of nanometer
-        box_dimension = 30 ; [30, 30, 60]
+        ; box_dimension = x (cubic) or [x, y, z] (rectangular), in nm
+        box_dimension = 30   ; or [30, 30, 60]
 
         ; input
-        protein_code = FUS_100chains
-        pdb_file = FUS_100chains.pdb
+        protein_code = 2ww4
+        pdb_file = 2ww4.pdb
+        ; optional: for structure-based non-bonded (TOPO)
+        domain_def = domain.yaml
+        stride_output_file = stride.dat
         ; output
-        checkpoint = FUS_100chains.chk
-        ;Use GPU/CPU
+        checkpoint = 2ww4.chk
+        ; GPU/CPU
         device = GPU
-        ; If CPU is specified, then use ppn variable
         ppn = 4
-        ;Restart simulation
+        ; restart
         restart = no
-        minimize = yes ;if not restart, then minimize will be loaded, otherwise, minimize=False
-
-==============================================================================================================================
+        minimize = no
 
 General information
-++++++++++++++++++++++++
-Simulation parameters are input from `.ini` file which is loaded by `ConfigParser` module in Python.
-The section title ``[OPTIONS]`` is required, do not change section's name.
++++++++++++++++++++
+Simulation parameters are read from an `.ini` file (e.g. ``md.ini``) using Python's :mod:`configparser`. The section title ``[OPTIONS]`` is required.
 
-* Comment can be inline or in new line, start with `;` or `#`
-* Keyword and value can be separated by `=` or `:`
+* Comments: inline or new line, start with ``;`` or ``#``
+* Keyword and value separated by ``=`` or ``:``
 
 Run control
-++++++++++++
++++++++++++
 
 ::
 
-    md_steps:   (long int)
-                (1) Maximum number of steps to integrate or minimize
+    md_steps:   (int)
+                Total number of integration steps. Underscores are allowed (e.g. 500_000).
     ------------------------------------------------------------------------------------
-    dt:         (double)
-                (0.01)[ps] Time step for integration
+    dt:         (float)
+                (0.01) [ps] Time step for integration
     ------------------------------------------------------------------------------------
     nstxout:    (int)
-                (1) [step] number of steps that elapse between writing coordinates to output trajectory file,
-                      the last coordinates are always written
+                Steps between writing coordinates and checkpoint to output files
     ------------------------------------------------------------------------------------
     nstlog:     (int)
-                (1) number of steps that elapse between writing energies to the log file
+                Steps between writing energies to the log file
     ------------------------------------------------------------------------------------
     nstcomm:    (int)
-                (100) frequency for center of mass motion removal
+                (100) Frequency for center-of-mass motion removal
 
 Model parameter
 +++++++++++++++
-There are three models supported now: `hps_kr`, `hps_urry` and `hps_ss`.
-
-`hps_kr` has parameters for a wide range of residues, i.e RNA, phosphorylation residues ... but this model is less accurate
+Currently only the **topo** model is supported: topology-based coarse-grained CA model with structure-based non-bonded contacts and Yukawa electrostatics.
 
 ::
 
     model:      (string)
-                hps_kr: Kapcha-Rossy hydropathy scale, parameterize from OPLS-AA forcefield
-
-                hps_urry (default): Urry hydropathy scale, parameterize from experiment
-
-                hps_ss: hps_urry with bonded potential (angle and torsion)
+                topo: TOPO model (default). Uses domain_def and stride_output_file when provided for contact-based non-bonded interactions.
 
 
 Temperature coupling
@@ -138,20 +130,24 @@ if pcoupl is yes then pbc must be yes.
                 If you want a rectangular box? Put:  [30, 30, 60]
 
 File input/output
-+++++++++++++++++++
++++++++++++++++++
 
 ::
 
     protein_code    (string)
-                    String for output prefix, i.e {protein_code}.dcd, {protein_code}.log
+                    Output prefix, e.g. {protein_code}.dcd, {protein_code}.log
     ------------------------------------------------------------------------------------
     pdb_file        (string)
-                    [.pdb, .cif] Input structure for loading topology and initial coordinate
+                    [.pdb, .cif] Input structure for topology and initial coordinates
+    ------------------------------------------------------------------------------------
+    domain_def      (string, optional)
+                    Path to domain definition YAML (e.g. domain.yaml) for TOPO structure-based non-bonded scaling. Omit for single-domain or if not using domain scaling.
+    ------------------------------------------------------------------------------------
+    stride_output_file  (string, optional)
+                    Path to STRIDE output file for hydrogen-bond-based contact energies in TOPO. If omitted, the builder may attempt to run STRIDE on the structure.
     ------------------------------------------------------------------------------------
     checkpoint      (string)
-                    [.chk] Checkpoint file name, here I ask you to provide it explicitly since
-                            because checkpoint can be used to load state or save state.
-                            in case if you restart simulation with different name, you have to provide it.
+                    [.chk] Checkpoint file name; required for restart and for saving state.
 
 Simulation platform
 +++++++++++++++++++++

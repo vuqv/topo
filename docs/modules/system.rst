@@ -1,30 +1,35 @@
-System 
-========================================================= 
+System
+======
 
-A class containing methods and parameters for generating CG systems to be simulated using the OpenMM interface.
-    It offers flexibility to create default and custom CG systems and to easily modify their parameters.
+A class containing methods and parameters for generating TOPO coarse-grained systems to be simulated with OpenMM. It is typically constructed via :func:`topo.models.buildCoarseGrainModel`, which sets bonds, angles, torsions, Yukawa electrostatics, and structure-based non-bonded forces.
 
 .. autoclass:: topo.core.system
 
-        .. automethod:: __init__
-        .. automethod:: topo.core.system.getAtoms
-        .. automethod:: topo.core.system.getBonds
-        .. automethod:: topo.core.system.setBondForceConstants
-        .. automethod:: topo.core.system.setParticlesMasses
-        .. automethod:: topo.core.system.setParticlesRadii
-        .. automethod:: topo.core.system.setParticlesCharge
-        .. automethod:: topo.core.system.addYukawaForces
-        .. automethod:: topo.core.system.addAshbaughHatchForces
-        .. automethod:: topo.core.system.createSystemObject
-        .. automethod:: topo.core.system.checkBondDistances
-        .. automethod:: topo.core.system.checkLargeForces
-        .. automethod:: topo.core.system.addParticles
-        .. automethod:: topo.core.system.addSystemForces
-        .. automethod:: topo.core.system.dumpStructure
-        .. automethod:: topo.core.system.dumpTopology
-        .. automethod:: topo.core.system.dumpForceFieldData
-        .. automethod:: topo.core.system.setCAMassPerResidueType
-        .. automethod:: topo.core.system.setCARadiusPerResidueType
-        .. automethod:: topo.core.system.setCAChargePerResidueType
-        .. automethod:: topo.core.system.setCAHPSPerResidueType
-        .. automethod:: topo.core.system._setParameters
+   .. automethod:: __init__
+   .. automethod:: getCAlphaOnly
+   .. automethod:: getAtoms
+   .. automethod:: getBonds
+   .. automethod:: getAngles
+   .. automethod:: getTorsions
+   .. automethod:: setBondForceConstants
+   .. automethod:: setParticlesMass
+   .. automethod:: setParticlesRadii
+   .. automethod:: setParticlesCharge
+   .. automethod:: addHarmonicBondForces
+   .. automethod:: addGaussianAngleForces
+   .. automethod:: addPeriodicTorsionForce
+   .. automethod:: addYukawaForces
+   .. automethod:: addCustomNonBondedForce
+   .. automethod:: createSystemObject
+   .. automethod:: checkBondDistances
+   .. automethod:: checkLargeForces
+   .. automethod:: addParticles
+   .. automethod:: addSystemForces
+   .. automethod:: dumpStructure
+   .. automethod:: dumpTopology
+   .. automethod:: dumpForceFieldData
+   .. automethod:: setCAMassPerResidueType
+   .. automethod:: setCARadiusPerResidueType
+   .. automethod:: setCAChargePerResidueType
+   .. automethod:: setCAHPSPerResidueType
+   .. automethod:: _setParameters
