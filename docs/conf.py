@@ -56,14 +56,17 @@ autosummary_generate = True
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
-#    'numpydoc', # automatically includes `sphinx.ext.autosummary`
-    'rst2pdf.pdfbuilder',
     'sphinx.ext.autodoc',
     'sphinx.ext.mathjax',
     'sphinx.ext.viewcode',
-    'sphinx.ext.napoleon',    
+    'sphinx.ext.napoleon',
     'sphinx.ext.githubpages',
 ]
+try:
+    import rst2pdf
+    extensions.insert(0, 'rst2pdf.pdfbuilder')
+except ImportError:
+    pass  # HTML build works without rst2pdf
 
 pdf_documents = [('index', u'rst2pdf', u'TOPO', u'Quyen Vu'),]
 
@@ -202,8 +205,8 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-    (master_doc, 'hpsOpenMM', 'hpsOpenMM Documentation',
-     author, 'hpsOpenMM', 'Analysis package for all-atom simulations of proteins, with a specific focus on intrinsically disordered proteins.',
+    (master_doc, 'TOPO', 'TOPO Documentation',
+     author, 'TOPO', 'Topology-based coarse-grained model for folded proteins.',
      'Miscellaneous'),
 ]
 
@@ -241,39 +244,37 @@ else:
 # tell the theme which language to we're currently building
 html_context['current_language'] = current_language
 
-# SET CURRENT_VERSION
-from git import Repo
-
-repo = Repo(search_parent_directories=True)
+# SET CURRENT_VERSION (and versions list); git optional for local builds without GitPython
+try:
+    from git import Repo
+    repo = Repo(search_parent_directories=True)
+    _has_git = True
+except Exception:
+    repo = None
+    _has_git = False
 
 if 'current_version' in os.environ:
-    # get the current_version env var set by buildDocs.sh
     current_version = os.environ['current_version']
 elif _github_ref.startswith('refs/tags/'):
-    # Tag push: use year.month (same as version/release)
     current_version = version
-else:
-    # set this build's current version by looking at the branch, or CI ref
+elif _has_git:
     try:
         current_version = repo.active_branch.name
     except TypeError:
-        # Detached HEAD (e.g. GitHub Actions checkout at SHA); use GITHUB_REF or fallback
         current_version = os.environ.get('GITHUB_REF', 'refs/heads/main').replace('refs/heads/', '')
+else:
+    current_version = os.environ.get('GITHUB_REF', 'refs/heads/main').replace('refs/heads/', '') or 'main'
 
-# tell the theme which version we're currently on ('current_version' affects
-# the lower-left rtd menu and 'version' affects the logo-area version)
 html_context['current_version'] = current_version
 html_context['version'] = current_version
-
-# POPULATE LINKS TO OTHER LANGUAGES
 html_context['languages'] = [('en', '/' + REPO_NAME + '/en/' + current_version + '/')]
-
-# POPULATE LINKS TO OTHER VERSIONS
 html_context['versions'] = list()
 
-versions = [branch.name for branch in repo.branches]
-for version in versions:
-    html_context['versions'].append((version, '/' + REPO_NAME + '/' + current_language + '/' + version + '/'))
+if _has_git and repo is not None:
+    for b in repo.branches:
+        html_context['versions'].append((b.name, '/' + REPO_NAME + '/' + current_language + '/' + b.name + '/'))
+else:
+    html_context['versions'].append((current_version, '/' + REPO_NAME + '/' + current_language + '/' + current_version + '/'))
 
 # POPULATE LINKS TO OTHER FORMATS/DOWNLOADS
 
