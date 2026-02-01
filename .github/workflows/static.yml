@@ -44,14 +44,13 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install sphinx
-          # requirements.txt is conda-style; install only pip-compatible deps needed for docs (autodoc may import topo)
+          pip install -r docs/requirements.txt
+          # Runtime deps for autodoc (Sphinx imports topo; topo needs these)
           pip install "numpy>=1.22" "openmm>=7.7" "parmed>=3.4" "MDAnalysis>=2.2" "pandas>=1.4" "pyyaml"
 
-      - name: Build Sphinx docs
+      - name: Build documentation
         run: |
-          cd docs
-          make html
+          make -C docs html
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
