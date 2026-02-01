@@ -21,13 +21,17 @@ sys.path.insert(0, os.path.abspath('..'))
 # -- Project information -----------------------------------------------------
 
 project = u'TOPO'
-copyright = u'2022, Quyen Vu'
+copyright = u'2026, Quyen Vu'
 author = u'Quyen Vu'
 
-# The short X.Y version
-version = '2022.0'
-# The full version, including alpha/beta/rc tags
-release = 'v1.3'
+# Version: auto year.month when building from a tag push (CI); else defaults
+import datetime
+_github_ref = os.environ.get('GITHUB_REF', '')
+if _github_ref.startswith('refs/tags/'):
+    version = release = datetime.datetime.utcnow().strftime('%Y.%m')
+else:
+    version = '2026.1'
+    release = 'rc1'
 
 
 # -- General configuration ---------------------------------------------------
@@ -245,10 +249,16 @@ repo = Repo(search_parent_directories=True)
 if 'current_version' in os.environ:
     # get the current_version env var set by buildDocs.sh
     current_version = os.environ['current_version']
+elif _github_ref.startswith('refs/tags/'):
+    # Tag push: use year.month (same as version/release)
+    current_version = version
 else:
-    # the user is probably doing `make html`
-    # set this build's current version by looking at the branch
-    current_version = repo.active_branch.name
+    # set this build's current version by looking at the branch, or CI ref
+    try:
+        current_version = repo.active_branch.name
+    except TypeError:
+        # Detached HEAD (e.g. GitHub Actions checkout at SHA); use GITHUB_REF or fallback
+        current_version = os.environ.get('GITHUB_REF', 'refs/heads/main').replace('refs/heads/', '')
 
 # tell the theme which version we're currently on ('current_version' affects
 # the lower-left rtd menu and 'version' affects the logo-area version)

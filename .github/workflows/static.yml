@@ -9,6 +9,7 @@ name: Deploy docs to Pages
 on:
   push:
     branches: ["main"]
+    tags: ["*"]
   workflow_dispatch:
 
 permissions:
