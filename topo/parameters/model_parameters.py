@@ -124,6 +124,33 @@ parameters = {
             "radii": 0.586,
             "charge": 0.0,
         },
+        # Parameters for RNA 
+        """
+        nucleotides containing pyrimidines and purines were represented as 3 and 4 interaction sites, respectively, 
+        with one interaction located at the phosphate position and having a q=-1e charge, another at the centroid of the ribose ring, 
+        and one at the centroid of each conjugated ring in the base.
+        pyrimidine bases: C, T (one ring)
+        purine bases: A, G (two rings)- in CG model will have two BR beads.
+
+        Be careful on sigma_ij: (only used for non-native contacts)
+        Ed's paper: sigma_ij = 0.5 * (sigma_i + sigma_j)
+        Yang's code: R_ij =  (R_i + R_j)
+        """
+        "P": {
+            "mass": 95.00,
+            "radii": 0.710,
+            "charge": -1.0,
+        },
+        "R": {
+            "mass": 92.00,
+            "radii": 0.710,
+            "charge": 0.0,
+        },
+        "BR": {
+            "mass": 64.00,
+            "radii": 0.710,
+            "charge": 0.0,
+        },
         # Dihedral parameters loaded from data/dihedral_params.csv
         'dihedral_params': load_dihedral_params(),
     },
