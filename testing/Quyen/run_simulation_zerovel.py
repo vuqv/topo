@@ -157,7 +157,9 @@ def main():
         build_kwargs['stride_output_file'] = stride_output_file
     cgModel = topo.models.buildCoarseGrainModel(pdb_file, **build_kwargs)
     print("Model built successfully...")
-
+    # NOTE (see ../Readme.md): bond treatment (rigid via constraints vs flexible
+    # via a harmonic force) is controlled by the `constraints` field in md.ini and
+    # handled inside buildCoarseGrainModel; the two modes are mutually exclusive.
 
     # Remove center of mass motion
     cgModel.system.addForce(mm.CMMotionRemover(nstcomm))
@@ -201,7 +203,12 @@ def main():
         xyz[:, 2] -= np.amin(xyz[:, 2])
         cgModel.positions = xyz * unit.nanometer
         simulation.context.setPositions(cgModel.positions)
-        simulation.context.setVelocitiesToTemperature(ref_t)
+        # TEST (see ../Readme.md): fix the initial velocity of every particle to
+        # zero instead of drawing random Maxwell-Boltzmann velocities, so that
+        # both implementations start from an identical, deterministic state.
+        n_particles = cgModel.system.getNumParticles()
+        zero_velocities = np.zeros((n_particles, 3)) * (unit.nanometer / unit.picosecond)
+        simulation.context.setVelocities(zero_velocities)
         nsteps_remain = md_steps
 
     simulation.reporters = []
