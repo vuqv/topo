@@ -7,19 +7,19 @@ corfile = setup/P0CX28_clean_ca.cor
 temp_heating = 600
 temp_prod = 300
 ppn = 1
-outname = SETINDEX
+outname = 1
 # performed production run in 10^8 steps= 1.5 microseconds
-mdsteps = 100_000_000
+mdsteps = 10
 
 # equilibrium in 15 ns
-heating_steps = 1_000_000
+heating_steps = 10
 
 Q_threshold = 0.7
 
 use_gpu = yes
 # frequency to write dcd and checkpoint file
-nstxout = 5000
-nstlog = 5000
+nstxout = 1
+nstlog = 1
 # for analysis of folding pathway, set nsteps_calQ = nstxout to sim runs faster.
 nsteps_calQ = 5000
 restart = no

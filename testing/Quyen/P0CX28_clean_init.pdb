@@ -1,4 +1,4 @@
-REMARK   1 CREATED WITH OPENMM 8.2, 2026-02-01
+REMARK   1 CREATED WITH OPENMM 8.2, 2026-06-24
 CRYST1    1.000    1.000    1.000  90.00  90.00  90.00 P 1           1 
 ATOM      1  CA  MET A   1       6.733   7.619  17.977  1.00  0.00           C  
 ATOM      2  CA  VAL A   2       3.342   7.276  16.174  1.00  0.00           C  
