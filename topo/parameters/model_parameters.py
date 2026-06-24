@@ -133,8 +133,8 @@ parameters = {
         purine bases: A, G (two rings)- in CG model will have two BR beads.
 
         Be careful on sigma_ij: (only used for non-native contacts)
-        Ed's paper: sigma_ij = 0.5 * (sigma_i + sigma_j)
-        Yang's code: R_ij =  (R_i + R_j)
+        Two conventions exist: sigma_ij = 0.5 * (sigma_i + sigma_j), or
+        R_ij = (R_i + R_j).
         """
         "P": {
             "mass": 95.00,

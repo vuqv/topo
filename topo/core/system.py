@@ -539,7 +539,7 @@ class system:
                                            self.bonds[bond][1])
 
     def addGaussianAngleForces(self) -> None:
-        """
+        r"""
         Add Gaussian functional form of angle.
         Note that in openMM log is neutral logarithm.
 
@@ -553,10 +553,15 @@ class system:
         Angle potential is taken from reference:
         """
 
-        gamma = 0.0239 / unit.kilojoule_per_mole  # 0.1 mol/kcal
+        # Reference angles and gamma use the precise degree->radian / unit
+        # conversions rather than rounded values:
+        #   theta_alpha = 91.7 deg, theta_beta = 130.0 deg, gamma = 0.1 mol/kcal.
+        # (Rounding theta to 1.6/2.27 rad and gamma to 0.0239 shifts the total
+        # angle energy by ~6 kJ/mol, so the precise values are used here.)
+        gamma = 0.02390057361376673 / unit.kilojoule_per_mole  # 0.1 mol/kcal
         eps_alpha = 17.9912 * unit.kilojoule_per_mole  # 4.3 kcal/mol
-        theta_alpha = 1.6 * unit.radian
-        theta_beta = 2.27 * unit.radian
+        theta_alpha = 1.6004669240788003 * unit.radian  # 91.7 deg
+        theta_beta = 2.2689280275926285 * unit.radian   # 130.0 deg
         k_alpha = 445.1776 * unit.kilojoule_per_mole / unit.radian ** 2 # 106.4 kcal/mol/rad^-2
         k_beta = 110.0392 * unit.kilojoule_per_mole / unit.radian ** 2 # 26.3 kcal/mol/rad^-2
 
@@ -599,7 +604,7 @@ class system:
 
 
     def addYukawaForces(self, use_pbc: bool) -> None:
-        """
+        r"""
         Creates a nonbonded force term for electrostatic interaction DH potential.
 
         Creates an :code:`mm.CustomNonbondedForce()` object with the parameters
@@ -629,8 +634,12 @@ class system:
         # currently, just use debye-length at [NaCl]=100mM
         lD = 1.0 * unit.nanometer
         electric_factor = 138.935458 * unit.kilojoule_per_mole * unit.nanometer / unit.elementary_charge ** 2
-        yukawa_cutoff = 3.5 * unit.nanometer
-        epsilon_r = 80.0
+        # The Yukawa (screened electrostatic) term uses a switching function at
+        # 1.8 nm and a 2.0 nm cutoff, consistent with the contact non-bonded force.
+        yukawa_cutoff = 2.0 * unit.nanometer
+        yukawa_switch = 1.8 * unit.nanometer
+        # Relative dielectric constant for the screened-electrostatic interaction.
+        epsilon_r = 78.5
 
         energy_function = 'factor*charge1*charge2/epsilon_r/r*exp(-r/lD)'
         self.yukawaForce = mm.CustomNonbondedForce(energy_function)
@@ -647,6 +656,9 @@ class system:
 
         print(f"Use cutoff distance: {yukawa_cutoff}")
         self.yukawaForce.setCutoffDistance(yukawa_cutoff)
+        self.yukawaForce.setUseSwitchingFunction(True)
+        self.yukawaForce.setSwitchingDistance(yukawa_switch)
+        print(f"Use switching function from: {yukawa_switch}")
 
         if isinstance(self.particles_charge, float):
             for i in np.arange(len(self.atoms)):

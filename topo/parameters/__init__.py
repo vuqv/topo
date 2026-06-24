@@ -5,4 +5,3 @@ The only supported model is "topo" (topology/structure-based model for globular 
 """
 
 from .model_parameters import parameters
-from .globular_model_parameters import globular_parameters

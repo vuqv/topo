@@ -59,11 +59,51 @@ ENERGY_PARAMS = {
     'hydrogen_bond': 0.75 * KCAL_TO_KJ,       # per H-bond; 2+ H-bonds capped at 1.5 kcal/mol total
     'backbone_sidechain': 0.37 * KCAL_TO_KJ,
     'non_native': 0.000132 * KCAL_TO_KJ,
-    'yang_shift': 0.6   # Used in BT potential (kcal/mol)
+    'bt_shift': 0.6   # reference shift for the BT contact potential (kcal/mol)
 }
 
 
-def get_residue_mapping(universe: mda.Universe) -> Tuple[Dict[int, int], Dict[int, str], int]:
+# -----------------------------------------------------------------------------
+# Chain-ID handling (multi-chain support)
+# -----------------------------------------------------------------------------
+def _norm_chain(chain) -> str:
+    """
+    Normalize a chain identifier to a canonical string.
+
+    Residues are keyed by ``(chain, resid)`` so that structures with multiple
+    chains (where the same residue number can appear in more than one chain) are
+    handled correctly. Different sources spell a blank chain differently:
+    MDAnalysis reports ``''`` or a space, while STRIDE prints ``'-'``. All of
+    these are normalized to the empty string so the two sources agree.
+    """
+    chain = ('' if chain is None else str(chain)).strip()
+    return '' if chain in ('', '-') else chain
+
+
+def _residue_chain(res) -> str:
+    """
+    Return the normalized chain ID for an MDAnalysis residue.
+
+    Prefers the PDB ``chainID`` (matching STRIDE's chain column); falls back to
+    ``segid`` if ``chainID`` is unavailable.
+    """
+    chain = None
+    try:
+        chain_ids = res.atoms.chainIDs
+        if len(chain_ids) > 0:
+            chain = chain_ids[0]
+    except (AttributeError, IndexError):
+        chain = None
+    if _norm_chain(chain) == '':
+        # Fall back to segid when chainID is blank/missing.
+        try:
+            chain = res.segid
+        except AttributeError:
+            chain = None
+    return _norm_chain(chain)
+
+
+def get_residue_mapping(universe: mda.Universe) -> Tuple[Dict[Tuple[str, int], int], Dict[int, str], int]:
     """
     Build residue index and name mappings from an MDAnalysis protein universe.
 
@@ -78,8 +118,12 @@ def get_residue_mapping(universe: mda.Universe) -> Tuple[Dict[int, int], Dict[in
 
     Returns
     -------
-    resid_to_index : dict
-        Maps PDB residue ID (resid) -> 0-based index in residue list.
+    key_to_index : dict
+        Maps ``(chain, resid)`` -> 0-based index in residue list, where ``chain``
+        is the normalized chain ID (see :func:`_norm_chain`) and ``resid`` is the
+        PDB residue ID. Keying on ``(chain, resid)`` instead of ``resid`` alone is
+        required for multi-chain structures, where the same residue number can
+        appear in more than one chain.
     index_to_resname : dict
         Maps 0-based index -> three-letter residue name (e.g. 'ALA', 'GLY').
     n_residues : int
@@ -88,17 +132,18 @@ def get_residue_mapping(universe: mda.Universe) -> Tuple[Dict[int, int], Dict[in
     Example
     -------
     >>> u = mda.Universe("protein.pdb")
-    >>> resid_to_idx, idx_to_name, n = get_residue_mapping(u)
-    >>> resid_to_idx[1]   # first residue's index
+    >>> key_to_idx, idx_to_name, n = get_residue_mapping(u)
+    >>> key_to_idx[('A', 1)]   # first residue's index (chain A, resid 1)
     0
     >>> idx_to_name[0]
     'MET'
     """
     residues = universe.select_atoms("protein").residues
     n_residues = len(residues)
-    resid_to_index = {res.resid: idx for idx, res in enumerate(residues)}
+    key_to_index = {(_residue_chain(res), res.resid): idx
+                    for idx, res in enumerate(residues)}
     index_to_resname = {idx: res.resname for idx, res in enumerate(residues)}
-    return resid_to_index, index_to_resname, n_residues
+    return key_to_index, index_to_resname, n_residues
 
 def parse_hydrogen_bonds(stride_output_file: str) -> List[Tuple]:
     """
@@ -116,10 +161,12 @@ def parse_hydrogen_bonds(stride_output_file: str) -> List[Tuple]:
     Returns
     -------
     list of tuple
-        Each element is a pair ``((resname1, resid1), (resname2, resid2))`` with the
-        tuple sorted so the pair is canonical. Resid is the first number in the
-        STRIDE line (PDB residue ID). Repeated pairs indicate multiple H-bonds
-        between the same residue pair.
+        Each element is a pair ``((chain1, resid1), (chain2, resid2))`` with the
+        tuple sorted so the pair is canonical. ``chain`` is the normalized chain
+        ID and ``resid`` the PDB residue ID. Repeated pairs indicate multiple
+        H-bonds between the same residue pair. The ``(chain, resid)`` keys match
+        those produced by :func:`get_residue_mapping`, so multi-chain structures
+        (where a residue number repeats across chains) are resolved correctly.
 
     Raises
     ------
@@ -128,14 +175,15 @@ def parse_hydrogen_bonds(stride_output_file: str) -> List[Tuple]:
 
     Notes
     -----
-    STRIDE line format: ``DNR  RES -  resid  seq ->  RES -  resid  seq  ...``
-    The regex captures resname and the first resid for donor and acceptor.
+    STRIDE line format: ``DNR  RES chain  resid  seq ->  RES chain  resid  seq``,
+    where ``chain`` is a chain letter (e.g. ``A``) or ``-`` for a blank chain.
+    The regex captures resname, chain, and the first resid for donor and acceptor.
 
     Example
     -------
     >>> pairs = parse_hydrogen_bonds("stride.dat")
-    >>> pairs[0]  # e.g. ((u'THR', 3), (u'ILE', 43))
-    (('THR', 3), ('ILE', 43))
+    >>> pairs[0]  # e.g. (('A', 3), ('A', 43))
+    (('A', 3), ('A', 43))
     """
     try:
         with open(stride_output_file, "r") as f:
@@ -143,11 +191,16 @@ def parse_hydrogen_bonds(stride_output_file: str) -> List[Tuple]:
     except FileNotFoundError:
         print(f"STRIDE output file not found: {stride_output_file}")
         raise
-    
+
+    # Fields after the residue name are: chain ID, resid, seq. The chain may be a
+    # chain letter (e.g. "A") or "-" for a blank chain; capturing it (\S+) lets us
+    # key residues by (chain, resid) and supports multi-chain structures. The
+    # original pattern matched only a literal "-" for the chain, so chained
+    # structures parsed zero H-bonds (dropping all backbone hydrogen-bond energy).
     pattern = re.compile(
-        r"(?:DNR|ACC)\s+(\w+)\s+-\s+(\d+)\s+\d+\s+->\s+(\w+)\s+-\s+(\d+)\s+\d+"
+        r"(?:DNR|ACC)\s+\w+\s+(\S+)\s+(\d+)\s+\d+\s+->\s+\w+\s+(\S+)\s+(\d+)\s+\d+"
     )
-    
+
     hb_pairs = []
     # STRIDE reports each H-bond twice (DNR and ACC). Count each bond once by using only DNR lines.
     # Then pairs with multiple physical H-bonds appear as multiple DNR lines and are counted correctly.
@@ -155,14 +208,16 @@ def parse_hydrogen_bonds(stride_output_file: str) -> List[Tuple]:
         if line.startswith("DNR"):
             match = pattern.search(line)
             if match:
-                res1, res1_pdb, res2, res2_pdb = match.groups()
-                donor = (res1, int(res1_pdb))
-                acceptor = (res2, int(res2_pdb))
+                chain1, res1_pdb, chain2, res2_pdb = match.groups()
+                donor = (_norm_chain(chain1), int(res1_pdb))
+                acceptor = (_norm_chain(chain2), int(res2_pdb))
                 pair = tuple(sorted([donor, acceptor]))
                 hb_pairs.append(pair)
     return hb_pairs
 
-def build_hb_contact_matrix(hb_pairs: List[Tuple], n_residues: int) -> np.ndarray:
+def build_hb_contact_matrix(hb_pairs: List[Tuple],
+                            key_to_index: Dict[Tuple[str, int], int],
+                            n_residues: int) -> np.ndarray:
     """
     Build the hydrogen-bond contact matrix from a list of H-bond pairs.
 
@@ -174,7 +229,11 @@ def build_hb_contact_matrix(hb_pairs: List[Tuple], n_residues: int) -> np.ndarra
     ----------
     hb_pairs : list of tuple
         List of canonical pairs from :func:`parse_hydrogen_bonds`. Each pair is
-        ``((resname1, resid1), (resname2, resid2))`` with resid as PDB residue ID.
+        ``((chain1, resid1), (chain2, resid2))``.
+    key_to_index : dict
+        Maps ``(chain, resid)`` -> 0-based residue index, from
+        :func:`get_residue_mapping`. Used to place each H-bond at the correct
+        matrix index regardless of chain (multi-chain safe).
     n_residues : int
         Number of residues (determines matrix shape).
 
@@ -182,28 +241,32 @@ def build_hb_contact_matrix(hb_pairs: List[Tuple], n_residues: int) -> np.ndarra
     -------
     np.ndarray, shape (n_residues, n_residues), dtype int
         Symmetric matrix. Entry [i, j] is 0, 1, or 2 (number of H-bonds between
-        residue index i and j, capped at 2). Indices are 0-based and must match
-        the residue order used elsewhere (e.g. from :func:`get_residue_mapping`);
-        resids in hb_pairs are converted to 0-based index as ``resid - 1``.
+        residue index i and j, capped at 2). Indices are the 0-based residue order
+        from :func:`get_residue_mapping`.
 
     Notes
     -----
-    Resid in hb_pairs is the PDB residue number (1-based). It is converted to
-    matrix index as ``resid - 1``. Ensure your residue list order matches the
-    PDB/STRIDE numbering when interpreting i, j.
+    H-bond ``(chain, resid)`` keys are resolved to matrix indices via
+    ``key_to_index``. A pair whose residue is not found in the mapping (e.g. a
+    hetero residue STRIDE reported but that is not in the protein selection) is
+    skipped with a warning rather than mis-placed.
     """
     hb_contact_matrix = np.zeros((n_residues, n_residues), dtype=int)
-    
+
     # Count hydrogen bonds between residue pairs
     pair_counts = defaultdict(int)
     for donor, acceptor in hb_pairs:
         pair = tuple(sorted([donor, acceptor]))
         pair_counts[pair] += 1
-    
+
     # Fill contact matrix; cap at 2 (model: 1 H-bond -> 0.75 kcal/mol, 2+ H-bonds -> 1.5 kcal/mol only)
-    for (res1, res2), count in pair_counts.items():
-        i = res1[1] - 1  # 0-based index
-        j = res2[1] - 1  # 0-based index
+    for (key1, key2), count in pair_counts.items():
+        if key1 not in key_to_index or key2 not in key_to_index:
+            print(f"Warning: H-bond residue {key1} or {key2} not found in residue "
+                  f"mapping; skipping this H-bond.")
+            continue
+        i = key_to_index[key1]
+        j = key_to_index[key2]
         val = min(count, 2)
         hb_contact_matrix[i, j] = val
         hb_contact_matrix[j, i] = val
@@ -223,7 +286,7 @@ def print_pairs_with_multiple_hb(hb_pairs: List[Tuple]) -> Dict[Tuple, int]:
     Returns
     -------
     dict
-        Maps canonical pair ``((resname1, resid1), (resname2, resid2))`` to number
+        Maps canonical pair ``((chain1, resid1), (chain2, resid2))`` to number
         of H-bonds (before any cap). Useful for logging or downstream analysis.
 
     Example
@@ -231,10 +294,10 @@ def print_pairs_with_multiple_hb(hb_pairs: List[Tuple]) -> Dict[Tuple, int]:
     >>> pairs = parse_hydrogen_bonds("stride.dat")
     >>> counts = print_pairs_with_multiple_hb(pairs)
     Residue pairs with more than 1 hydrogen bond:
-      THR3 -- ILE43:  2 H-bonds
+      A3 -- A43:  2 H-bonds
       ...
       (total: 20 pairs)
-    >>> counts[(('THR', 3), ('ILE', 43))]
+    >>> counts[(('A', 3), ('A', 43))]
     2
     """
     pair_counts = defaultdict(int)
@@ -245,14 +308,16 @@ def print_pairs_with_multiple_hb(hb_pairs: List[Tuple]) -> Dict[Tuple, int]:
     multi.sort(key=lambda x: (-x[1], x[0]))
     if multi:
         print("Residue pairs with more than 1 hydrogen bond:")
-        for (r1, i1), (r2, i2) in [p for p, _ in multi]:
-            c = pair_counts[tuple(sorted([(r1, i1), (r2, i2)]))]
-            print(f"  {r1}{i1} -- {r2}{i2}:  {c} H-bonds")
+        for (c1, i1), (c2, i2) in [p for p, _ in multi]:
+            c = pair_counts[tuple(sorted([(c1, i1), (c2, i2)]))]
+            print(f"  {c1}{i1} -- {c2}{i2}:  {c} H-bonds")
         print(f"  (total: {len(multi)} pairs)")
     return dict(pair_counts)
 
 
-def get_hb_contact_matrix(stride_output_file: str, n_residues: int) -> np.ndarray:
+def get_hb_contact_matrix(stride_output_file: str,
+                          key_to_index: Dict[Tuple[str, int], int],
+                          n_residues: int) -> np.ndarray:
     """
     Build the hydrogen-bond contact matrix directly from a STRIDE output file.
 
@@ -263,6 +328,9 @@ def get_hb_contact_matrix(stride_output_file: str, n_residues: int) -> np.ndarra
     ----------
     stride_output_file : str
         Path to the STRIDE output file.
+    key_to_index : dict
+        Maps ``(chain, resid)`` -> 0-based residue index, from
+        :func:`get_residue_mapping` (multi-chain safe).
     n_residues : int
         Number of residues (must match the system used for STRIDE).
 
@@ -273,15 +341,15 @@ def get_hb_contact_matrix(stride_output_file: str, n_residues: int) -> np.ndarra
 
     Example
     -------
-    >>> n_residues = 283
-    >>> hb_matrix = get_hb_contact_matrix("stride.dat", n_residues)
+    >>> key_to_index, _, n_residues = get_residue_mapping(u)
+    >>> hb_matrix = get_hb_contact_matrix("stride.dat", key_to_index, n_residues)
     >>> hb_matrix.shape
     (283, 283)
     >>> (hb_matrix > 1).sum() // 2   # number of pairs with 2 H-bonds (symmetric)
     20
     """
     hb_pairs = parse_hydrogen_bonds(stride_output_file)
-    return build_hb_contact_matrix(hb_pairs, n_residues)
+    return build_hb_contact_matrix(hb_pairs, key_to_index, n_residues)
 
 def get_bs_contact_matrix(u: mda.Universe, cutoff: float = DEFAULT_CUTOFF) -> np.ndarray:
     """
@@ -309,39 +377,40 @@ def get_bs_contact_matrix(u: mda.Universe, cutoff: float = DEFAULT_CUTOFF) -> np
     Notes
     -----
     Backbone: protein backbone atoms excluding H. Sidechain: protein non-backbone
-    excluding H. Pairs with |resid_i - resid_j| <= LOCAL_SEPARATION are excluded.
+    excluding H. Pairs within |resid_i - resid_j| <= LOCAL_SEPARATION are excluded,
+    but only when both residues are in the same chain; residues in different chains
+    are never excluded by sequence separation (multi-chain safe).
     """
-    resid_to_index, _, n_residues = get_residue_mapping(u)
-    
+    key_to_index, _, n_residues = get_residue_mapping(u)
+
     backbone = u.select_atoms('protein and backbone and not name H*')
     sidechain = u.select_atoms("protein and not backbone and not name H*")
-    
+
     dists_bs = distance_array(backbone.positions, sidechain.positions)
-    
-    # Build directional residue-residue contact list
+
+    # Per-atom (chain, resid) keys (chain-aware so resid numbers can repeat across chains)
+    bb_keys = [(_residue_chain(a.residue), a.resid) for a in backbone]
+    sc_keys = [(_residue_chain(a.residue), a.resid) for a in sidechain]
+
+    # Build directional residue-residue contact list, keyed by (chain, resid).
+    # Sequence-local exclusion applies only within the same chain.
     contacts_bs = set()
-    for i, atom1 in enumerate(backbone):
-        for j, atom2 in enumerate(sidechain):
-            if (dists_bs[i, j] <= cutoff and 
-                abs(atom1.resid - atom2.resid) > LOCAL_SEPARATION):
-                pair = (atom1.resid, atom2.resid)  # preserve direction: bb → sc
-                contacts_bs.add(pair)
-    
+    for i, k1 in enumerate(bb_keys):
+        for j, k2 in enumerate(sc_keys):
+            if dists_bs[i, j] <= cutoff:
+                if k1[0] == k2[0] and abs(k1[1] - k2[1]) <= LOCAL_SEPARATION:
+                    continue
+                contacts_bs.add((k1, k2))  # preserve direction: bb → sc
+
     # Build asymmetric matrix first
     bs_contact_matrix = np.zeros((n_residues, n_residues), dtype=int)
-    for contact in sorted(contacts_bs, key=lambda x: x[0]):
-        bs_contact_matrix[resid_to_index[contact[0]], 
-                        resid_to_index[contact[1]]] = 1
-    
-    # Build symmetric count matrix
-    bs_symmetric_count = np.zeros((n_residues, n_residues), dtype=int)
-    for i in range(n_residues):
-        for j in range(n_residues):
-            if abs(i - j) > LOCAL_SEPARATION:
-                count = bs_contact_matrix[i, j] + bs_contact_matrix[j, i]
-                bs_symmetric_count[i, j] = count
-                bs_symmetric_count[j, i] = count
-    
+    for k1, k2 in contacts_bs:
+        bs_contact_matrix[key_to_index[k1], key_to_index[k2]] = 1
+
+    # Symmetric count = directional bb→sc plus sc→bb. The contact list is already
+    # separation-filtered, so a plain symmetrization is correct (and chain-safe).
+    bs_symmetric_count = bs_contact_matrix + bs_contact_matrix.T
+
     return bs_symmetric_count
 
 def get_ss_contact_matrix(u: mda.Universe, cutoff: float = DEFAULT_CUTOFF) -> np.ndarray:
@@ -366,28 +435,30 @@ def get_ss_contact_matrix(u: mda.Universe, cutoff: float = DEFAULT_CUTOFF) -> np
         at least one sidechain–sidechain contact within cutoff, else 0. Indices
         are 0-based residue order from :func:`get_residue_mapping`.
     """
-    resid_to_index, _, n_residues = get_residue_mapping(u)
+    key_to_index, _, n_residues = get_residue_mapping(u)
     sidechain = u.select_atoms("protein and not backbone and not name H*")
-    
+
     dists_ss = distance_array(sidechain.positions, sidechain.positions)
     ss_contact_matrix = np.zeros((n_residues, n_residues), dtype=int)
-    
-    # Build residue-residue contact list
+
+    # Per-atom (chain, resid) keys (chain-aware so resid numbers can repeat across chains)
+    sc_keys = [(_residue_chain(a.residue), a.resid) for a in sidechain]
+
+    # Build residue-residue contact list, keyed by (chain, resid). Sequence-local
+    # exclusion applies only within the same chain.
     contacts_ss = set()
-    for i, atom1 in enumerate(sidechain):
-        for j, atom2 in enumerate(sidechain):
-            if (dists_ss[i, j] <= cutoff and 
-                abs(atom1.resid - atom2.resid) > LOCAL_SEPARATION):
-                pair = tuple(sorted([atom1.resid, atom2.resid]))
-                contacts_ss.add(pair)
-    
+    for i, k1 in enumerate(sc_keys):
+        for j, k2 in enumerate(sc_keys):
+            if dists_ss[i, j] <= cutoff:
+                if k1[0] == k2[0] and abs(k1[1] - k2[1]) <= LOCAL_SEPARATION:
+                    continue
+                contacts_ss.add(tuple(sorted([k1, k2])))
+
     # Fill contact matrix
-    for contact in sorted(contacts_ss, key=lambda x: x[0]):
-        ss_contact_matrix[resid_to_index[contact[0]], 
-                        resid_to_index[contact[1]]] = 1
-        ss_contact_matrix[resid_to_index[contact[1]], 
-                        resid_to_index[contact[0]]] = 1
-    
+    for k1, k2 in contacts_ss:
+        ss_contact_matrix[key_to_index[k1], key_to_index[k2]] = 1
+        ss_contact_matrix[key_to_index[k2], key_to_index[k1]] = 1
+
     return ss_contact_matrix
 
 def load_bt_potential(bt_file: str = 'bt_potential.csv') -> pd.DataFrame:
@@ -408,7 +479,7 @@ def load_bt_potential(bt_file: str = 'bt_potential.csv') -> pd.DataFrame:
     -------
     pd.DataFrame
         Matrix indexed by residue name (rows and columns). Values are in kJ/mol,
-        computed as ``KCAL_TO_KJ * |raw_value - yang_shift|`` from the CSV.
+        computed as ``KCAL_TO_KJ * |raw_value - bt_shift|`` from the CSV.
 
     Raises
     ------
@@ -427,7 +498,7 @@ def load_bt_potential(bt_file: str = 'bt_potential.csv') -> pd.DataFrame:
         bt_path = data_dir / bt_path.name
     try:
         df = pd.read_csv(bt_path, index_col=0)
-        return KCAL_TO_KJ * np.abs(df - ENERGY_PARAMS['yang_shift'])
+        return KCAL_TO_KJ * np.abs(df - ENERGY_PARAMS['bt_shift'])
     except FileNotFoundError:
         print(f"BT potential file not found: {bt_path}")
         raise
@@ -783,7 +854,7 @@ def build_nonbonded_interaction(
 
     print("Building hydrogen bond contact matrix...")
     try:
-        hb_contact_matrix = get_hb_contact_matrix(stride_path, n_residues)
+        hb_contact_matrix = get_hb_contact_matrix(stride_path, resid_to_index, n_residues)
     finally:
         if temp_stride_path is not None:
             try:

@@ -20,7 +20,8 @@ class models:
                      model: str = 'topo',
                      domain_def: str = None,
                      stride_output_file: str = None,
-                     box_dimension: Any = None):
+                     box_dimension: Any = None,
+                     constraints: Any = 'AllBonds'):
         """
         Build a topology-based coarse-grained model for a folded protein system.
 
@@ -42,6 +43,14 @@ class models:
             Path to STRIDE output file for secondary structure.
         box_dimension : float or array, optional
             If set, use PBC (cubic if float, rectangular if [x,y,z]).
+        constraints : str or None, optional (default: 'AllBonds')
+            Controls the treatment of covalent bonds. These two modes are mutually
+            exclusive (a bond is never both constrained and harmonic):
+
+            - 'AllBonds' : rigid bonds. A distance constraint is added at each
+              bond's equilibrium length and no harmonic bond force is created.
+            - None (or the string 'None'/'none') : flexible bonds. A harmonic
+              bond force is created and no constraints are added.
 
         Returns
         -------
@@ -72,9 +81,27 @@ class models:
 
         topo_model.getBonds()
         print('Added ' + str(topo_model.n_bonds) + ' bonds')
-        # Add constraints to all bonds
-        for bond in topo_model.bonds:
-            topo_model.system.addConstraint(bond[0].index, bond[1].index, topo_model.bonds[bond][0])
+
+        # Resolve the bond-constraint mode. Accepted values: 'AllBonds' (rigid,
+        # default) or None / 'None' / 'none' (flexible). Rigid and flexible are
+        # mutually exclusive, so a bond is never both constrained and harmonic.
+        if constraints is None or str(constraints).strip().lower() == 'none':
+            use_constraints = False
+        elif str(constraints).strip().lower() == 'allbonds':
+            use_constraints = True
+        else:
+            raise ValueError(
+                f"Invalid constraints option: {constraints!r}. "
+                f"Expected 'AllBonds' or None.")
+
+        # Rigid bonds: constrain every bond at its equilibrium length (no harmonic
+        # bond force is added later in that case).
+        if use_constraints:
+            for bond in topo_model.bonds:
+                topo_model.system.addConstraint(bond[0].index, bond[1].index, topo_model.bonds[bond][0])
+            print(f'Constraining all bonds at equilibrium length (constraints=AllBonds)')
+        else:
+            print('Bonds are flexible (constraints=None); a harmonic bond force will be added')
 
         print("Setting alpha-carbon masses to their average residue mass.")
         topo_model.setCAMassPerResidueType()
@@ -93,8 +120,15 @@ class models:
 
         # all models have bonded interactions
         print('Adding Forces:')
-        topo_model.addHarmonicBondForces()
-        print('Added Harmonic Bond Forces')
+        # Only add the harmonic bond force when bonds are flexible. With rigid
+        # bonds (constraints=AllBonds) the distance is pinned, so a harmonic term
+        # would be redundant (it contributes ~0 energy/force) and would also show
+        # a misleading non-zero bond energy on the unconstrained input geometry.
+        if not use_constraints:
+            topo_model.addHarmonicBondForces()
+            print('Added Harmonic Bond Forces')
+        else:
+            print('Skipping harmonic bond force (bonds are constrained/rigid)')
         print("---")
 
 
