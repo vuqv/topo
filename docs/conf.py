@@ -61,6 +61,7 @@ extensions = [
     'sphinx.ext.viewcode',
     'sphinx.ext.napoleon',
     'sphinx.ext.githubpages',
+    'myst_parser',          # parse Markdown (.md) sources, e.g. the tutorials
 ]
 try:
     import rst2pdf

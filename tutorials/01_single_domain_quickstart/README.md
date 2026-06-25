@@ -36,7 +36,7 @@ From this folder:
 python -c "import topo, openmm; print('OK', openmm.__version__)"
 which stride
 ```
-Both must succeed (see the [top-level README](../README.md) for setup).
+Both must succeed (see the [tutorials overview](https://vuqv.github.io/topo/tutorials/index.html) for setup).
 
 ### 2. Look at `md.ini`
 Open `md.ini`. The important lines:

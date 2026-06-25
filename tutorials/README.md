@@ -8,11 +8,15 @@ Each subfolder is **one self-contained example**: it ships the input files you
 need, and its `README.md` walks you through the run step by step and explains
 the concepts involved. Work through them in order.
 
-| # | Folder | What you learn |
-|---|--------|----------------|
-| 1 | [`01_single_domain_quickstart/`](01_single_domain_quickstart/) | The minimal workflow: a config file, one PDB, run an MD simulation, read the outputs. |
-| 2 | [`02_multidomain_domain_scaling/`](02_multidomain_domain_scaling/) | Multidomain proteins: per-domain contact scaling via `domain.yaml`, including a discontiguous domain. |
-| 3 | [`03_restart_and_outputs/`](03_restart_and_outputs/) | Continuing a run from a checkpoint, and a tour of every output file. |
+| # | Tutorial | What you learn |
+|---|----------|----------------|
+| 1 | [Single-domain quickstart](https://vuqv.github.io/topo/tutorials/01_single_domain.html) | The minimal workflow: a config file, one PDB, run an MD simulation, read the outputs. |
+| 2 | [Multidomain & domain scaling](https://vuqv.github.io/topo/tutorials/02_multidomain.html) | Multidomain proteins: per-domain contact scaling via `domain.yaml`, including a discontiguous domain. |
+| 3 | [Restart & outputs](https://vuqv.github.io/topo/tutorials/03_restart.html) | Continuing a run from a checkpoint, and a tour of every output file. |
+
+The **ready-to-run files** for each tutorial (PDB, `md.ini`, `run_simulation.py`,
+…) live in the matching folder under
+[`tutorials/`](https://github.com/vuqv/topo/tree/main/tutorials) in the repository.
 
 ---
 
@@ -50,9 +54,9 @@ python run_simulation.py -f md.ini
 script is copied into each tutorial folder so every example is self-contained.
 
 A full reference for `md.ini` options lives in
-[`../docs/usage/simulation_control.rst`](../docs/usage/simulation_control.rst);
+[Simulation control options](https://vuqv.github.io/topo/usage/simulation_control.html);
 the `domain.yaml` format is documented in
-[`../docs/usage/domain_definition.rst`](../docs/usage/domain_definition.rst).
+[Domain definition file](https://vuqv.github.io/topo/usage/domain_definition.html).
 
 ---
 

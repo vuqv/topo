@@ -6,7 +6,7 @@ for long production runs that exceed a wall-clock limit or get interrupted — a
 
 **Time:** two short runs, ~2 seconds each.
 
-**Prerequisite:** do [Tutorial 1](../01_single_domain_quickstart/) first. This
+**Prerequisite:** do [Tutorial 1](https://vuqv.github.io/topo/tutorials/01_single_domain.html) first. This
 tutorial reuses the same single-domain protein (`P0CX28`).
 
 ---
