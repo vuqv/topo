@@ -76,9 +76,9 @@ class system:
     yukawaForce : :code:`mm.CustomNonbondedForce`
         Stores the OpenMM :code:`CustomNonbondedForce` initialized-class.
         Implements the Debye-Huckle potential.
-    ashbaugh_HatchForce : :code:`mm.CustomNonbondedForce`
-        Stores the OpenMM :code:`CustomNonbondedForce` initialized-class. Implements the pairwise short-range
-        potential.
+    custom_non_bonded_force : :code:`mm.CustomNonbondedForce`
+        Stores the OpenMM :code:`CustomNonbondedForce` initialized-class. Implements the
+        structure-based (native + non-native) contact potential.
     forceGroups : :code:`collections.OrderedDict`
         A dict that uses force names as keys and their corresponding force
         as values.
@@ -98,7 +98,7 @@ class system:
     """
 
     # def __init__(self, structure_path, model):
-    def __init__(self, structure_path: str, model: str = 'hps_urry'):
+    def __init__(self, structure_path: str, model: str = 'topo'):
         """
         Initialises the TOPO OpenMM system class.
 
@@ -130,10 +130,8 @@ class system:
         self.model = model
         # particle properties
         self.particles_mass = None
-        self.rf_sigma = None  # particle vdw radius
+        self.rf_sigma = None  # particle excluded-volume radius
         self.particles_charge = None
-        self.particles_hps = None  # hydropathy scale of particles
-        self.particle_type_id = None
 
         # Define geometric attributes
         self.atoms = []
@@ -164,12 +162,7 @@ class system:
         # Exclusion rule for nonbonded forces
         self.bonded_exclusions_index = model_parameters.parameters[model]["bonded_exclusions_index"]
 
-        # Parameters for PairWise potential Force
-        self.ashbaugh_HatchForce = None
-
-        # instance for Wang-Frenkel potential, alternative to Ashbaugh_Hatch
-        self.wang_Frenkel_Force = None
-
+        # Structure-based (native + non-native) contact non-bonded force
         self.custom_non_bonded_force = None
 
         # Define parameters for DH potential Force
@@ -498,9 +491,6 @@ class system:
 
     
 
-    def setParticleTypeID(self, particle_id):
-        self.particle_type_id = particle_id
-
     """ Functions for creating force objects with defined parameters """
 
     def addHarmonicBondForces(self) -> None:
@@ -543,7 +533,7 @@ class system:
         Add Gaussian functional form of angle.
         Note that in openMM log is neutral logarithm.
 
-        Angle potential take Gaussian functional form in hps-ss model.
+        Angle potential takes a Gaussian functional form.
 
         .. math::
             U_{angle}(\\theta) = \\frac{-1}{\gamma}
@@ -714,7 +704,7 @@ class system:
                            bond_threshold: float = 0.5) -> None:
         """
         Creates OpenMM system object adding particles, masses and forces.
-        It also groups the added forces into Force-Groups for the hpsReporter
+        It also groups the added forces into Force-Groups for the topoReporter
         class.
 
         Creates an :code:`mm.System()` object using the force field parameters
@@ -945,14 +935,6 @@ class system:
             self.system.addForce(self.yukawaForce)
             self.forceGroups['Yukawa Energy'] = self.yukawaForce
 
-        if self.ashbaugh_HatchForce is not None:
-            self.system.addForce(self.ashbaugh_HatchForce)
-            self.forceGroups['PairWise Energy'] = self.ashbaugh_HatchForce
-
-        if self.wang_Frenkel_Force is not None:
-            self.system.addForce(self.wang_Frenkel_Force)
-            self.forceGroups['PairWire Energy'] = self.wang_Frenkel_Force
-        
         if self.custom_non_bonded_force is not None:
             self.system.addForce(self.custom_non_bonded_force)
             self.forceGroups['Custom Non-Bonded Energy'] = self.custom_non_bonded_force
@@ -1034,7 +1016,7 @@ class system:
             if self.atoms != OrderedDict():
                 ff.write('[atoms]\n')
                 ff.write(
-                    '# %2s %3s %9s %9s %9s \t %14s\n' % ('atom', 'mass', 'exc_radius', 'charge', 'hps', 'atom_name'))
+                    '# %2s %3s %9s %9s \t %14s\n' % ('atom', 'mass', 'exc_radius', 'charge', 'atom_name'))
 
                 for i, atom in enumerate(self.atoms):
 
@@ -1050,19 +1032,14 @@ class system:
                         charge = self.particles_charge[i]
                     elif isinstance(self.particles_charge, float):
                         charge = self.particles_charge
-                    if isinstance(self.particles_hps, list):
-                        hps = self.particles_hps[i]
-                    elif isinstance(self.particles_hps, float):
-                        hps = self.particles_hps
                     res = atom.residue
 
-                    ff.write('%4s %5s %9.3f %9.3f %9.3f\t# %12s\n' % (atom.index + 1,
-                                                                      mass,
-                                                                      sigma,
-                                                                      charge,
-                                                                      hps,
-                                                                      atom.name + '_' + res.name + '_' + str(
-                                                                          res.index + 1)))
+                    ff.write('%4s %5s %9.3f %9.3f\t# %12s\n' % (atom.index + 1,
+                                                                mass,
+                                                                sigma,
+                                                                charge,
+                                                                atom.name + '_' + res.name + '_' + str(
+                                                                    res.index + 1)))
             if self.bonds != OrderedDict():
                 ff.write('\n')
                 ff.write('[bonds]\n')
@@ -1186,49 +1163,6 @@ class system:
                 raise ValueError('Residue ' + r.name + ' not found in charge dictionary.')
 
         self.setParticlesCharge(charge)
-
-    def setCAHPSPerResidueType(self) -> None:
-        """
-        Sets alpha carbon atoms to their residue hydropathy scale. Used specially for
-        modifying alpha-carbon (CA) coarse-grained models.
-
-        Sets the HPS model of the alpha carbon atoms using corresponding scale.
-
-        Parameters
-        ----------
-
-        Returns
-        -------
-        None
-        """
-
-        # Load hydropathy scale from parameters package
-        params = model_parameters.parameters[self.model]
-
-        hps = []
-
-        for r in self.topology.residues():
-            if r.name in params:
-                hps.append(params[r.name]['hps'])
-            else:
-                raise ValueError('Residue ' + r.name + ' not found in hps dictionary.')
-
-        self.setParticlesHPS(hps)
-
-    def setCAIDPerResidueType(self) -> None:
-        """
-        The mpipi model specified interactions are residue-specific, hence requires an extra particle identity.
-        """
-        params = model_parameters.parameters['mpipi']
-        atom_type = []
-
-        for r in self.topology.residues():
-            if r.name in params:
-                atom_type.append(params[r.name]['id'])
-            else:
-                raise ValueError(f'Residue {r.name} not found in model parameter')
-
-        self.setParticleTypeID(atom_type)
 
     # User-hidden functions #
     @staticmethod

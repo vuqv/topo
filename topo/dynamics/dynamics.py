@@ -1,8 +1,8 @@
 """
 The Dynamics class is used to perform molecular dynamics simulations of a protein system using the
-HPS (hydrophobic-polar scale) force field. The class has a constructor that takes a configuration file as an input,
+TOPO (topology-based coarse-grained) force field. The class has a constructor that takes a configuration file as an input,
 which contains the parameters for the simulation. The class has several attributes such as the number of steps,
-the time step, the frequency for writing coordinates and energies, the hydropathy scale, the temperature and
+the time step, the frequency for writing coordinates and energies, the coarse-grained model, the temperature and
 pressure coupling, the reference temperature and pressure, the frequency for pressure coupling, the PBC, the device,
 the number of threads, whether to restart the simulation or not, and whether to minimize energy or not.
 The class also has several methods such as reading the config file, setting up the system, running the simulation, and
@@ -50,8 +50,8 @@ class Dynamics:
         The number of steps between writing energies to the log file. The last energies are always written.
     nstcomm : int, optional (default: 100)
         The frequency for center of mass motion removal.
-    model : str, optional (default: 'hps_urry')
-        Hydropathy scale used in the simulation.
+    model : str, optional (default: 'topo')
+        Coarse-grained model used in the simulation. Currently only 'topo' is supported.
     tcoupl : bool, optional (default: False)
         Indicates whether temperature coupling is used in the simulation.
     ref_t : float, optional (default: 300.0) [K]
@@ -152,7 +152,7 @@ class Dynamics:
         self.nstcomm = int(params.get('nstcomm', self.nstcomm))
         print(f'Setting frequency of center of mass motion removal to every {self.nstcomm} steps')
         self.model = params.get('model', self.model)
-        print(f'Setting hydropathy scale to: {self.model}')
+        print(f'Setting coarse-grained model to: {self.model}')
         self.tcoupl = bool(strtobool(params.get('tcoupl', self.tcoupl)))
         if self.tcoupl:
             self.ref_t = float(params['ref_t']) * unit.kelvin

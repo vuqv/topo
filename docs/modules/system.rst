@@ -31,5 +31,4 @@ A class containing methods and parameters for generating TOPO coarse-grained sys
    .. automethod:: setCAMassPerResidueType
    .. automethod:: setCARadiusPerResidueType
    .. automethod:: setCAChargePerResidueType
-   .. automethod:: setCAHPSPerResidueType
    .. automethod:: _setParameters

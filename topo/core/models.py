@@ -109,6 +109,9 @@ class models:
         print("Setting alpha-carbon charge to their residue charge.")
         topo_model.setCAChargePerResidueType()
 
+        print("Setting alpha-carbon excluded-volume radius to their residue radius.")
+        topo_model.setCARadiusPerResidueType()
+
         
         
         # set particle interactions

@@ -180,6 +180,16 @@ description).
      - no
      - ``1``
      - Number of CPU threads. Used when ``device = CPU``.
+   * - ``n_copies``
+     - int
+     - no
+     - ``1``
+     - Number of independent, **non-interacting** copies of the input chain to pack into one simulation (better GPU utilization; ``n_copies`` trajectories per run). ``1`` disables replication. See :doc:`../tutorials/04_multicopy`.
+   * - ``copy_shift``
+     - float [nm]
+     - no
+     - ``5.0``
+     - Initial x-translation between successive copies. Only used when ``n_copies > 1``; since copies never interact, the exact value affects only the starting layout, not the physics.
    * - ``restart``
      - bool
      - no
@@ -233,3 +243,17 @@ Periodic boundary conditions
 Hardware (``device`` / ``ppn``)
     ``device = GPU`` runs on CUDA (mixed precision). ``device = CPU`` uses ``ppn``
     threads; ``ppn`` is ignored on GPU.
+
+Multi-copy runs (``n_copies`` / ``copy_shift``)
+    A single coarse-grained chain (a few hundred beads) badly underuses a GPU.
+    Setting ``n_copies > 1`` packs that many independent copies of the input chain
+    into one ``System`` and yields one trajectory per copy. The copies are
+    guaranteed non-interacting: bonded terms and constraints are duplicated per
+    copy, and every ``CustomNonbondedForce`` (Yukawa electrostatics and the
+    structure-based contacts) is restricted to intra-copy interaction groups, so
+    the total potential energy is exactly ``n_copies ×`` the single-chain energy.
+    ``copy_shift`` sets the initial x-offset between copies (layout only). The
+    standard ``run_simulation.py`` replicates automatically via
+    :func:`topo.make_noninteracting_copies` whenever ``n_copies > 1``; afterwards
+    split the combined trajectory into per-chain DCDs for analysis. See
+    :doc:`../tutorials/04_multicopy` for a complete walkthrough.
