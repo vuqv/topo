@@ -1,8 +1,9 @@
 # Run a TOPO coarse-grained simulation from a control file (md.ini).
 #
-# All control-file parsing now lives in the package:
-#     cfg = topo.read_simulation_config("md.ini")   -> topo.SimulationConfig
-# so this script only contains the simulation logic itself.
+# Control-file parsing lives in the package (topo.read_simulation_config). After
+# building the single-chain model, if md.ini sets n_copies > 1 the model is
+# replicated into that many non-interacting copies with
+# topo.make_noninteracting_copies (default n_copies = 1 = single chain).
 import argparse
 import time
 import warnings
@@ -11,6 +12,7 @@ import numpy as np
 import openmm as mm
 from openmm import unit
 
+import parmed as pmd
 from parmed.exceptions import OpenMMWarning
 
 import topo
@@ -29,50 +31,53 @@ def main():
     parser.add_argument('-input', '-f', type=str, help='simulation config file')
     args = parser.parse_args()
 
-    # Read every simulation parameter from the control file. See
-    # topo.read_simulation_config / topo.SimulationConfig for the full list.
     cfg = topo.read_simulation_config(args.input)
 
-    # Build the coarse-grained model from the input structure.
+    # Build the single-chain coarse-grained model.
     cgModel = topo.models.buildCoarseGrainModel(cfg.pdb_file, **cfg.build_kwargs())
     print("Model built successfully...")
 
+    # Single chain by default; replicate into non-interacting copies if requested.
+    if cfg.n_copies > 1:
+        system, topology, positions = topo.make_noninteracting_copies(
+            cgModel.system, cgModel.topology, cgModel.positions,
+            n_copies=cfg.n_copies, shift=cfg.copy_shift * unit.nanometer)
+    else:
+        system, topology, positions = cgModel.system, cgModel.topology, cgModel.positions
+
+    # Write the topology as PSF (we keep only the DCD trajectory + PSF topology;
+    # no initial/final PDB). The single-chain topology is always {protein_code}.psf
+    # (used to load the per-chain trajectories from split_chains.py). A multi-copy
+    # run additionally writes {protein_code}_multi.psf for the combined DCD.
+    cgModel.dumpTopology(f'{cfg.protein_code}.psf')              # single-chain
+    if cfg.n_copies > 1:
+        pmd.openmm.load_topology(topology, system=system, xyz=positions).save(
+            f'{cfg.protein_code}_multi.psf', overwrite=True)     # multi-chain
+
     # Remove center-of-mass motion.
-    cgModel.system.addForce(mm.CMMotionRemover(cfg.nstcomm))
+    system.addForce(mm.CMMotionRemover(cfg.nstcomm))
 
-    # Dump the CA structure + topology for visualization / analysis.
-    cgModel.dumpStructure(f'{cfg.protein_code}_init.pdb')
-    cgModel.dumpTopology(f'{cfg.protein_code}.psf')
-
-    # Select the compute platform.
-    if cfg.device == 'GPU':
-        print("Running simulation on GPU CUDA")
-        platform = mm.Platform.getPlatformByName('CUDA')
-        properties = {'CudaPrecision': 'mixed', "DeviceIndex": "0"}
-    else:  # CPU
-        print(f"Running simulation on CPU using {cfg.ppn} cores")
-        platform = mm.Platform.getPlatformByName('CPU')
-        properties = {'Threads': str(cfg.ppn)}
+    # Select the compute platform (CPU/GPU) from the config.
+    platform, properties = cfg.make_platform()
 
     print('Simulation started')
     start_time = time.time()
 
     integrator = mm.LangevinIntegrator(cfg.ref_t, cfg.tau_t, cfg.dt)
-    simulation = mm.app.Simulation(cgModel.topology, cgModel.system, integrator,
-                                   platform, properties)
+    simulation = mm.app.Simulation(topology, system, integrator, platform, properties)
 
     if cfg.restart:
         simulation.loadCheckpoint(cfg.checkpoint)
         print(f"Restart simulation from step: {simulation.context.getState().getStepCount()}")
         nsteps_remain = cfg.md_steps - simulation.context.getState().getStepCount()
     else:
-        # Shift coordinates so the structure sits in the positive octant.
-        xyz = np.array(cgModel.positions / unit.nanometer)
+        # Shift coordinates into the positive octant.
+        xyz = np.array(positions / unit.nanometer)
         xyz[:, 0] -= np.amin(xyz[:, 0])
         xyz[:, 1] -= np.amin(xyz[:, 1])
         xyz[:, 2] -= np.amin(xyz[:, 2])
-        cgModel.positions = xyz * unit.nanometer
-        simulation.context.setPositions(cgModel.positions)
+        positions = xyz * unit.nanometer
+        simulation.context.setPositions(positions)
         simulation.context.setVelocitiesToTemperature(cfg.ref_t)
         nsteps_remain = cfg.md_steps
 
@@ -87,11 +92,6 @@ def main():
                                  temperature=True, remainingTime=True, speed=True,
                                  totalSteps=cfg.md_steps, separator='\t', append=cfg.restart))
     simulation.step(nsteps_remain)
-
-    # Write the last frame.
-    last_frame = simulation.context.getState(
-        getPositions=True, enforcePeriodicBox=bool(cfg.pbc)).getPositions()
-    mm.app.PDBFile.writeFile(cgModel.topology, last_frame, open(f'{cfg.protein_code}_final.pdb', 'w'))
     simulation.saveCheckpoint(cfg.checkpoint)
 
     print("--- Finished in %s seconds ---" % (time.time() - start_time))

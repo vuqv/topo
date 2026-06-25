@@ -21,6 +21,7 @@ from distutils.util import strtobool
 from json import loads
 from typing import Any, List, Optional
 
+import openmm as mm
 from openmm import unit
 
 
@@ -65,6 +66,10 @@ class SimulationConfig:
     device: str = 'CPU'
     ppn: int = 1
 
+    # multi-copy (non-interacting chains in one simulation; see topo.multichain)
+    n_copies: int = 1
+    copy_shift: float = 5.0   # nm, x-translation between replicated copies
+
     # restart / minimize
     restart: bool = False
     minimize: bool = True
@@ -88,6 +93,20 @@ class SimulationConfig:
         if self.stride_output_file is not None:
             kwargs['stride_output_file'] = self.stride_output_file
         return kwargs
+
+    def make_platform(self):
+        """
+        Build the OpenMM ``(platform, properties)`` pair selected by ``device``.
+
+        ``device = 'GPU'`` -> CUDA (mixed precision, device 0); anything else ->
+        CPU using ``ppn`` threads.
+        """
+        if self.device == 'GPU':
+            print("Running simulation on GPU CUDA")
+            return (mm.Platform.getPlatformByName('CUDA'),
+                    {'CudaPrecision': 'mixed', 'DeviceIndex': '0'})
+        print(f"Running simulation on CPU using {self.ppn} cores")
+        return (mm.Platform.getPlatformByName('CPU'), {'Threads': str(self.ppn)})
 
 
 def read_simulation_config(config_file: str, verbose: bool = True) -> SimulationConfig:
@@ -205,6 +224,12 @@ def read_simulation_config(config_file: str, verbose: bool = True) -> Simulation
     if cfg.device == "CPU":
         cfg.ppn = int(params.get('ppn', cfg.ppn))
         log(f'Using {cfg.ppn} threads')
+
+    cfg.n_copies = int(params.get('n_copies', cfg.n_copies))
+    cfg.copy_shift = float(params.get('copy_shift', cfg.copy_shift))
+    if cfg.n_copies > 1:
+        log(f'Replicating into {cfg.n_copies} non-interacting copies '
+            f'(x-shift {cfg.copy_shift} nm)')
 
     cfg.restart = bool(strtobool(str(params.get('restart', cfg.restart))))
     log(f'Restart simulation: {cfg.restart}')

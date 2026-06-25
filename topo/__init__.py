@@ -21,7 +21,9 @@ The first class, geometry, contains methods to calculate the geometrical paramet
 The library is open-source and offers flexibility.
 """
 __all__ = ['system', 'models', 'dynamics', 'build_structure',
-           'read_simulation_config', 'SimulationConfig']
+           'read_simulation_config', 'SimulationConfig',
+           'make_noninteracting_copies', 'replicate_system_intra_only',
+           'replicate_topology', 'replicate_positions', 'split_indices']
 
 from .core import geometry
 from .core import models
@@ -31,3 +33,6 @@ from .parameters import model_parameters
 from .reporter import topoReporter
 from .utils import build_structure
 from .utils.config import read_simulation_config, SimulationConfig
+from .utils.multichain import (make_noninteracting_copies,
+                               replicate_system_intra_only, replicate_topology,
+                               replicate_positions, split_indices)
