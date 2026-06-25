@@ -863,7 +863,9 @@ class system:
                     print('_______________________')
                     print('')
 
-                sim.minimizeEnergy(tolerance=tolerance * unit.kilojoule / unit.mole)
+                # OpenMM's minimizeEnergy expects a FORCE tolerance (kJ/mol/nm),
+                # not an energy tolerance; passing kJ/mol raises a unit error.
+                sim.minimizeEnergy(tolerance=tolerance * unit.kilojoule / (unit.mole * unit.nanometer))
                 # minimized = True
                 state = sim.context.getState(getForces=True)
                 prev_force = np.max(forces)

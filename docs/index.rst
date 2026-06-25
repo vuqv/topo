@@ -14,6 +14,7 @@ This documentation is for the TOPO package.
    
    modules/introduction
    usage/simulation_control
+   usage/domain_definition
    modules/parameters
    modules/system
    modules/models

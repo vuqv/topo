@@ -29,7 +29,6 @@ Typical use
 import os
 import shutil
 import subprocess
-import tempfile
 import MDAnalysis as mda
 from MDAnalysis.analysis.distances import distance_array
 import numpy as np
@@ -383,8 +382,13 @@ def get_bs_contact_matrix(u: mda.Universe, cutoff: float = DEFAULT_CUTOFF) -> np
     """
     key_to_index, _, n_residues = get_residue_mapping(u)
 
-    backbone = u.select_atoms('protein and backbone and not name H*')
-    sidechain = u.select_atoms("protein and not backbone and not name H*")
+    # The MDAnalysis 'backbone' keyword only matches N, CA, C, O, so the terminal
+    # carboxyl oxygens (OXT/OT1/OT2) would otherwise fall into the "not backbone"
+    # sidechain set. They are backbone (terminal) atoms, not sidechain; counting
+    # them as sidechain creates spurious sidechain contacts for the C-terminal
+    # residue (and gives glycine, which has no sidechain, a fake one).
+    backbone = u.select_atoms('protein and (backbone or name OXT OT1 OT2) and not name H*')
+    sidechain = u.select_atoms("protein and not backbone and not name H* OXT OT1 OT2")
 
     dists_bs = distance_array(backbone.positions, sidechain.positions)
 
@@ -436,7 +440,10 @@ def get_ss_contact_matrix(u: mda.Universe, cutoff: float = DEFAULT_CUTOFF) -> np
         are 0-based residue order from :func:`get_residue_mapping`.
     """
     key_to_index, _, n_residues = get_residue_mapping(u)
-    sidechain = u.select_atoms("protein and not backbone and not name H*")
+    # Exclude terminal carboxyl oxygens (OXT/OT1/OT2): they are backbone atoms,
+    # not sidechain, so they must not generate sidechain-sidechain contacts. See
+    # the note in get_bs_contact_matrix.
+    sidechain = u.select_atoms("protein and not backbone and not name H* OXT OT1 OT2")
 
     dists_ss = distance_array(sidechain.positions, sidechain.positions)
     ss_contact_matrix = np.zeros((n_residues, n_residues), dtype=int)
@@ -671,7 +678,8 @@ def get_scaling_ss_matrix(domain_def: str) -> np.ndarray:
     Reads domain definitions from YAML and builds an (n × n) matrix where
     entry [i, j] is the intra-domain strength if residues i and j are in
     the same domain, or the inter-domain strength if they are in different
-    domains (or 0 if no inter strength is defined).
+    domains (defaulting to 1.0 — no scaling — when no inter strength is
+    defined for that domain pair).
 
     Parameters
     ----------
@@ -717,7 +725,14 @@ def get_scaling_ss_matrix(domain_def: str) -> np.ndarray:
                 elif (dom_j, dom_i) in inter_strengths:
                     matrix[i_idx, j_idx] = inter_strengths[(dom_j, dom_i)]
                 else:
-                    matrix[i_idx, j_idx] = 0.0
+                    # Default to 1.0 (identity = no scaling), not 0.0. The scaling
+                    # matrix only modulates the strength of contacts that already
+                    # exist in the native contact map; an unspecified inter-domain
+                    # pair should leave those native contacts unchanged rather than
+                    # silently delete them. This matches the neutral default used
+                    # for single-domain systems and for the auto 'X' domain. To
+                    # decouple two domains, set their pair to 0.0 explicitly.
+                    matrix[i_idx, j_idx] = 1.0
     
     return matrix
 
@@ -783,9 +798,12 @@ def build_nonbonded_interaction(
         If None, all residues are treated as a single domain (scaling 1.0 everywhere).
     stride_output_file : str, optional
         Path to STRIDE output for hydrogen bond list. If None, the function checks
-        whether the ``stride`` program is available and executable; if yes, runs
-        ``stride -h pdb_file`` and uses that output. If stride is not found, raises
-        an error (provide a precomputed STRIDE file or install STRIDE).
+        whether the ``stride`` program is available; if yes, it runs
+        ``stride -h pdb_file``, caches the output to ``{prefix}_stride.dat`` (prefix
+        taken from the PDB filename), and parses that file. STRIDE success is judged
+        by output content (presence of DNR records), not the process exit code,
+        since some STRIDE builds return non-zero even on success. If stride is not
+        found, raises an error (provide a precomputed STRIDE file or install STRIDE).
 
     Returns
     -------
@@ -813,9 +831,11 @@ def build_nonbonded_interaction(
     u = mda.Universe(pdb_file)
     resid_to_index, index_to_resname, n_residues = get_residue_mapping(u)
 
-    # Resolve STRIDE output: use file if given, else run stride -h pdb_file if executable
+    # Resolve STRIDE output: use the file if provided; otherwise, if the `stride`
+    # program is available, run it and cache the output to "{prefix}_stride.dat"
+    # (prefix taken from the PDB filename, e.g. 1AKE_A.pdb -> 1AKE_A_stride.dat),
+    # then parse that file.
     stride_path = stride_output_file
-    temp_stride_path = None
     if stride_path is None:
         stride_exe = shutil.which("stride")
         if stride_exe is None:
@@ -824,43 +844,34 @@ def build_nonbonded_interaction(
                 "Either provide a precomputed STRIDE output file (stride_output_file=...) or "
                 "install STRIDE and ensure it is on PATH."
             )
-        print("Running STRIDE on structure (stride -h {}).".format(pdb_file))
+        prefix = os.path.splitext(os.path.basename(pdb_file))[0]
+        stride_path = "{}_stride.dat".format(prefix)
+        print("Running STRIDE on structure (stride -h {} -> {}).".format(pdb_file, stride_path))
         try:
             result = subprocess.run(
                 [stride_exe, "-h", pdb_file],
                 capture_output=True,
                 text=True,
-                check=True,
                 timeout=60,
             )
-        except subprocess.CalledProcessError as e:
-            raise RuntimeError(
-                "STRIDE failed: {} {}".format(e.stderr or "", e.stdout or "")
-            ) from e
         except FileNotFoundError:
             raise RuntimeError(
                 "stride executable was found but could not be run. "
                 "Ensure stride is executable and on PATH."
             ) from None
-        fd, temp_stride_path = tempfile.mkstemp(suffix=".stride.dat", text=True)
-        try:
-            with os.fdopen(fd, "w") as f:
-                f.write(result.stdout)
-            stride_path = temp_stride_path
-        except Exception:
-            if temp_stride_path is not None:
-                os.unlink(temp_stride_path)
-            raise
+        # NOTE: some STRIDE builds return a non-zero exit code even on success, so we
+        # validate by output content (presence of DNR hydrogen-bond records, which
+        # parse_hydrogen_bonds keys on) rather than trusting the process return code.
+        if "DNR" not in result.stdout:
+            raise RuntimeError(
+                "STRIDE produced no hydrogen-bond (DNR) records for {} (exit code {}). "
+                "stderr: {}".format(pdb_file, result.returncode, result.stderr)
+            )
+        with open(stride_path, "w") as f:
+            f.write(result.stdout)
 
     print("Building hydrogen bond contact matrix...")
-    try:
-        hb_contact_matrix = get_hb_contact_matrix(stride_path, resid_to_index, n_residues)
-    finally:
-        if temp_stride_path is not None:
-            try:
-                os.unlink(temp_stride_path)
-            except OSError:
-                pass
+    hb_contact_matrix = get_hb_contact_matrix(stride_path, resid_to_index, n_residues)
     # Matrix values: 0, 1, or 2 only (2+ H-bonds capped; energy 0.75 kcal/mol per single, 1.5 for multiple)
     hb_interaction_energy = ENERGY_PARAMS['hydrogen_bond'] * hb_contact_matrix
 

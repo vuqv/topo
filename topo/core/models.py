@@ -171,27 +171,31 @@ class models:
         print("---")
 
         # non-bonded interaction
+        # The structure-based (contact) non-bonded term is a core part of the TOPO
+        # model: without it there are no native/Go contacts, no H-bond/sidechain
+        # energies, and no domain scaling. A failure here must be fatal rather than
+        # silently swallowed, otherwise the simulation runs an incomplete force field.
         print("Building non-bonded interactions for TOPO model...")
         try:
             distance_matrix, energy_matrix = build_nonbonded_interaction(
                 structure_file,
                 domain_def,
-                stride_output_file # TODO: If Stride output is None, then run stride on structure_file to generate the stride output file
+                stride_output_file,
             )
-            print(f"Built non-bonded interaction matrices: {distance_matrix.shape}, {energy_matrix.shape}")
-            
-            # Store the matrices in the topo_model object for later use
-            topo_model.distance_matrix = distance_matrix
-            topo_model.energy_matrix = energy_matrix
-            
-            # You can also add them to the system if needed
-            topo_model.addCustomNonBondedForce(distance_matrix, energy_matrix, use_pbc)
-            
         except Exception as e:
-            print(f"Warning: Could not build non-bonded interactions: {e}")
-            print("Continuing with default non-bonded interactions...")
-            distance_matrix = None
-            energy_matrix = None
+            raise RuntimeError(
+                "Failed to build the TOPO structure-based non-bonded interactions "
+                f"(domain_def={domain_def!r}, stride_output_file={stride_output_file!r}): {e}"
+            ) from e
+
+        print(f"Built non-bonded interaction matrices: {distance_matrix.shape}, {energy_matrix.shape}")
+
+        # Store the matrices on the model for later use
+        topo_model.distance_matrix = distance_matrix
+        topo_model.energy_matrix = energy_matrix
+
+        # Add the custom non-bonded (contact) force to the system
+        topo_model.addCustomNonBondedForce(distance_matrix, energy_matrix, use_pbc)
 
 
 
