@@ -20,7 +20,8 @@ The first class, geometry, contains methods to calculate the geometrical paramet
 
 The library is open-source and offers flexibility.
 """
-__all__ = ['system', 'models', 'dynamics', 'build_structure']
+__all__ = ['system', 'models', 'dynamics', 'build_structure',
+           'read_simulation_config', 'SimulationConfig']
 
 from .core import geometry
 from .core import models
@@ -29,3 +30,4 @@ from .dynamics import dynamics
 from .parameters import model_parameters
 from .reporter import topoReporter
 from .utils import build_structure
+from .utils.config import read_simulation_config, SimulationConfig

@@ -1,18 +1,28 @@
 Simulation control options
 ==========================
 
-An example of how the simulation config file (e.g. ``md.ini``) looks:
+Simulation parameters are read from an ``.ini`` file (e.g. ``md.ini``) by
+:func:`topo.read_simulation_config`, which returns a
+:class:`~topo.utils.config.SimulationConfig`. The section title ``[OPTIONS]`` is
+required.
+
+* Comments: inline or on their own line, starting with ``;`` or ``#``.
+* Keyword and value are separated by ``=`` or ``:``.
+* Every option below has a default **except** the ones marked *required*; you
+  only need to set the options you want to change.
+
+Example ``md.ini``:
 
 .. code-block::
 
         [OPTIONS]
         md_steps = 500_000   ; number of steps (underscores allowed)
-        dt = 0.01 ; time step in ps
-        nstxout = 1000 ; number of steps to write checkpoint = nstxout
-        nstlog = 1000 ; number of steps to print log
-        nstcomm = 100 ; frequency for center of mass motion removal
-        ; TOPO model (only option currently)
-        model = topo
+        dt = 0.01            ; time step in ps
+        nstxout = 1000       ; steps between trajectory/checkpoint writes
+        nstlog = 1000        ; steps between log writes
+        nstcomm = 100        ; steps between center-of-mass motion removal
+        model = topo         ; TOPO model (only option currently)
+        constraints = AllBonds  ; AllBonds (rigid) or None (flexible bonds)
 
         ; temperature coupling
         tcoupl = yes
@@ -26,160 +36,200 @@ An example of how the simulation config file (e.g. ``md.ini``) looks:
 
         ; periodic boundary condition
         pbc = yes
-        ; box_dimension = x (cubic) or [x, y, z] (rectangular), in nm
-        box_dimension = 30   ; or [30, 30, 60]
+        box_dimension = 30   ; cubic 30 nm; or [30, 30, 60] for a box
 
         ; input
         protein_code = 2ww4
         pdb_file = 2ww4.pdb
-        ; optional: for structure-based non-bonded (TOPO)
-        domain_def = domain.yaml
-        stride_output_file = stride.dat
+        domain_def = domain.yaml      ; optional
+        stride_output_file = stride.dat ; optional
         ; output
         checkpoint = 2ww4.chk
-        ; GPU/CPU
+        ; hardware
         device = GPU
         ppn = 4
         ; restart
         restart = no
         minimize = no
 
-General information
-+++++++++++++++++++
-Simulation parameters are read from an `.ini` file (e.g. ``md.ini``) using Python's :mod:`configparser`. The section title ``[OPTIONS]`` is required.
 
-* Comments: inline or new line, start with ``;`` or ``#``
-* Keyword and value separated by ``=`` or ``:``
-
-Run control
-+++++++++++
-
-::
-
-    md_steps:   (int)
-                Total number of integration steps. Underscores are allowed (e.g. 500_000).
-    ------------------------------------------------------------------------------------
-    dt:         (float)
-                (0.01) [ps] Time step for integration
-    ------------------------------------------------------------------------------------
-    nstxout:    (int)
-                Steps between writing coordinates and checkpoint to output files
-    ------------------------------------------------------------------------------------
-    nstlog:     (int)
-                Steps between writing energies to the log file
-    ------------------------------------------------------------------------------------
-    nstcomm:    (int)
-                (100) Frequency for center-of-mass motion removal
-
-Model parameter
-+++++++++++++++
-Currently only the **topo** model is supported: topology-based coarse-grained CA model with structure-based non-bonded contacts and Yukawa electrostatics.
-
-::
-
-    model:      (string)
-                topo: TOPO model (default). Uses domain_def and stride_output_file when provided for contact-based non-bonded interactions.
-
-
-Temperature coupling
-+++++++++++++++++++++
-
-::
-
-    tcoupl:     (bool)
-                yes (default) : The only available option for now, we don't care about NVE ensemble.
-    ------------------------------------------------------------------------------------
-    ref_t:      (double)
-                (300) [K] : Reference temperature in unit of Kelvin
-    ------------------------------------------------------------------------------------
-    tau_t:      (double)
-                [ps^-1] : The friction coefficient which couples the system to the heat bath (in inverse picoseconds)
-
-Pressure coupling
-+++++++++++++++++++
-
-::
-
-    pcoupl      (bool)
-                yes : Using pressure coupling
-
-                no (default) : Run on NVT ensemble only
-    ------------------------------------------------------------------------------------
-    ref_p       (double)
-                 (1) [bar] The default pressure acting on the system.
-    ------------------------------------------------------------------------------------
-    frequency_p (int)
-                (25) [steps] the frequency at which Monte Carlo pressure changes should be attempted
-
-Periodic boundary condition:
-+++++++++++++++++++++++++++++
-if pcoupl is yes then pbc must be yes.
-
-::
-
-    pbc         (bool)
-                yes : Using periodic boundary condition.
-                        If this option is chosen, then it will affect to non-bonded forces in the system,
-                        and the coordinate writen in PDB and DCD file as well. No worries since I have handled these.
-
-                no (default) : Without periodic boundary condition.
-    ------------------------------------------------------------------------------------
-    box_dimension   (float or list of float)
-                [nm] An example of box dimension:
-                If you want a cubic box of 30x30x30 nm^3, put: 30 or [30, 30, 30]
-                If you want a rectangular box? Put:  [30, 30, 60]
-
-File input/output
+Parameter summary
 +++++++++++++++++
 
-::
+"Required = yes" means the run cannot proceed without it. Options with a default
+may be omitted. ``—`` in the *Default* column means there is no default (the
+option is either required, or only meaningful in a specific mode noted in the
+description).
 
-    protein_code    (string)
-                    Output prefix, e.g. {protein_code}.dcd, {protein_code}.log
-    ------------------------------------------------------------------------------------
-    pdb_file        (string)
-                    [.pdb, .cif] Input structure for topology and initial coordinates
-    ------------------------------------------------------------------------------------
-    domain_def      (string, optional)
-                    Path to domain definition YAML (e.g. domain.yaml) for TOPO structure-based non-bonded scaling. Omit for single-domain or if not using domain scaling.
-    ------------------------------------------------------------------------------------
-    stride_output_file  (string, optional)
-                    Path to STRIDE output file for hydrogen-bond-based contact energies in TOPO. If omitted, the builder may attempt to run STRIDE on the structure.
-    ------------------------------------------------------------------------------------
-    checkpoint      (string)
-                    [.chk] Checkpoint file name; required for restart and for saving state.
+.. list-table::
+   :header-rows: 1
+   :widths: 20 14 10 14 42
 
-Simulation platform
-+++++++++++++++++++++
-Simulation can be run on CPU with number of threads is control by `ppn` or using GPU.
-If `device=CPU` then ppn need to be specify, otherwise simulation will run on 1 core
+   * - Option
+     - Type
+     - Required
+     - Default
+     - Description
+   * - ``md_steps``
+     - int
+     - no
+     - ``1000``
+     - Total number of integration steps. Underscores are allowed (``500_000``).
+   * - ``dt``
+     - float [ps]
+     - no
+     - ``0.01``
+     - Integration time step.
+   * - ``nstxout``
+     - int
+     - no
+     - ``10``
+     - Steps between writing the trajectory (DCD) and checkpoint.
+   * - ``nstlog``
+     - int
+     - no
+     - ``10``
+     - Steps between writing the energy/temperature log.
+   * - ``nstcomm``
+     - int
+     - no
+     - ``100``
+     - Steps between center-of-mass motion removals.
+   * - ``model``
+     - str
+     - no
+     - ``topo``
+     - Force-field model. Only ``topo`` is currently supported.
+   * - ``constraints``
+     - str
+     - no
+     - ``AllBonds``
+     - Bond treatment: ``AllBonds`` (rigid bonds via constraints) or ``None`` (flexible harmonic bonds). Mutually exclusive.
+   * - ``tcoupl``
+     - bool
+     - no
+     - ``yes``
+     - Langevin thermostat on/off. (NVE is not used.)
+   * - ``ref_t``
+     - float [K]
+     - no
+     - ``300``
+     - Reference temperature. Used when ``tcoupl = yes``.
+   * - ``tau_t``
+     - float [ps⁻¹]
+     - no
+     - ``0.01``
+     - Friction coefficient coupling the system to the heat bath. Used when ``tcoupl = yes``.
+   * - ``pcoupl``
+     - bool
+     - no
+     - ``no``
+     - Monte Carlo barostat on/off. Requires ``pbc = yes``.
+   * - ``ref_p``
+     - float [bar]
+     - no
+     - ``1``
+     - Reference pressure. Used when ``pcoupl = yes``.
+   * - ``frequency_p``
+     - int [steps]
+     - no
+     - ``25``
+     - Barostat move attempt frequency. Used when ``pcoupl = yes``.
+   * - ``pbc``
+     - bool
+     - no
+     - ``no``
+     - Periodic boundary conditions on/off.
+   * - ``box_dimension``
+     - float or [x,y,z] [nm]
+     - if ``pbc = yes``
+     - ``—``
+     - Box size: a scalar ``L`` gives a cubic ``L×L×L`` box; a list ``[x, y, z]`` a rectangular box.
+   * - ``pdb_file``
+     - str
+     - **yes**
+     - ``—``
+     - Input structure (``.pdb`` / ``.cif``) for topology and initial coordinates.
+   * - ``protein_code``
+     - str
+     - **yes**
+     - ``—``
+     - Output filename prefix, e.g. ``{protein_code}.dcd``, ``{protein_code}.log``.
+   * - ``checkpoint``
+     - str
+     - **yes**
+     - ``—``
+     - Checkpoint file (``.chk``); written during the run and read on restart.
+   * - ``domain_def``
+     - str
+     - no
+     - ``—``
+     - Path to a domain YAML for per-domain sidechain-contact scaling. If omitted, all SS contacts use scale 1.0. See :doc:`domain_definition`.
+   * - ``stride_output_file``
+     - str
+     - no
+     - ``—``
+     - Path to a precomputed STRIDE output. If omitted, STRIDE is run automatically on the structure (and cached to ``{prefix}_stride.dat``).
+   * - ``device``
+     - str
+     - no
+     - ``CPU``
+     - Compute platform: ``CPU`` or ``GPU`` (CUDA).
+   * - ``ppn``
+     - int
+     - no
+     - ``1``
+     - Number of CPU threads. Used when ``device = CPU``.
+   * - ``restart``
+     - bool
+     - no
+     - ``no``
+     - Restart from ``checkpoint`` instead of the PDB coordinates. Forces ``minimize = no``.
+   * - ``minimize``
+     - bool
+     - no
+     - ``yes``
+     - Energy-minimize the input structure before dynamics. Forced ``no`` when ``restart = yes``.
 
-::
+.. note::
 
-    device          (string)
-                    GPU : Use gpu to run simulation
+   Boolean options accept ``yes``/``no``, ``true``/``false``, ``1``/``0``
+   (parsed by :func:`distutils.util.strtobool`).
 
-                    CPU (default) : use cpu to run simulation, if you specify cpu, you should modify ppn option, it control
-                            how many cores will be used to run simulation, if not, default is 1.
-    ------------------------------------------------------------------------------------
-    ppn             (int)
-                    (1) [threads] Number of threads used to run simulation on CPU. When using GPU,
-                                performance is boosted a lot so ppn in that case is set to 1.
 
-Restart simulation
-++++++++++++++++++++
+Notes on individual options
++++++++++++++++++++++++++++
 
-::
+Bond treatment (``constraints``)
+    ``AllBonds`` (default) makes every bond a rigid distance constraint and adds
+    no harmonic bond force — appropriate for the standard CA model and required
+    for the usual 15 fs / 0.015 ps time step. ``None`` (also ``none`` / empty)
+    instead adds a harmonic bond force and no constraints (flexible bonds). The
+    two modes are mutually exclusive.
 
-    restart         (bool)
-                    yes : restart simulation from checkpoint file. This can be True, 1 or whatever are not (FALSE)
-                            in python condition. If this option is selected, minimize will be force to False.
+Temperature / pressure coupling
+    ``ref_t`` and ``tau_t`` are only consumed when ``tcoupl = yes``; ``ref_p``
+    and ``frequency_p`` only when ``pcoupl = yes``. Pressure coupling additionally
+    requires ``pbc = yes`` (asserted at parse time).
 
-                    no (default) : Run simulation from beginning, if this option is selected, you can choose if you want to minimize your
-                        system before running simulation.
-    ------------------------------------------------------------------------------------
+Periodic boundary conditions
+    Turning ``pbc`` on affects the non-bonded forces and how coordinates are
+    written to the PDB/DCD (handled internally). ``box_dimension`` must be given
+    when ``pbc = yes``; an invalid/empty value silently disables PBC.
 
-    minimize        (bool)
-                    yes (default) : perform energy minimization before run molecular dynamics.
+``domain_def`` and ``stride_output_file``
+    Both are optional inputs to the TOPO structure-based non-bonded potential.
+    Omit ``domain_def`` for no domain scaling (every SS contact scaled by 1.0).
+    Omit ``stride_output_file`` to let the builder run STRIDE for you (STRIDE must
+    be on ``PATH``); supply a path to reuse a precomputed file.
 
-                    no : Not running energy minimization. This is default option when restart option is set to yes.
+``restart`` and ``minimize``
+    ``restart = yes`` loads positions **and** velocities from ``checkpoint`` and
+    continues; reporters append to the existing log/trajectory, and ``minimize``
+    is forced off. With ``restart = no`` you may choose ``minimize``. Note that a
+    native input structure is already the energy minimum of the structure-based
+    model, so minimization is usually unnecessary.
+
+Hardware (``device`` / ``ppn``)
+    ``device = GPU`` runs on CUDA (mixed precision). ``device = CPU`` uses ``ppn``
+    threads; ``ppn`` is ignored on GPU.
