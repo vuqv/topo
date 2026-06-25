@@ -1,4 +1,0 @@
-pdbfile = ../../../P0CX28_clean.pdb
-casm = 0
-potential_name = bt
-domain_file = domain_def.dat
