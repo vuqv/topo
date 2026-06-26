@@ -78,14 +78,15 @@ That single line switches on domain-aware contact scaling.
 ```bash
 python run_simulation.py -f md.ini
 ```
-In the build log you'll see `Domain definition file: domain.yaml` and
-`Built non-bonded interaction matrices: (214, 214), (214, 214)`, confirming the
-214×214 contact matrices were built with your scaling applied.
+In the build log you'll see `Domain definition file: domain.yaml`, a
+`contact matrices: (214, 214)` line and a `native contacts: … | non-native pairs: …`
+summary, confirming the 214×214 contact matrices were built with your scaling applied.
 
 ### 3. Outputs
-Same set as Tutorial 1, prefixed with `protein_code = 1AKE_A`
-(`1AKE_A.log`, `1AKE_A.dcd`, `1AKE_A.chk`, `1AKE_A.psf`,
-`1AKE_A_init.pdb`, `1AKE_A_final.pdb`, `1AKE_A_stride.dat`).
+Same set as Tutorial 1, in the `traj/` run folder:
+`traj/traj.log`, `traj/traj.dcd`, `traj/traj.chk`, `traj/traj.psf`,
+`traj/traj_final.pdb`, `traj/traj_runinfo.log` (plus the cached STRIDE
+`*_stride.dat` next to the input PDB).
 
 ## Build your own `domain.yaml`
 

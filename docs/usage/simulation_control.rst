@@ -18,9 +18,12 @@ Example ``md.ini``:
         [OPTIONS]
         md_steps = 500_000   ; number of steps (underscores allowed)
         dt = 0.01            ; time step in ps
-        nstxout = 1000       ; steps between trajectory/checkpoint writes
+        nstxout = 1000       ; steps between trajectory (DCD) writes
         nstlog = 1000        ; steps between log writes
-        nstcomm = 100        ; steps between center-of-mass motion removal
+        nstchk = 5000        ; steps between checkpoint writes (default: nstxout)
+        nstcomm = 100        ; center-of-mass motion removal; omit for multi-chain runs
+        log_precision = 4    ; decimal places for float columns in the .log
+        log_width = 14       ; min column width for aligned, fixed-width .log
         model = topo         ; TOPO model (only option currently)
         constraints = AllBonds  ; AllBonds (rigid) or None (flexible bonds)
 
@@ -39,12 +42,13 @@ Example ``md.ini``:
         box_dimension = 30   ; cubic 30 nm; or [30, 30, 60] for a box
 
         ; input
-        protein_code = 2ww4
         pdb_file = 2ww4.pdb
+        ; init_position = traj/traj_final.pdb   ; optional starting coordinates
         domain_def = domain.yaml      ; optional
         stride_output_file = stride.dat ; optional
-        ; output
-        checkpoint = 2ww4.chk
+        ; output  (all files -> <output_dir>/<outname>.*, default traj/traj.*)
+        output_dir = traj
+        outname = traj
         ; hardware
         device = GPU
         ppn = 4
@@ -84,17 +88,32 @@ description).
      - int
      - no
      - ``10``
-     - Steps between writing the trajectory (DCD) and checkpoint.
+     - Steps between writing the trajectory (DCD).
    * - ``nstlog``
      - int
      - no
      - ``10``
      - Steps between writing the energy/temperature log.
+   * - ``nstchk``
+     - int
+     - no
+     - ``nstxout``
+     - Steps between writing the checkpoint. Defaults to ``nstxout`` when unset, so checkpoint and trajectory frequency can be decoupled (e.g. frequent checkpoints, sparser frames).
    * - ``nstcomm``
      - int
      - no
-     - ``100``
-     - Steps between center-of-mass motion removals.
+     - ``—`` (off)
+     - Steps between center-of-mass motion removals. **Unset by default → no COM removal.** COM removal suits a single chain but couples the drift of independent chains, so leave it off for multi-copy runs (``n_copies > 1``).
+   * - ``log_precision``
+     - int
+     - no
+     - ``4``
+     - Decimal places for floating-point columns (energies, time, temperature, ...) in the ``.log``. Set to ``None`` for OpenMM's full ``repr`` precision.
+   * - ``log_width``
+     - int
+     - no
+     - ``14``
+     - Minimum width (characters) of each ``.log`` column, right-justified, so columns line up. Each column uses ``max(header_length, log_width)``. Set to ``None`` to disable fixed-width formatting.
    * - ``model``
      - str
      - no
@@ -105,6 +124,11 @@ description).
      - no
      - ``AllBonds``
      - Bond treatment: ``AllBonds`` (rigid bonds via constraints) or ``None`` (flexible harmonic bonds). Mutually exclusive.
+   * - ``constraint_tolerance``
+     - float
+     - no
+     - ``1e-5``
+     - Integrator relative constraint tolerance. Only meaningful with ``constraints = AllBonds``.
    * - ``tcoupl``
      - bool
      - no
@@ -149,17 +173,27 @@ description).
      - str
      - **yes**
      - ``—``
-     - Input structure (``.pdb`` / ``.cif``) for topology and initial coordinates.
-   * - ``protein_code``
+     - Input structure (``.pdb`` / ``.cif``) used to build the model (topology, force field) and, by default, the initial coordinates.
+   * - ``init_position``
      - str
-     - **yes**
+     - no
      - ``—``
-     - Output filename prefix, e.g. ``{protein_code}.dcd``, ``{protein_code}.log``.
+     - Optional PDB of starting coordinates for a fresh run (atom count must match the system). If unset, the coordinates from ``pdb_file`` are used. Ignored on a successful restart (coordinates come from the checkpoint).
+   * - ``output_dir``
+     - str
+     - no
+     - ``traj``
+     - Folder for all generated files; created if missing. One run = one self-contained folder.
+   * - ``outname``
+     - str
+     - no
+     - ``traj``
+     - Basename for generated files: ``<output_dir>/<outname>.dcd``, ``.log``, ``.psf``, ``.chk``, ``_runinfo.log`` (and ``_multi.psf`` for multi-copy).
    * - ``checkpoint``
      - str
-     - **yes**
-     - ``—``
-     - Checkpoint file (``.chk``); written during the run and read on restart.
+     - no
+     - ``<output_dir>/<outname>.chk``
+     - Explicit checkpoint path override. Normally leave unset so it lands in the run folder.
    * - ``domain_def``
      - str
      - no
@@ -210,6 +244,30 @@ description).
 Notes on individual options
 +++++++++++++++++++++++++++
 
+Output layout (``output_dir`` / ``outname``)
+    Every generated file is written to ``<output_dir>/<outname><suffix>``, so a run
+    is one self-contained folder (default ``traj/``): ``traj.dcd`` (trajectory),
+    ``traj.log`` (state log), ``traj.psf`` (single-chain topology), ``traj.chk``
+    (checkpoint), ``traj_final.pdb`` (last conformation — reusable as
+    ``init_position`` for a follow-up run), ``traj_runinfo.log`` (provenance), and
+    ``traj_multi.psf`` for a multi-copy run. ``output_dir`` is created
+    automatically if missing. To keep
+    several runs side by side, point each at its own folder (e.g.
+    ``output_dir = runs/P0CX28_T300``) or change ``outname``.
+
+Output frequency and log formatting (``nstxout`` / ``nstchk`` / ``nstcomm`` / ``log_precision`` / ``log_width``)
+    ``nstxout`` controls trajectory (DCD) frames; ``nstchk`` controls checkpoint
+    writes and defaults to ``nstxout`` when unset, so the two can be decoupled.
+    ``nstcomm`` is **off unless set** — center-of-mass motion removal is only
+    appropriate for a single chain (it couples the drift of independent chains),
+    so leave it unset for multi-copy runs. The log reporter is
+    :class:`topo.topoReporter`, which writes a fixed-width, aligned ``.log``:
+    ``log_precision`` sets the decimals for float columns (default ``4``;
+    ``None`` for full precision) and ``log_width`` sets the minimum column width
+    (default ``14``; ``None`` to disable padding). Columns are separated by two
+    spaces and the header is a ``#`` comment, so the log stays both human-readable
+    and machine-parsable (see :func:`topo.reporter.readOpenMMReporterFile`).
+
 Bond treatment (``constraints``)
     ``AllBonds`` (default) makes every bond a rigid distance constraint and adds
     no harmonic bond force — appropriate for the standard CA model and required
@@ -239,6 +297,20 @@ Periodic boundary conditions
     is forced off. With ``restart = no`` you may choose ``minimize``. Note that a
     native input structure is already the energy minimum of the structure-based
     model, so minimization is usually unnecessary.
+
+Initial coordinates and velocities (``init_position``)
+    The starting state is resolved as follows (and recorded in
+    ``<outname>_runinfo.log`` under ``initial_coordinates`` / ``initial_velocities``):
+
+    * ``restart = yes`` **with** the checkpoint present → positions *and* velocities
+      come from the checkpoint.
+    * Otherwise (a fresh start, **including** ``restart = yes`` when the checkpoint
+      is missing — which prints a warning) → coordinates come from ``init_position``
+      if set, else from ``pdb_file``; velocities are drawn from the Boltzmann
+      distribution at ``ref_t``.
+
+    Every run also writes ``<outname>_final.pdb`` (the last conformation), which
+    you can pass as ``init_position`` to seed a follow-up run.
 
 Hardware (``device`` / ``ppn``)
     ``device = GPU`` runs on CUDA (mixed precision). ``device = CPU`` uses ``ppn``

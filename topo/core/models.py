@@ -21,7 +21,8 @@ class models:
                      domain_def: str = None,
                      stride_output_file: str = None,
                      box_dimension: Any = None,
-                     constraints: Any = 'AllBonds'):
+                     constraints: Any = 'AllBonds',
+                     check_forces: bool = True):
         """
         Build a topology-based coarse-grained model for a folded protein system.
 
@@ -51,6 +52,11 @@ class models:
               bond's equilibrium length and no harmonic bond force is created.
             - None (or the string 'None'/'none') : flexible bonds. A harmonic
               bond force is created and no constraints are added.
+        check_forces : bool, optional (default: True)
+            If True, run the build-time energy/large-force check on the initial
+            input structure. Set False when restarting from a checkpoint, where
+            the input-structure energy is irrelevant (the loaded state, not the
+            PDB geometry, is what gets simulated).
 
         Returns
         -------
@@ -58,29 +64,19 @@ class models:
             Initialized coarse-grained system ready for simulation.
         """
 
-        # common for all model:
-        print(f'Generating CA coarse-grained model for structure from file {structure_file}')
         print('')
+        print('=' * 66)
+        print('[ System build ]')
+        print('=' * 66)
+        print(f'Building CA coarse-grained model (model={model}) from {structure_file}')
+
         topo_model = system(structure_file, model)
-        print("Checking input structure file ...")
-        print("Be sure that you do not have missing residues in the initial structure. At the moment, I will not take "
-              "care of that")
 
-        # Set up geometric parameters of the model
-        print('Setting up geometrical parameters ...')
-        print('__________________________________________________________________')
-        print('Keeping only alpha carbon atoms in topology')
+        # Build alpha-carbon topology (atoms, bonds, angles).
         topo_model.getCAlphaOnly()
-
-        print(f'There are {topo_model.n_chains} chain(s) in the input file.')
-
-        # set particle's properties
-        # Common for all
         topo_model.getAtoms()
-        print('Added ' + str(topo_model.n_atoms) + ' CA atoms')
-
         topo_model.getBonds()
-        print('Added ' + str(topo_model.n_bonds) + ' bonds')
+        topo_model.getAngles()
 
         # Resolve the bond-constraint mode. Accepted values: 'AllBonds' (rigid,
         # default) or None / 'None' / 'none' (flexible). Rigid and flexible are
@@ -94,54 +90,33 @@ class models:
                 f"Invalid constraints option: {constraints!r}. "
                 f"Expected 'AllBonds' or None.")
 
+        bond_mode = 'rigid (AllBonds)' if use_constraints else 'flexible (harmonic)'
+        print(f'  chains={topo_model.n_chains}  CA atoms={topo_model.n_atoms}  '
+              f'bonds={topo_model.n_bonds}  angles={topo_model.n_angles}')
+        print(f'  bonds: {bond_mode}')
+
         # Rigid bonds: constrain every bond at its equilibrium length (no harmonic
         # bond force is added later in that case).
         if use_constraints:
             for bond in topo_model.bonds:
                 topo_model.system.addConstraint(bond[0].index, bond[1].index, topo_model.bonds[bond][0])
-            print(f'Constraining all bonds at equilibrium length (constraints=AllBonds)')
-        else:
-            print('Bonds are flexible (constraints=None); a harmonic bond force will be added')
 
-        print("Setting alpha-carbon masses to their average residue mass.")
+        # Per-residue particle properties (mass, charge, excluded-volume radius).
         topo_model.setCAMassPerResidueType()
-
-        print("Setting alpha-carbon charge to their residue charge.")
         topo_model.setCAChargePerResidueType()
-
-        print("Setting alpha-carbon excluded-volume radius to their residue radius.")
         topo_model.setCARadiusPerResidueType()
 
-        
-        
-        # set particle interactions
-        # add forces to system
-        print('Adding default bond force constant:', end=' ')
+        # set particle interactions and add forces to system
         topo_model.setBondForceConstants()
-        print('')
-        print('__________________________________________________________________')
 
-        # all models have bonded interactions
-        print('Adding Forces:')
         # Only add the harmonic bond force when bonds are flexible. With rigid
         # bonds (constraints=AllBonds) the distance is pinned, so a harmonic term
         # would be redundant (it contributes ~0 energy/force) and would also show
         # a misleading non-zero bond energy on the unconstrained input geometry.
         if not use_constraints:
             topo_model.addHarmonicBondForces()
-            print('Added Harmonic Bond Forces')
-        else:
-            print('Skipping harmonic bond force (bonds are constrained/rigid)')
-        print("---")
 
-
-        # this model has angle bonded potential.
-        # angle
-        topo_model.getAngles()
-        print(f'Added {topo_model.n_angles} angles ')
         topo_model.addGaussianAngleForces()
-        print('Added Gaussian Angle Forces')
-        print("---")
 
         # add Periodic Torsion angle for topo model
         topo_model.getTorsions()
@@ -170,15 +145,12 @@ class models:
             use_pbc = False
 
         topo_model.addYukawaForces(use_pbc)
-        print('Added Yukawa Force')
-        print("---")
 
         # non-bonded interaction
         # The structure-based (contact) non-bonded term is a core part of the TOPO
         # model: without it there are no native/Go contacts, no H-bond/sidechain
         # energies, and no domain scaling. A failure here must be fatal rather than
         # silently swallowed, otherwise the simulation runs an incomplete force field.
-        print("Building non-bonded interactions for TOPO model...")
         try:
             distance_matrix, energy_matrix = build_nonbonded_interaction(
                 structure_file,
@@ -191,7 +163,7 @@ class models:
                 f"(domain_def={domain_def!r}, stride_output_file={stride_output_file!r}): {e}"
             ) from e
 
-        print(f"Built non-bonded interaction matrices: {distance_matrix.shape}, {energy_matrix.shape}")
+        print(f'  contact matrices: {distance_matrix.shape}')
 
         # Store the matrices on the model for later use
         topo_model.distance_matrix = distance_matrix
@@ -200,18 +172,11 @@ class models:
         # Add the custom non-bonded (contact) force to the system
         topo_model.addCustomNonBondedForce(distance_matrix, energy_matrix, use_pbc)
 
-
-
-
-        print('')
-        print('__________________________________________________________________')
-
-        # Generate the system object and add previously generated forces
-
-        print('Creating System Object:')
-        # print('______________________')
-        topo_model.createSystemObject(minimize=minimize, check_bond_distances=True)
-        print('topo system Object created')
-        print('')
+        # Generate the system object and add previously generated forces. The
+        # bond-distance check always runs (it validates the built geometry); the
+        # large-force / initial-energy check is skipped on restart (check_forces
+        # is False there) since the loaded checkpoint state is what matters.
+        topo_model.createSystemObject(minimize=minimize, check_bond_distances=True,
+                                      check_large_forces=check_forces)
 
         return topo_model

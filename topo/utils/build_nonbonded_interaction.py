@@ -29,6 +29,7 @@ Typical use
 import os
 import shutil
 import subprocess
+import warnings
 import MDAnalysis as mda
 from MDAnalysis.analysis.distances import distance_array
 import numpy as np
@@ -828,7 +829,16 @@ def build_nonbonded_interaction(
     (283, 283)
     """
     print("Loading protein structure...")
-    u = mda.Universe(pdb_file)
+    # A placeholder "1 A^3" CRYST1 record is common in CG/processed PDBs and makes
+    # MDAnalysis warn that the unit cell is set to None. The box is irrelevant here
+    # (only coordinates/topology are used), so the warning is safe to silence.
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message=r".*CRYST1 record.*",
+            category=UserWarning,
+        )
+        u = mda.Universe(pdb_file)
     resid_to_index, index_to_resname, n_residues = get_residue_mapping(u)
 
     # Resolve STRIDE output: use the file if provided; otherwise, if the `stride`
@@ -870,16 +880,13 @@ def build_nonbonded_interaction(
         with open(stride_path, "w") as f:
             f.write(result.stdout)
 
-    print("Building hydrogen bond contact matrix...")
     hb_contact_matrix = get_hb_contact_matrix(stride_path, resid_to_index, n_residues)
     # Matrix values: 0, 1, or 2 only (2+ H-bonds capped; energy 0.75 kcal/mol per single, 1.5 for multiple)
     hb_interaction_energy = ENERGY_PARAMS['hydrogen_bond'] * hb_contact_matrix
 
-    print("Building backbone-sidechain contact matrix...")
     bs_contact_matrix = get_bs_contact_matrix(u, cutoff=DEFAULT_CUTOFF)
     bs_interaction_energy = bs_contact_matrix * ENERGY_PARAMS['backbone_sidechain']
 
-    print("Building sidechain-sidechain contact matrix...")
     if domain_def is None:
         # Single domain: all residues scaled by 1.0
         scaling_matrix = np.ones((n_residues, n_residues))
@@ -920,7 +927,14 @@ def build_nonbonded_interaction(
     # Convert to nm for OpenMM compatibility
     distance_matrix /= DISTANCE_TO_NM
     
-    print("Non-bonded interaction matrices built successfully")
+    # Report contact statistics over unique residue pairs (upper triangle, i < j).
+    # Native contacts are residue pairs flagged in the binary contact matrix;
+    # all remaining pairs interact through the non-native (excluded-volume) term.
+    n_native = int(np.triu(binary_contact_matrix, k=1).sum())
+    n_pairs = n_residues * (n_residues - 1) // 2
+    n_non_native = n_pairs - n_native
+    print(f"  native contacts: {n_native}  |  non-native pairs: {n_non_native}  "
+          f"(of {n_pairs} residue pairs)")
     return distance_matrix, eps_ij
 
 # Main execution

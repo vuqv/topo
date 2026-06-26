@@ -76,7 +76,6 @@ model and returns the replicated `(system, topology, positions)`. It wraps
 ```ini
 n_copies = 10          ; independent chains in one run
 copy_shift = 5.0       ; nm, x-offset between copies at the start
-protein_code = P0CX28_x10
 device = CPU           ; <-- set to GPU on a CUDA machine; that's the point
 ```
 
@@ -86,20 +85,20 @@ python run_simulation.py -f md.ini
 ```
 The **same** standard runner is used as in Tutorials 1–3; because `n_copies = 10`
 the run script's `if cfg.n_copies > 1` branch replicates the model via
-`topo.make_noninteracting_copies`. Output (DCD + PSF only, no PDB):
-`P0CX28_x10.dcd` (all chains), `P0CX28_x10.log`, `P0CX28_x10.chk`,
-`P0CX28_x10.psf` (single-chain topology) and `P0CX28_x10_multi.psf`
+`topo.make_noninteracting_copies`. Output goes to the `traj/` run folder (DCD +
+PSF only, no PDB): `traj/traj.dcd` (all chains), `traj/traj.log`, `traj/traj.chk`,
+`traj/traj.psf` (single-chain topology) and `traj/traj_multi.psf`
 (multi-chain topology, matches the combined DCD).
 
 ### 3. Split into per-chain trajectories
 ```bash
 python split_chains.py -f md.ini
 ```
-This writes `P0CX28_x10_chain{0..9}.dcd` — one ordinary single-chain trajectory
+This writes `traj/traj_chain{0..9}.dcd` — one ordinary single-chain trajectory
 per copy. Load each with the single-chain PSF:
 ```python
 import MDAnalysis as mda
-u = mda.Universe("P0CX28_x10.psf", "P0CX28_x10_chain0.dcd")
+u = mda.Universe("traj/traj.psf", "traj/traj_chain0.dcd")
 # RMSD, Q, Rg, ... per independent trajectory
 ```
 

@@ -427,7 +427,6 @@ class system:
         None
         """
         bond_force_constant = model_parameters.parameters[self.model]["bond_force_constant"]
-        print(f"bond_force_constant: {bond_force_constant} kj/mol/nm^2")
 
         system._setParameters(self.bonds, bond_force_constant)
 
@@ -620,7 +619,6 @@ class system:
         -------
         None
         """
-        print("Setting Coulomb interaction ...")
         # currently, just use debye-length at [NaCl]=100mM
         lD = 1.0 * unit.nanometer
         electric_factor = 138.935458 * unit.kilojoule_per_mole * unit.nanometer / unit.elementary_charge ** 2
@@ -638,17 +636,13 @@ class system:
         self.yukawaForce.addGlobalParameter('lD', lD)
         self.yukawaForce.addPerParticleParameter('charge')
         if use_pbc:
-            print("Set cutoff Periodic ...")
             self.yukawaForce.setNonbondedMethod(mm.NonbondedForce.CutoffPeriodic)
         else:
-            print("Set cutoff NonPeriodic ...")
             self.yukawaForce.setNonbondedMethod(mm.NonbondedForce.CutoffNonPeriodic)
 
-        print(f"Use cutoff distance: {yukawa_cutoff}")
         self.yukawaForce.setCutoffDistance(yukawa_cutoff)
         self.yukawaForce.setUseSwitchingFunction(True)
         self.yukawaForce.setSwitchingDistance(yukawa_switch)
-        print(f"Use switching function from: {yukawa_switch}")
 
         if isinstance(self.particles_charge, float):
             for i in np.arange(len(self.atoms)):
@@ -670,7 +664,6 @@ class system:
         """
         Add a custom non-bonded force to the system.
         """
-        print("Adding custom non-bonded force...")
         table_R_ravel = distance_matrix.ravel().tolist()
         table_eps_ravel = energy_matrix.ravel().tolist()
         n_atoms = distance_matrix.shape[0]
@@ -769,7 +762,6 @@ class system:
         -------
         None
         """
-        print('Checking large bonds in constructed model ...')
         if isinstance(threshold, float):
             threshold = threshold * unit.nanometer
 
@@ -785,9 +777,39 @@ class system:
                 raise ValueError('The bond distance between them ' + str(self.bonds[b][0]) +
                                  'is larger than ' + str(threshold) + '. This error is caused when building model. '
                                                                       'Please report the error to the maintainer!')
-            # else:
-        print(f'All bonds seem to be OK (less than threshold: {threshold})')
-        print('')
+
+    def reportEnergy(self, simulation, header: str = 'Potential energy',
+                     section: bool = True) -> None:
+        """
+        Print the total potential energy and per-force-group breakdown for the
+        current state held in ``simulation``'s context.
+
+        Used both for the build-time energy check (initial/minimized structure)
+        and, on restart, for the state loaded from a checkpoint, so the reported
+        energy always reflects the configuration that will actually be simulated.
+
+        Parameters
+        ----------
+        simulation : openmm.app.Simulation
+            A simulation whose context holds the state to report.
+        header : str, optional
+            Label for the total-energy line.
+        section : bool, optional (default: True)
+            If True, print the ``[ Energy check ]`` section header first.
+
+        Returns
+        -------
+        None
+        """
+        if section:
+            print('-' * 66)
+            print('[ Energy check ]')
+        pe = simulation.context.getState(getEnergy=True).getPotentialEnergy()
+        print(f'{header}: {pe}')
+        for i, n in enumerate(self.forceGroups):
+            energy = simulation.context.getState(getEnergy=True, groups={i}).getPotentialEnergy().value_in_unit(
+                unit.kilojoules_per_mole)
+            print('    ' + n.replace('Force', 'Energy') + f': {energy} kJ/mol')
 
     def checkLargeForces(self, minimize: bool = False, threshold: float = 10) -> None:
         """
@@ -809,10 +831,6 @@ class system:
         None
         """
 
-        # minimized = False
-        print('__________________________________________________________________')
-        print('Potential Energy from initial structure (input structure):')
-
         # Define test simulation to extract forces
         integrator = mm.LangevinIntegrator(1 * unit.kelvin, 1 / unit.picosecond,
                                            0.0005 * unit.picoseconds)
@@ -820,45 +838,21 @@ class system:
         sim.context.setPositions(self.positions)
         state = sim.context.getState(getForces=True, getEnergy=True)
 
-        # Print initial state of the system
-        print(f'The Potential Energy of the system is : {state.getPotentialEnergy()}')
-        for i, n in enumerate(self.forceGroups):
-            energy = sim.context.getState(getEnergy=True, groups={i}).getPotentialEnergy().value_in_unit(
-                unit.kilojoules_per_mole)
-            print('The ' + n.replace('Force', 'Energy') + ' is: ' + str(energy) + ' kJ/mol')
-        print('')
-
-        # print(state.getForces())
+        # Report energy of the initial (input-structure) configuration
+        self.reportEnergy(sim, header='Initial potential energy', section=True)
 
         if minimize:
-            print('__________________________________________________________________')
-            print('Perform energy minimization ...')
             # Find if there is an acting force larger than threshold
             # minimize the system until forces have converged
             forces = [np.linalg.norm([f[0]._value, f[1]._value, f[2]._value]) for f in state.getForces()]
-            # print(state.getForces())
-            prev_force = None
             tolerance = 10
 
             while np.max(forces) > threshold:
 
-                # Write atom with the largest force if not reported before
-                if np.max(forces) != prev_force:
-                    atom = self.atoms[np.argmax(forces)]
-                    residue = atom.residue
-                    print(f'Large force {np.max(forces):.3f} kJ/(mol nm) found in:')
-                    print(f'Atom: {atom.index} {atom.name}')
-                    print(f'Residue: {residue.name} {residue.index}')
-                    print(f'Minimising system with energy tolerance of {tolerance:.1f} kJ/mol')
-                    print('_______________________')
-                    print('')
-
                 # OpenMM's minimizeEnergy expects a FORCE tolerance (kJ/mol/nm),
                 # not an energy tolerance; passing kJ/mol raises a unit error.
                 sim.minimizeEnergy(tolerance=tolerance * unit.kilojoule / (unit.mole * unit.nanometer))
-                # minimized = True
                 state = sim.context.getState(getForces=True)
-                prev_force = np.max(forces)
                 forces = [np.linalg.norm([f.x, f.y, f.z]) for f in state.getForces()]
                 if tolerance > 1:
                     tolerance -= 1
@@ -868,21 +862,9 @@ class system:
                     raise ValueError('The system could not be minimized at the requested convergence\n' +
                                      'Try to increase the force threshold value to achieve convergence.')
 
-            print(f'All forces are less than {threshold:.2f} kJ/mol/nm')
-            print('______________________')
             state = sim.context.getState(getPositions=True, getEnergy=True)
-            print('Potential Energy After minimisation:')
-            print(f'The Potential Energy of the system (after minimized) is : {state.getPotentialEnergy()}')
-            for i, n in enumerate(self.forceGroups):
-                energy = sim.context.getState(getEnergy=True, groups={i}).getPotentialEnergy().value_in_unit(
-                    unit.kilojoules_per_mole)
-                print('The ' + n.replace('Force', 'Energy') + ' is: ' + str(energy) + ' kJ/mol')
-
-            print('')
+            self.reportEnergy(sim, header='Minimized potential energy', section=False)
             self.positions = state.getPositions()
-            print('Saving minimized positions')
-            print('__________________________________________________________________')
-            print('')
 
     def addParticles(self) -> None:
         """

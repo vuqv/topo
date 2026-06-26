@@ -1,0 +1,40 @@
+# Forcefield definition
+psffile = setup/1AKE_A_ca.psf
+prmfile = setup/1AKE_A_nscal1_fnn1_go_bt.xml
+native_cor = setup/1AKE_A_ca.cor
+corfile = setup/1AKE_A_ca.cor
+
+# output-based name
+outname = traj
+
+# Number of chains in single simulations.
+n_copies = 10
+
+# Directory to store the trajectory
+traj_dir = traj
+
+# Heating to unfold protein
+temp_heating = 600
+# equilibrium in 15 ns
+heating_steps = 1000000
+
+# temperature quenching, folding at low temperature
+temp_prod = 310
+# performed production run in 2 microseconds
+mdsteps = 133333333
+
+# Running simulation on GPU or CPU
+use_gpu = yes
+ppn = 1
+
+# frequency to write dcd and checkpoint file
+nstxout = 5000
+nstlog = 5000
+restart = no
+
+# restraint_idx: atom indices to restrain
+# Format: i,j,k OR a-b,c-d (comma-separated singles/ranges; inclusive ranges)
+# Indexing: 1-based
+restraint_idx = 1-117,166-214
+# restraint_k: restraint strength in kJ/mol/nm^2, optional. Default is 1000.0.
+restraint_k = 1000.0

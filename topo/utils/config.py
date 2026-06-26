@@ -17,6 +17,7 @@ OpenMM units already applied where appropriate (``dt``, ``ref_t``, ``tau_t``,
 """
 import configparser
 from dataclasses import dataclass, field
+from pathlib import Path
 from distutils.util import strtobool
 from json import loads
 from typing import Any, List, Optional
@@ -35,11 +36,26 @@ class SimulationConfig:
     dt: Any = field(default_factory=lambda: 0.01 * unit.picoseconds)
     nstxout: int = 10
     nstlog: int = 10
-    nstcomm: int = 100
+    # Checkpoint-write frequency. When None it falls back to ``nstxout`` so that
+    # behaviour is unchanged for configs that do not set ``nstchk``.
+    nstchk: Optional[int] = None
+    # Center-of-mass motion removal frequency. When None (the default), no
+    # CMMotionRemover is added. COM removal suits a single chain but couples the
+    # drift of multiple independent chains, so it is opt-in via the config.
+    nstcomm: Optional[int] = None
+    # Decimal places for floating-point columns in the .log (energies, time,
+    # temperature, ...). Keeps the log readable; set to None for full precision.
+    log_precision: Optional[int] = 4
+    # Minimum width (characters) of each .log column, for aligned fixed-width
+    # output. Set to None to disable fixed-width formatting.
+    log_width: Optional[int] = 14
     model: str = 'topo'
 
     # bond treatment: 'AllBonds' (rigid, default) or None (flexible harmonic bonds)
     constraints: Any = 'AllBonds'
+    # integrator constraint tolerance (relative). Tighter than OpenMM's 1e-5
+    # default is unnecessary; only meaningful when constraints = AllBonds.
+    constraint_tolerance: float = 1e-5
 
     # temperature coupling
     tcoupl: bool = True
@@ -55,12 +71,19 @@ class SimulationConfig:
     pbc: bool = False
     box_dimension: Optional[List[float]] = None
 
-    # input / output
+    # input
     pdb_file: Optional[str] = None
-    protein_code: Optional[str] = None
+    # Optional PDB of starting coordinates for a fresh run. If unset, the
+    # coordinates of the structure used to build the system (pdb_file) are used.
+    init_position: Optional[str] = None
     domain_def: Optional[str] = None
     stride_output_file: Optional[str] = None
-    checkpoint: Optional[str] = None
+
+    # output: all generated files go to <output_dir>/<outname><suffix>, so a run
+    # is one self-contained folder (default traj/traj.dcd, traj.log, traj.psf, ...).
+    output_dir: str = 'traj'
+    outname: str = 'traj'
+    checkpoint: Optional[str] = None     # explicit override; defaults to <output_dir>/<outname>.chk
 
     # hardware
     device: str = 'CPU'
@@ -84,15 +107,46 @@ class SimulationConfig:
 
         Always passes ``minimize``, ``model`` and ``box_dimension``; passes
         ``domain_def`` / ``stride_output_file`` only when they are set, so the
-        builder's own defaults apply otherwise.
+        builder's own defaults apply otherwise. On restart the build-time energy
+        check is skipped (``check_forces=False``) because the loaded checkpoint
+        state, not the input structure, is what gets simulated.
         """
         kwargs = dict(minimize=self.minimize, model=self.model,
-                      box_dimension=self.box_dimension, constraints=self.constraints)
+                      box_dimension=self.box_dimension, constraints=self.constraints,
+                      check_forces=not self.restart)
         if self.domain_def is not None:
             kwargs['domain_def'] = self.domain_def
         if self.stride_output_file is not None:
             kwargs['stride_output_file'] = self.stride_output_file
         return kwargs
+
+    def output_path(self, suffix: str = '') -> str:
+        """
+        Path for a generated output file: ``<output_dir>/<outname><suffix>``.
+
+        Examples: ``output_path('.dcd')`` -> ``traj/traj.dcd``;
+        ``output_path('_multi.psf')`` -> ``traj/traj_multi.psf``.
+
+        Built with :class:`pathlib.Path` but returned as ``str`` so it can be
+        passed directly to OpenMM/parmed writers (some of which special-case
+        ``str`` and would mishandle a raw ``Path``).
+        """
+        return str(Path(self.output_dir) / f'{self.outname}{suffix}')
+
+    def checkpoint_path(self) -> str:
+        """
+        Resolved checkpoint path: the explicit ``checkpoint`` option if given,
+        otherwise ``<output_dir>/<outname>.chk``.
+        """
+        return self.checkpoint if self.checkpoint else self.output_path('.chk')
+
+    def prepare_output_dir(self) -> None:
+        """
+        Ensure ``output_dir`` exists. ``Path.mkdir(parents=True, exist_ok=True)``
+        creates any missing parents and is a no-op if the folder already exists
+        (no manual "does it exist?" check needed).
+        """
+        Path(self.output_dir).mkdir(parents=True, exist_ok=True)
 
     def make_platform(self):
         """
@@ -155,11 +209,28 @@ def read_simulation_config(config_file: str, verbose: bool = True) -> Simulation
     cfg.dt = float(params.get('dt', 0.01)) * unit.picoseconds
     log(f'Setting timestep for integration of equations of motion to: {cfg.dt}')
     cfg.nstxout = int(params.get('nstxout', cfg.nstxout))
-    log(f'Setting number of steps to write checkpoint and coordinate: {cfg.nstxout}')
+    log(f'Setting number of steps to write trajectory frame: {cfg.nstxout}')
     cfg.nstlog = int(params.get('nstlog', cfg.nstlog))
     log(f'Setting number of steps to write logfile: {cfg.nstlog}')
-    cfg.nstcomm = int(params.get('nstcomm', cfg.nstcomm))
-    log(f'Setting frequency of center of mass motion removal to every {cfg.nstcomm} steps')
+    # Checkpoint frequency: defaults to the trajectory frequency (nstxout) when
+    # the config does not set nstchk explicitly.
+    cfg.nstchk = int(params.get('nstchk', cfg.nstxout))
+    log(f'Setting number of steps to write checkpoint: {cfg.nstchk}')
+    nstcomm_val = params.get('nstcomm', None)
+    cfg.nstcomm = int(nstcomm_val) if str(nstcomm_val).strip() not in ('None', '') else None
+    if cfg.nstcomm is None:
+        log('Center-of-mass motion removal is off (nstcomm not set)')
+    else:
+        log(f'Setting frequency of center of mass motion removal to every {cfg.nstcomm} steps')
+    prec_val = params.get('log_precision', None)
+    if prec_val is not None:
+        # Explicit 'None'/empty disables formatting; otherwise use the integer.
+        cfg.log_precision = None if str(prec_val).strip().lower() in ('none', '') else int(prec_val)
+    width_val = params.get('log_width', None)
+    if width_val is not None:
+        cfg.log_width = None if str(width_val).strip().lower() in ('none', '') else int(width_val)
+    log(f'Log columns: precision={cfg.log_precision if cfg.log_precision is not None else "full"}, '
+        f'width={cfg.log_width if cfg.log_width is not None else "auto"}')
     cfg.model = params.get('model', cfg.model)
     log(f'Setting model: {cfg.model}')
 
@@ -168,6 +239,8 @@ def read_simulation_config(config_file: str, verbose: bool = True) -> Simulation
     if str(cfg.constraints).strip().lower() in ('none', ''):
         cfg.constraints = None
     log(f'Bond constraints: {"None (flexible bonds)" if cfg.constraints is None else cfg.constraints}')
+    cfg.constraint_tolerance = float(params.get('constraint_tolerance', cfg.constraint_tolerance))
+    log(f'Constraint tolerance: {cfg.constraint_tolerance}')
 
     cfg.tcoupl = bool(strtobool(str(params.get('tcoupl', cfg.tcoupl))))
     if cfg.tcoupl:
@@ -209,15 +282,20 @@ def read_simulation_config(config_file: str, verbose: bool = True) -> Simulation
 
     cfg.pdb_file = params.get('pdb_file', cfg.pdb_file)
     log(f'Input structure: {cfg.pdb_file}')
-    cfg.protein_code = params.get('protein_code', cfg.protein_code)
-    log(f'Prefix use to write file: {cfg.protein_code}')
+    cfg.init_position = params.get('init_position', cfg.init_position)
+    if cfg.init_position:
+        log(f'Initial coordinates from: {cfg.init_position}')
     cfg.domain_def = params.get('domain_def', cfg.domain_def)
     if cfg.domain_def:
         log(f'Domain definition file: {cfg.domain_def}')
     cfg.stride_output_file = params.get('stride_output_file', cfg.stride_output_file)
     if cfg.stride_output_file:
         log(f'STRIDE output file: {cfg.stride_output_file}')
+
+    cfg.output_dir = params.get('output_dir', cfg.output_dir)
+    cfg.outname = params.get('outname', cfg.outname)
     cfg.checkpoint = params.get('checkpoint', cfg.checkpoint)
+    log(f'Output: {cfg.output_path("")}.* (dir: {cfg.output_dir}/, checkpoint: {cfg.checkpoint_path()})')
 
     cfg.device = params.get('device', cfg.device)
     log(f'Running simulation on {cfg.device}')

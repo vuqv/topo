@@ -1,0 +1,6 @@
+Potential Energy from initial structure (input structure):
+The Potential Energy of the system is : -288.884806394577 kJ/mol
+The Gaussian Angle Energy is: 167.31546020507812 kJ/mol
+The Periodic Torsion Energy is: 527.2103271484375 kJ/mol
+The Yukawa Energy is: 44.70424526929855 kJ/mol
+The Custom Non-Bonded Energy is: -1028.1148428112501 kJ/mol

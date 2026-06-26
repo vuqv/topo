@@ -87,5 +87,6 @@ the `domain.yaml` format is documented in
   real science you would increase `md_steps` to millions and likely use a GPU.
 - `minimize = no`: the input PDBs are native structures (already the model's
   energy minimum), so no pre-minimization is needed.
-- Output files use the `protein_code` prefix from `md.ini` and are **not**
-  committed — you generate them by running the tutorial.
+- Output files are written to the run folder `output_dir` (default `traj/`),
+  named `<outname>.*` (default `traj.*`), and are **not** committed — you
+  generate them by running the tutorial.

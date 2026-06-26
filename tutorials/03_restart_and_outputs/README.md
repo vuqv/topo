@@ -22,9 +22,10 @@ tutorial reuses the same single-domain protein (`P0CX28`).
 
 ## How restarting works
 
-TOPO writes a **checkpoint** file (`<protein_code>.chk`) every `nstxout` steps. A
-checkpoint stores the full dynamical state — **positions and velocities** — so a
-restarted run picks up exactly where it left off (not just the coordinates).
+TOPO writes a **checkpoint** file (`traj/traj.chk`) every `nstchk` steps
+(`nstchk` defaults to `nstxout` if unset). A checkpoint stores the full dynamical
+state — **positions and velocities** — so a restarted run picks up exactly where
+it left off (not just the coordinates).
 
 Two settings control a restart:
 
@@ -34,7 +35,7 @@ Two settings control a restart:
   The runner computes `remaining = md_steps - steps_already_done` and runs only
   that many. So to add 5000 steps on top of an initial 5000, set `md_steps = 10000`.
 
-Everything else (`protein_code`, `checkpoint`, `pdb_file`) must stay **identical**
+Everything else (`output_dir`, `outname`, `pdb_file`) must stay **identical**
 between stages so the restart targets the same files. On restart, the reporters
 **append** to the existing `.log` and `.dcd`, giving you one continuous record.
 
@@ -44,10 +45,10 @@ between stages so the restart targets the same files. On restart, the reporters
 ```bash
 python run_simulation.py -f md.ini
 ```
-This produces `P0CX28.chk`, `P0CX28.log`, `P0CX28.dcd`, etc., and runs to step
-5000. Check the last log line:
+This produces `traj/traj.chk`, `traj/traj.log`, `traj/traj.dcd`, etc., and runs
+to step 5000. Check the last log line:
 ```bash
-tail -1 P0CX28.log     # step column should read 5000
+tail -1 traj/traj.log     # step column should read 5000
 ```
 
 ### 2. Stage 2 — continue from the checkpoint
@@ -58,7 +59,7 @@ Watch the console: it prints
 `Restart simulation from step: 5000` and then runs 5000 more steps to reach
 10000. Confirm the log now continues past 5000:
 ```bash
-tail -3 P0CX28.log     # you should now see step 10000 at the end
+tail -3 traj/traj.log     # you should now see step 10000 at the end
 ```
 The `.dcd` trajectory has likewise grown — it was appended to, not overwritten.
 
@@ -70,18 +71,18 @@ The `.dcd` trajectory has likewise grown — it was appended to, not overwritten
 
 | File | Format | Purpose | When to use |
 |------|--------|---------|-------------|
-| `P0CX28.log` | text (TSV) | Step, time, energies, temperature, speed. | Quick health check, plotting energy vs time. |
-| `P0CX28.dcd` | binary | Trajectory: coordinates every `nstxout` steps. | Visualization (VMD), analysis (MDAnalysis, MDTraj). |
-| `P0CX28.chk` | binary | Checkpoint: positions **+ velocities**. | Restarting (this tutorial). |
-| `P0CX28.psf` | text | CA-model topology (atoms, bonds). | Loading the `.dcd` in analysis tools that need a topology. |
-| `P0CX28_init.pdb` | text | The CA-only structure actually simulated. | Sanity-check the coarse-grained input; topology for the DCD. |
-| `P0CX28_final.pdb` | text | Last frame of the run. | Starting point for a follow-up, or a quick look at the end state. |
-| `P0CX28_clean_stride.dat` | text | Cached STRIDE hydrogen-bond output. | Reused automatically; delete to force regeneration. |
+| `traj/traj.log` | text (fixed-width) | Step, time, energies, temperature, speed. | Quick health check, plotting energy vs time. |
+| `traj/traj.dcd` | binary | Trajectory: coordinates every `nstxout` steps. | Visualization (VMD), analysis (MDAnalysis, MDTraj). |
+| `traj/traj.chk` | binary | Checkpoint: positions **+ velocities**, every `nstchk` steps. | Restarting (this tutorial). |
+| `traj/traj.psf` | text | CA-model topology (atoms, bonds). | Loading the `.dcd` in analysis tools that need a topology. |
+| `traj/traj_final.pdb` | text | Last conformation (CA PDB). | Seed a follow-up run via `init_position`. |
+| `traj/traj_runinfo.log` | text | Run provenance: package versions, hardware, GPU, timing. | Reproducibility; debugging performance differences. |
+| `P0CX28_clean_stride.dat` | text | Cached STRIDE hydrogen-bond output (next to the input PDB). | Reused automatically; delete to force regeneration. |
 
 ### Loading the trajectory for analysis
 ```python
 import MDAnalysis as mda
-u = mda.Universe("P0CX28.psf", "P0CX28.dcd")
+u = mda.Universe("traj/traj.psf", "traj/traj.dcd")
 print(u.atoms.n_atoms, "CA beads,", len(u.trajectory), "frames")
 # e.g. compute RMSD to the initial frame, radius of gyration, etc.
 ```
@@ -91,7 +92,7 @@ print(u.atoms.n_atoms, "CA beads,", len(u.trajectory), "frames")
 - **Checkpoint = positions + velocities** → seamless continuation.
 - **`md_steps` is a total, not an increment.**
 - **Logs and trajectories append** on restart, so long runs stay in one file set.
-- Keep `protein_code` / `checkpoint` / `pdb_file` consistent across stages.
+- Keep `output_dir` / `outname` / `pdb_file` consistent across stages.
 
 ## Try next
 
