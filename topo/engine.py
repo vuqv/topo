@@ -23,7 +23,6 @@ from typing import Any, Optional
 import time
 import warnings
 
-import numpy as np
 import openmm as mm
 from openmm import unit
 
@@ -149,12 +148,11 @@ def setup_simulation(cfg, built: BuiltSystem,
             init_pos = built.positions
             coord_source = f"pdb_file ({cfg.pdb_file})"
 
-        # Shift coordinates into the positive octant.
-        xyz = np.array(init_pos / unit.nanometer)
-        xyz[:, 0] -= np.amin(xyz[:, 0])
-        xyz[:, 1] -= np.amin(xyz[:, 1])
-        xyz[:, 2] -= np.amin(xyz[:, 2])
-        simulation.context.setPositions(xyz * unit.nanometer)
+        # Use the input coordinates as-is (no shift into the positive octant):
+        # an automatic translation would corrupt carefully placed coordinates,
+        # e.g. multi-copy layouts (topo.make_noninteracting_copies) and
+        # translation/ribosome geometries that depend on absolute positions.
+        simulation.context.setPositions(init_pos)
         simulation.context.setVelocitiesToTemperature(cfg.ref_t)
         done_steps = 0
         vel_source = f"Boltzmann distribution at {cfg.ref_t}"
