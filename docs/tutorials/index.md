@@ -10,4 +10,5 @@
 03_restart
 04_multicopy
 05_opt_nscal
+06_anneal
 ```

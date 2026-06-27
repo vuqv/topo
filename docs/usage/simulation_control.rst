@@ -41,8 +41,16 @@ Example ``md.ini``:
 
         ; temperature coupling
         tcoupl = yes
-        ref_t = 310          ; Kelvin
+        ref_t = 310          ; Kelvin (also the low/refold temperature when annealing)
         tau_t = 0.01         ; ps^-1
+
+        ; temperature protocol (annealing / quenching) -- off by default
+        ; anneal = yes       ; hold at t_high then quench/cool down to ref_t
+        ; t_high = 600       ; Kelvin (high/unfolding temperature)
+        ; anneal_steps = 1_000_000   ; steps held at t_high before cooling
+        ; anneal_ramp = jump ; jump (instant drop) or linear (gradual cool)
+        ; anneal_ramp_steps = 500_000      ; linear only: steps to ramp t_high -> ref_t
+        ; anneal_ramp_increments = 20      ; linear only: discrete T steps in the ramp
 
         ; pressure coupling
         pcoupl = no
@@ -156,6 +164,36 @@ description).
      - no
      - ``0.01``
      - Friction coefficient coupling the system to the heat bath. Used when ``tcoupl = yes``.
+   * - ``anneal``
+     - bool
+     - no
+     - ``no``
+     - Temperature protocol. ``no`` → constant-temperature equilibrium at ``ref_t``. ``yes`` → hold at ``t_high`` then quench/cool to ``ref_t`` (requires ``tcoupl = yes``). See :doc:`../tutorials/06_anneal`.
+   * - ``t_high``
+     - float [K]
+     - if ``anneal = yes``
+     - ``—``
+     - High (unfolding) temperature held before cooling. ``ref_t`` is reused as the low/refold temperature (there is no ``t_low``).
+   * - ``anneal_steps``
+     - int
+     - no
+     - ``0``
+     - Steps held at ``t_high`` before cooling. Must be many thermal relaxation times (``~1/tau_t``) and long enough to unfold. Used when ``anneal = yes``.
+   * - ``anneal_ramp``
+     - str
+     - no
+     - ``jump``
+     - ``jump`` = instantaneous drop ``t_high → ref_t`` (delta T-jump; best for folding kinetics). ``linear`` = gradual cool-down (best for refolding yield). Used when ``anneal = yes``.
+   * - ``anneal_ramp_steps``
+     - int
+     - no
+     - ``0``
+     - Steps spent ramping ``t_high → ref_t``. Used only when ``anneal_ramp = linear``.
+   * - ``anneal_ramp_increments``
+     - int
+     - no
+     - ``20``
+     - Number of discrete temperature steps in the ramp; the last lands exactly on ``ref_t``. Used only when ``anneal_ramp = linear``.
    * - ``pcoupl``
      - bool
      - no
@@ -291,6 +329,31 @@ Temperature / pressure coupling
     ``ref_t`` and ``tau_t`` are only consumed when ``tcoupl = yes``; ``ref_p``
     and ``frequency_p`` only when ``pcoupl = yes``. Pressure coupling additionally
     requires ``pbc = yes`` (asserted at parse time).
+
+Temperature protocol (``anneal`` / ``t_high`` / ``anneal_*``)
+    By default a run is **equilibrium**: the Langevin thermostat is held at
+    ``ref_t`` for all ``md_steps``. Setting ``anneal = yes`` switches to a
+    **temperature schedule** — a list of ``(temperature, n_steps)`` stages whose
+    counts always sum to ``md_steps``. The system is held at ``t_high`` for
+    ``anneal_steps``, then brought down to ``ref_t`` either instantaneously
+    (``anneal_ramp = jump``, a delta T-jump) or gradually (``anneal_ramp =
+    linear``, over ``anneal_ramp_steps`` in ``anneal_ramp_increments`` discrete
+    steps), and the **remaining** steps run at ``ref_t``. ``ref_t`` is always the
+    low / refold temperature — there is no separate ``t_low`` key. The runner
+    prints the resolved schedule at startup (``Temperature protocol: 600 K x
+    1000000 -> 300 K x ...``).
+
+    The schedule must fit inside ``md_steps``: ``anneal_steps`` plus (for
+    ``linear``) ``anneal_ramp_steps`` cannot exceed ``md_steps``, or the run
+    aborts with an explanatory error. Choose ``jump`` for clean folding kinetics
+    (folding happens at a single temperature) and ``linear`` for maximum
+    refolding yield. Crucially, a Langevin thermostat relaxes toward a new
+    setpoint over roughly ``1/tau_t``, so ``anneal_steps`` must be **many**
+    relaxation times (and long enough to actually unfold the protein) — with a
+    production-typical ``tau_t = 0.01`` ps⁻¹ (≈100 ps relaxation) that means a
+    hold of many nanoseconds. Annealing requires ``tcoupl = yes`` and composes
+    with restarts: a restart resumes mid-schedule. See
+    :doc:`../tutorials/06_anneal` for a full walkthrough.
 
 Periodic boundary conditions
     Turning ``pbc`` on affects the non-bonded forces and how coordinates are

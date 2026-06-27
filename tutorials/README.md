@@ -15,6 +15,7 @@ the concepts involved. Work through them in order.
 | 3 | [Restart & outputs](https://vuqv.github.io/topo/tutorials/03_restart.html) | Continuing a run from a checkpoint, and a tour of every output file. |
 | 4 | [Many copies in one run](https://vuqv.github.io/topo/tutorials/04_multicopy.html) | Run N non-interacting chains at once to fill the GPU, then split into per-chain trajectories. |
 | 5 | [Optimizing the contact strength](https://vuqv.github.io/topo/tutorials/05_opt_nscal.html) | Automatically search the per-domain/interface `strength` (*n*<sub>scale</sub>) that keeps each domain folded, instead of hard-coding it. |
+| 6 | [Temperature annealing & quenching](https://vuqv.github.io/topo/tutorials/06_anneal.html) | Run a temperature protocol — hold the protein hot to unfold it, then T-jump (or slow-cool) back to `ref_t` to study refolding. |
 
 The **ready-to-run files** for each tutorial (PDB, `md.ini`, `run_simulation.py`,
 …) live in the matching folder under
