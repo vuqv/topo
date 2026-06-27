@@ -44,12 +44,15 @@ Example ``md.ini``:
         ref_t = 310          ; Kelvin (also the low/refold temperature when annealing)
         tau_t = 0.01         ; ps^-1
 
-        ; temperature protocol (annealing / quenching) -- off by default
+        ; temperature protocol (annealing / quenching) -- off by default.
+        ; Two phases: a quench (-> <outname>_quench.dcd/.log) then production
+        ; (md_steps at ref_t -> <outname>.dcd/.log). anneal_steps is SEPARATE
+        ; from md_steps; grand total = anneal_steps (+ ramp) + md_steps.
         ; anneal = yes       ; hold at t_high then quench/cool down to ref_t
         ; t_high = 600       ; Kelvin (high/unfolding temperature)
-        ; anneal_steps = 1_000_000   ; steps held at t_high before cooling
+        ; anneal_steps = 1_000_000   ; quench-phase steps held at t_high
         ; anneal_ramp = jump ; jump (instant drop) or linear (gradual cool)
-        ; anneal_ramp_steps = 500_000      ; linear only: steps to ramp t_high -> ref_t
+        ; anneal_ramp_steps = 500_000      ; linear only: quench-phase ramp t_high -> ref_t
         ; anneal_ramp_increments = 20      ; linear only: discrete T steps in the ramp
 
         ; pressure coupling
@@ -168,27 +171,27 @@ description).
      - bool
      - no
      - ``no``
-     - Temperature protocol. ``no`` → constant-temperature equilibrium at ``ref_t``. ``yes`` → hold at ``t_high`` then quench/cool to ``ref_t`` (requires ``tcoupl = yes``). See :doc:`../tutorials/06_anneal`.
+     - Temperature protocol. ``no`` → constant-temperature equilibrium at ``ref_t`` (one phase). ``yes`` → a **quench** phase (hold at ``t_high``, then quench/cool to ``ref_t``; written to ``<outname>_quench.dcd``/``.log``) followed by a **production** phase (``md_steps`` at ``ref_t``; written to ``<outname>.dcd``/``.log``). Requires ``tcoupl = yes``. See :doc:`../tutorials/06_anneal`.
    * - ``t_high``
      - float [K]
      - if ``anneal = yes``
      - ``—``
-     - High (unfolding) temperature held before cooling. ``ref_t`` is reused as the low/refold temperature (there is no ``t_low``).
+     - High (unfolding) temperature held during the quench phase. ``ref_t`` is reused as the low/refold temperature (there is no ``t_low``).
    * - ``anneal_steps``
-     - int
+     - int (``> 0``)
      - no
      - ``0``
-     - Steps held at ``t_high`` before cooling. Must be many thermal relaxation times (``~1/tau_t``) and long enough to unfold. Used when ``anneal = yes``.
+     - Quench-phase steps held at ``t_high``. **Separate from** ``md_steps`` (grand total = ``anneal_steps`` (+ ``anneal_ramp_steps``) + ``md_steps``). Must be many thermal relaxation times (``~1/tau_t``) and long enough to unfold. Used when ``anneal = yes``.
    * - ``anneal_ramp``
      - str
      - no
      - ``jump``
-     - ``jump`` = instantaneous drop ``t_high → ref_t`` (delta T-jump; best for folding kinetics). ``linear`` = gradual cool-down (best for refolding yield). Used when ``anneal = yes``.
+     - ``jump`` = instantaneous drop ``t_high → ref_t`` at the phase boundary (delta T-jump; best for folding kinetics). ``linear`` = gradual cool-down inside the quench phase (best for refolding yield). Used when ``anneal = yes``.
    * - ``anneal_ramp_steps``
      - int
      - no
      - ``0``
-     - Steps spent ramping ``t_high → ref_t``. Used only when ``anneal_ramp = linear``.
+     - Additional quench-phase steps spent ramping ``t_high → ref_t`` (on top of ``anneal_steps``). Used only when ``anneal_ramp = linear``.
    * - ``anneal_ramp_increments``
      - int
      - no
@@ -332,27 +335,35 @@ Temperature / pressure coupling
 
 Temperature protocol (``anneal`` / ``t_high`` / ``anneal_*``)
     By default a run is **equilibrium**: the Langevin thermostat is held at
-    ``ref_t`` for all ``md_steps``. Setting ``anneal = yes`` switches to a
-    **temperature schedule** — a list of ``(temperature, n_steps)`` stages whose
-    counts always sum to ``md_steps``. The system is held at ``t_high`` for
-    ``anneal_steps``, then brought down to ``ref_t`` either instantaneously
-    (``anneal_ramp = jump``, a delta T-jump) or gradually (``anneal_ramp =
-    linear``, over ``anneal_ramp_steps`` in ``anneal_ramp_increments`` discrete
-    steps), and the **remaining** steps run at ``ref_t``. ``ref_t`` is always the
-    low / refold temperature — there is no separate ``t_low`` key. The runner
-    prints the resolved schedule at startup (``Temperature protocol: 600 K x
-    1000000 -> 300 K x ...``).
+    ``ref_t`` for all ``md_steps``, written to ``<outname>.dcd`` / ``.log``.
+    Setting ``anneal = yes`` splits the run into **two phases**, each writing its
+    own trajectory and log:
 
-    The schedule must fit inside ``md_steps``: ``anneal_steps`` plus (for
-    ``linear``) ``anneal_ramp_steps`` cannot exceed ``md_steps``, or the run
-    aborts with an explanatory error. Choose ``jump`` for clean folding kinetics
-    (folding happens at a single temperature) and ``linear`` for maximum
-    refolding yield. Crucially, a Langevin thermostat relaxes toward a new
-    setpoint over roughly ``1/tau_t``, so ``anneal_steps`` must be **many**
-    relaxation times (and long enough to actually unfold the protein) — with a
-    production-typical ``tau_t = 0.01`` ps⁻¹ (≈100 ps relaxation) that means a
-    hold of many nanoseconds. Annealing requires ``tcoupl = yes`` and composes
-    with restarts: a restart resumes mid-schedule. See
+    * **Quench** — hold at ``t_high`` for ``anneal_steps`` and, for
+      ``anneal_ramp = linear``, cool to ``ref_t`` over ``anneal_ramp_steps`` (in
+      ``anneal_ramp_increments`` discrete temperature steps). Written to
+      ``<outname>_quench.dcd`` / ``.log``.
+    * **Production** — ``md_steps`` at ``ref_t``. Written to the usual
+      ``<outname>.dcd`` / ``.log``, so the production trajectory is never
+      contaminated by the hot hold.
+
+    ``anneal_steps`` is therefore **separate** from ``md_steps``: the grand total
+    is ``anneal_steps`` (+ ``anneal_ramp_steps`` for ``linear``) + ``md_steps``.
+    For ``anneal_ramp = jump`` the drop to ``ref_t`` is instantaneous and lands
+    exactly on the boundary between the two files. ``ref_t`` is always the low /
+    refold temperature — there is no separate ``t_low`` key. The OpenMM step
+    counter is continuous across phases (the production ``Step`` column starts at
+    the quench length), and a single checkpoint ``<outname>.chk`` covers the whole
+    run. The runner prints both phases at startup.
+
+    Choose ``jump`` for clean folding kinetics (folding happens at a single
+    temperature) and ``linear`` for maximum refolding yield. Crucially, a Langevin
+    thermostat relaxes toward a new setpoint over roughly ``1/tau_t``, so
+    ``anneal_steps`` must be **many** relaxation times (and long enough to actually
+    unfold the protein) — with a production-typical ``tau_t = 0.01`` ps⁻¹ (≈100 ps
+    relaxation) that means a hold of many nanoseconds. Annealing requires
+    ``tcoupl = yes`` and composes with restarts: a restart resumes whichever phase
+    it stopped in (appending to that phase's files). See
     :doc:`../tutorials/06_anneal` for a full walkthrough.
 
 Periodic boundary conditions

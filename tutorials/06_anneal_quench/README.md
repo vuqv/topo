@@ -4,7 +4,8 @@
 single constant temperature — hold the protein hot enough to unfold, then bring
 it back down to `ref_t` to watch it **refold**. You will learn both supported
 protocols (a delta **T-jump quench** and a **linear cooling ramp**), every config
-key that controls them, and how the schedule interacts with restarts.
+key that controls them, how the run splits into **two phases writing two separate
+trajectories**, and how the schedule interacts with restarts.
 
 **Time:** two short runs, ~2–3 seconds each.
 
@@ -14,25 +15,38 @@ first — this reuses the same single-domain protein (`P0CX28`) and its calibrat
 
 ---
 
-## The idea: a temperature *protocol*
+## The idea: a temperature *protocol* in two phases
 
 An ordinary run (Tutorials 1–4) is **equilibrium**: one Langevin thermostat held
-at `ref_t` for all `md_steps`. Annealing generalizes that to a **schedule** of
-`(temperature, n_steps)` stages whose step counts always sum to `md_steps`:
+at `ref_t` for all `md_steps`. Annealing (`anneal = yes`) splits the run into
+**two phases**, each writing its **own** trajectory and log:
 
-- **Equilibrium** (`anneal = no`, the default) → one stage: `[(ref_t, md_steps)]`.
-- **Annealing** (`anneal = yes`) → hold at a high temperature `t_high`, then
-  bring the thermostat down to `ref_t` and finish the run there.
+| Phase | What it does | Steps | Output files |
+|-------|--------------|-------|--------------|
+| **Quench** | Hold at `t_high` (and, for a linear ramp, cool down to `ref_t`). The protein unfolds here. | `anneal_steps` (+ `anneal_ramp_steps` for linear) | `<outname>_quench.dcd`, `<outname>_quench.log` |
+| **Production** | Run at `ref_t`. The protein refolds and you collect the equilibrium ensemble. | `md_steps` | `<outname>.dcd`, `<outname>.log` |
 
-The same runner (`topo-mdrun`) handles both — only the temperature schedule
-differs. `ref_t` is **always** the low / refold temperature; there is **no
-separate `t_low` key**, so you never have to keep two "low temperature" settings
-in sync.
+Two consequences worth internalizing:
 
-When the run starts, the runner prints the exact schedule it will execute, e.g.
+- **`anneal_steps` is *separate* from `md_steps`.** The grand total is
+  `quench_steps + md_steps` (where `quench_steps = anneal_steps` for a jump, or
+  `anneal_steps + anneal_ramp_steps` for a linear ramp). `md_steps` is now
+  *only* the production length.
+- **The hot part never contaminates your production trajectory.** Because the
+  quench writes `_quench.*` and production writes the normal `.*`, your
+  `traj.dcd` contains only the `ref_t` ensemble — exactly what you want for
+  analysis. `ref_t` is always the low / refold temperature; there is **no
+  separate `t_low` key**.
+
+The OpenMM step counter runs **continuously** across both phases, so the
+production log's `Step` column starts at `quench_steps` (it is honest elapsed
+time, not a reset). A single checkpoint `<outname>.chk` covers the whole run.
+
+When the run starts, the runner prints both phases:
 
 ```
-Temperature protocol: 600 K x 3000 -> 300 K x 3000
+Temperature protocol [quench -> _quench.*]: 600 K x 3000
+Temperature protocol [production -> .*]:    300 K x 3000  (grand total 6000 steps)
 ```
 
 ## Two ways down: jump vs. linear
@@ -41,8 +55,8 @@ Temperature protocol: 600 K x 3000 -> 300 K x 3000
 
 | `anneal_ramp` | What happens | Use it for |
 |---------------|--------------|------------|
-| `jump` (default) | Hold `t_high`, then **instantaneously** set the thermostat to `ref_t` (a delta T-jump). Folding then happens at a single, well-defined temperature. | **Folding kinetics / mechanism.** Clean folding times and pathways because rates aren't convolved with a changing T. Mirrors an experimental T-jump. |
-| `linear` | Hold `t_high`, then **cool gradually** to `ref_t` over `anneal_ramp_steps`, in `anneal_ramp_increments` discrete steps, then hold `ref_t`. | **Refolding yield / structure recovery.** Slow cooling avoids kinetic traps (classic simulated annealing toward the native minimum). *Not* for clean kinetics — cooling and folding overlap. |
+| `jump` (default) | The quench phase is purely the hold at `t_high`; the thermostat then drops to `ref_t` **instantaneously** at the phase boundary (a delta T-jump that lands exactly between the `_quench` and production files). Folding happens at a single, well-defined temperature. | **Folding kinetics / mechanism.** Clean folding times and pathways because rates aren't convolved with a changing T. Mirrors an experimental T-jump. |
+| `linear` | The quench phase holds at `t_high`, then **cools gradually** to `ref_t` over `anneal_ramp_steps` in `anneal_ramp_increments` discrete steps. Production then runs at `ref_t`. | **Refolding yield / structure recovery.** Slow cooling avoids kinetic traps (classic simulated annealing toward the native minimum). *Not* for clean kinetics — cooling and folding overlap. |
 
 **Recommendation:** for studying how (and how fast) the protein refolds, use the
 **delta `jump`**. Reach for `linear` only when the goal is "recover the native
@@ -55,29 +69,23 @@ They are read **only when `anneal = yes`**.
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `anneal` | bool | `no` | Turn the annealing protocol on. `no` → ordinary constant-`ref_t` equilibrium. |
-| `t_high` | float [K] | — (**required** when `anneal = yes`) | High / unfolding temperature to hold before cooling. |
-| `anneal_steps` | int | `0` | Steps held at `t_high` before cooling begins. |
-| `anneal_ramp` | str | `jump` | `jump` (instantaneous drop to `ref_t`) or `linear` (gradual cool-down). |
-| `anneal_ramp_steps` | int | `0` | **`linear` only.** Steps spent ramping `t_high → ref_t`. |
+| `anneal` | bool | `no` | Turn the annealing protocol on. `no` → ordinary constant-`ref_t` equilibrium (one phase, one file set). |
+| `t_high` | float [K] | — (**required** when `anneal = yes`) | High / unfolding temperature held during the quench phase. |
+| `anneal_steps` | int (`> 0`) | `0` | Quench-phase steps held at `t_high`. **Separate from `md_steps`.** Must be many thermal relaxation times (`~1/tau_t`) and long enough to unfold. |
+| `anneal_ramp` | str | `jump` | `jump` (instantaneous drop to `ref_t` at the phase boundary) or `linear` (gradual cool-down inside the quench phase). |
+| `anneal_ramp_steps` | int | `0` | **`linear` only.** Quench-phase steps spent ramping `t_high → ref_t` (added on top of `anneal_steps`). |
 | `anneal_ramp_increments` | int | `20` | **`linear` only.** Number of discrete temperature steps in the ramp; the last increment lands exactly on `ref_t`. |
 
 Reused, not new: `ref_t` (the low temperature), `tau_t` (thermostat coupling),
-`md_steps` (the **total** across the whole protocol).
+`md_steps` (now the **production** length only), `nstxout` / `nstlog` / `nstchk`
+(apply to both phases' files).
 
-**The arithmetic is on you, lightly:** the steps must fit inside `md_steps`. The
-runner spends `anneal_steps` at `t_high`, then (for `linear`) `anneal_ramp_steps`
-cooling, and the **remainder** at `ref_t`:
+**Grand total** of integration steps:
 
 ```
-remainder_at_ref_t = md_steps - anneal_steps - (anneal_ramp_steps if linear else 0)
+total = anneal_steps + (anneal_ramp_steps if linear else 0) + md_steps
+        \_________________ quench phase ________________/   \ production /
 ```
-
-If `anneal_steps (+ anneal_ramp_steps)` exceeds `md_steps`, the run stops
-immediately with an error telling you to lengthen `md_steps` or shorten the
-hold/ramp. If the remainder is zero, that's fine — the protocol just ends right
-as it reaches `ref_t` (you'd typically leave some steps for the system to settle
-and refold at `ref_t`).
 
 ## ⚠️ The most important physical knob: hold length vs. thermostat coupling
 
@@ -91,8 +99,9 @@ That has two consequences you must respect:
    steps via `dt`), or the system never actually reaches `t_high` and won't
    fully unfold.
 2. **The hold must be long enough to lose native memory** — verify the protein
-   genuinely unfolds during the hold (fraction of native contacts *Q* → 0, `Rg`
-   plateaus). Otherwise refolding is biased by leftover native structure.
+   genuinely unfolds during the quench (fraction of native contacts *Q* → 0,
+   `Rg` plateaus, in `traj_quench.dcd`). Otherwise refolding is biased by
+   leftover native structure.
 
 > **These tutorial configs cheat for speed:** they use `tau_t = 1.0` ps⁻¹
 > (relaxation ≈ 1 ps ≈ 67 steps at `dt = 0.015`), so a 3000-step hold easily
@@ -117,72 +126,84 @@ That has two consequences you must respect:
 ```bash
 python run_simulation.py -f md.ini
 ```
-The console echoes the protocol:
+The console echoes both phases and the grand total:
 ```
-Temperature annealing on: hold 600.0 K for 3000 steps, then jump to ref_t = 300.0 K
-...
-Temperature protocol: 600 K x 3000 -> 300 K x 3000
+Temperature protocol [quench -> _quench.*]: 600 K x 3000
+Temperature protocol [production -> .*]:    300 K x 3000  (grand total 6000 steps)
 ```
-Outputs land in `traj_jump/` (so they don't collide with the linear run).
+Outputs land in `traj_jump/` and you get **two** trajectories/logs:
+`traj_quench.dcd` / `traj_quench.log` (the 600 K hold) and `traj.dcd` /
+`traj.log` (the 300 K production), plus one shared `traj.chk`.
 
-Inspect the temperature column of the log — you should see it hover near 600 K
-for the first 3000 steps, then drop to ~300 K:
+Check that each file holds the temperature you expect:
 ```python
 import numpy as np
 from topo.reporter.topo_reporter import readOpenMMReporterFile
-d = readOpenMMReporterFile("traj_jump/traj.log")
-S, T = np.array(d["Step"]), np.array(d["Temperature (K)"])
-print("mean T during hold  :", round(T[S <= 3000].mean()))   # ~600 K
-print("mean T after quench :", round(T[S >  3000].mean()))   # ~300 K
+q = readOpenMMReporterFile("traj_jump/traj_quench.log")
+p = readOpenMMReporterFile("traj_jump/traj.log")
+print("quench     mean T:", round(np.array(q["Temperature (K)"]).mean()))   # ~600 K
+print("production mean T:", round(np.array(p["Temperature (K)"]).mean()))   # ~300 K
+print("production steps :", int(np.array(p["Step"]).min()), "..",
+                            int(np.array(p["Step"]).max()))                 # 3100 .. 6000
 ```
 (Instantaneous CG temperatures are noisy for a small chain — judge the *mean* of
-each block, not single frames.)
+each file, not single frames.)
 
 ### 2. Run the linear cooling ramp
 ```bash
 python run_simulation.py -f md_linear.ini
 ```
-Now the schedule has a staircase of cooling stages (outputs in `traj_linear/`):
+Now the **quench** schedule has a staircase of cooling stages (outputs in
+`traj_linear/`); production is still a flat `ref_t` run:
 ```
-Temperature protocol: 600 K x 1500 -> 570 K x 300 -> 540 K x 300 -> ... -> 300 K x 300 -> 300 K x 1500
+Temperature protocol [quench -> _quench.*]: 600 K x 1500 -> 570 K x 300 -> ... -> 300 K x 300
+Temperature protocol [production -> .*]:    300 K x 3000  (grand total 7500 steps)
 ```
-Plot `T` vs `Step` from `traj_linear/traj.log` and you'll see the staircase
-descend from 600 K to 300 K and then flatten.
+Plot `Temperature (K)` vs `Step` from `traj_linear/traj_quench.log` and you'll
+see the staircase descend from 600 K to 300 K; `traj_linear/traj.log` then sits
+flat at 300 K.
 
 ### 3. (Optional) Confirm unfolding/refolding
 For a real study you'd track the fraction of native contacts *Q* with
-`topo.analysis` (see Tutorial 5's machinery) over the trajectory: *Q* should fall
-toward 0 during the 600 K hold and climb back toward 1 after the quench. With the
-tiny demo `md_steps` here this is only illustrative — increase `md_steps` (and
-`anneal_steps`) for a meaningful folding curve.
+`topo.analysis` (see Tutorial 5's machinery): *Q* should fall toward 0 across
+`traj_quench.dcd` (the hot hold) and climb back toward 1 across `traj.dcd` (the
+`ref_t` production). With the tiny demo step counts here this is only
+illustrative — increase `anneal_steps` and `md_steps` for a meaningful curve.
 
 ## Annealing + restart
 
-Restarts (Tutorial 3) compose with annealing: the schedule is defined over
-**absolute** step counts, so a restart **resumes mid-schedule**. If a 6000-step
-jump protocol (`hold 0–3000 @ 600 K`, `quench 3000–6000 @ 300 K`) is interrupted
-at step 4000, restarting with `restart = yes` skips the completed hold and the
-already-done part of the quench, and runs only the remaining 2000 steps at
-`ref_t` — exactly the right temperature for where it left off. As always,
-`md_steps` is the **total**, and `output_dir` / `outname` / the protocol keys must
-match between stages.
+Restarts (Tutorial 3) compose with annealing. The schedule is defined over the
+**continuous** global step count and there is a single checkpoint, so a restart
+resumes **whichever phase it stopped in**:
+
+- **Interrupted during the quench** (`done < quench_steps`): the run appends to
+  `_quench.dcd` / `.log`, finishes the quench, then starts production fresh.
+- **Interrupted during production** (`done ≥ quench_steps`): the quench phase is
+  skipped entirely (its files are already complete), and the run appends to the
+  production `.dcd` / `.log`.
+
+As always, set `restart = yes`, keep `output_dir` / `outname` / the protocol keys
+identical between stages, and remember `md_steps` is the **production total** (the
+runner computes how many production steps remain). To add more production, raise
+`md_steps`.
 
 ## Key takeaways
 
-- Annealing is just a **temperature schedule**; equilibrium is its one-stage
-  special case. Same runner, selected by `anneal`.
+- Annealing is a **two-phase** protocol: a **quench** (`_quench.*`) then
+  **production** (`.*`). Same runner, selected by `anneal`.
+- **`anneal_steps` is separate from `md_steps`**; the grand total is their sum
+  (plus the linear ramp). `md_steps` is production-only.
+- **Two trajectories** keep the hot hold out of your production ensemble.
 - **`ref_t` is the low temperature** — reused directly, no `t_high`/`t_low`
   bookkeeping.
 - **`jump` for kinetics, `linear` for yield.**
-- **`md_steps` is the total**; the hold (+ ramp) must fit inside it, and the
-  remainder runs at `ref_t`.
 - **Match `anneal_steps` to your `tau_t`** — the hold must be many thermal
   relaxation times, and long enough to actually unfold.
 
 ## Try next
 
-- Sweep `t_high` (e.g. 500/600/700 K) and check at which temperature the hold
-  actually unfolds the protein (*Q* → 0).
+- Sweep `t_high` (e.g. 500/600/700 K) and check at which temperature the quench
+  actually unfolds the protein (*Q* → 0 in `traj_quench.dcd`).
 - Switch the demo to production-like coupling (`tau_t = 0.01`) and lengthen
   `anneal_steps` accordingly to see the realistic relaxation timescale.
 - Generate many independent refolding trajectories at once by combining this

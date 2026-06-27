@@ -159,34 +159,19 @@ def setup_simulation(cfg, built: BuiltSystem,
         done_steps = 0
         vel_source = f"Boltzmann distribution at {cfg.ref_t}"
 
-    simulation.reporters = []
-    # Checkpoint frequency (nstchk) is independent of the trajectory frequency
-    # (nstxout); nstchk defaults to nstxout when not set in the config.
-    simulation.reporters.append(mm.app.CheckpointReporter(checkpoint, cfg.nstchk))
-    simulation.reporters.append(
-        mm.app.DCDReporter(cfg.output_path('.dcd'), cfg.nstxout,
-                           enforcePeriodicBox=bool(cfg.pbc), append=restart_active))
-    # topo.topoReporter writes a clean, fixed-width log: each float column uses
-    # log_precision decimals and every column is padded to log_width characters so
-    # the columns line up. Columns are separated by two spaces (aligned and still
-    # machine-parsable via topo.reporter.readOpenMMReporterFile).
-    simulation.reporters.append(
-        topo.topoReporter(cfg.output_path('.log'), cfg.nstlog,
-                          precision=cfg.log_precision, width=cfg.log_width,
-                          step=True, time=True,
-                          potentialEnergy=True, kineticEnergy=True, totalEnergy=True,
-                          temperature=True, remainingTime=True, speed=True,
-                          totalSteps=cfg.md_steps, separator='  ', append=restart_active))
-
-    # Record run provenance (package versions, hardware, GPU, timing). This is a
-    # side channel only and does not affect the simulation.
+    # Reporters are attached per phase by the runner (see attach_reporters), so a
+    # quench phase can write <outname>_quench.* while production writes
+    # <outname>.*. Here we only record run provenance (package versions, hardware,
+    # GPU, timing) -- a side channel that does not affect the simulation. The
+    # planned-steps figure is the grand total (quench + production) minus whatever
+    # a restart has already completed.
     runinfo_path = cfg.output_path('_runinfo.log')
     topo.runinfo.write_run_start(
         runinfo_path,
         control_file=control_file,
         checkpoint_file=checkpoint,
         restart=restart_active,
-        steps_planned=cfg.md_steps - done_steps,
+        steps_planned=cfg.total_steps() - done_steps,
         simulation=simulation,
         use_gpu=(cfg.device == 'GPU'),
         ppn=cfg.ppn,
@@ -198,6 +183,51 @@ def setup_simulation(cfg, built: BuiltSystem,
     return RunContext(simulation=simulation, checkpoint=checkpoint,
                       restart_active=restart_active, done_steps=done_steps,
                       runinfo_path=runinfo_path)
+
+
+def attach_reporters(cfg, simulation, suffix='', append=False, total_steps=None):
+    """(Re)attach the checkpoint / trajectory / log reporters for one phase.
+
+    Replaces ``simulation.reporters`` so the runner can switch output file sets
+    between the quench phase (``suffix='_quench'``) and production (``suffix=''``).
+    All phases share the single checkpoint (``<outname>.chk``) so a restart can
+    resume from the global step count regardless of which phase it stopped in.
+
+    Parameters
+    ----------
+    suffix : str
+        Inserted before the extension: ``''`` -> ``<outname>.dcd`` / ``.log``;
+        ``'_quench'`` -> ``<outname>_quench.dcd`` / ``.log``.
+    append : bool
+        Append to (rather than truncate) the DCD/log -- used when a restart
+        resumes within this phase, so the log header is not re-written.
+    total_steps : int, optional
+        Value reported as the run length for the log's remaining-time/speed
+        columns. The OpenMM step counter is continuous across phases, so for the
+        production phase of an annealing run this should be the grand total
+        (``cfg.total_steps()``); defaults to ``cfg.md_steps``.
+    """
+    if total_steps is None:
+        total_steps = cfg.md_steps
+
+    # Checkpoint frequency (nstchk) is independent of the trajectory frequency
+    # (nstxout); nstchk defaults to nstxout when not set in the config.
+    simulation.reporters = []
+    simulation.reporters.append(mm.app.CheckpointReporter(cfg.checkpoint_path(), cfg.nstchk))
+    simulation.reporters.append(
+        mm.app.DCDReporter(cfg.output_path(suffix + '.dcd'), cfg.nstxout,
+                           enforcePeriodicBox=bool(cfg.pbc), append=append))
+    # topo.topoReporter writes a clean, fixed-width log: each float column uses
+    # log_precision decimals and every column is padded to log_width characters so
+    # the columns line up. Columns are separated by two spaces (aligned and still
+    # machine-parsable via topo.reporter.readOpenMMReporterFile).
+    simulation.reporters.append(
+        topo.topoReporter(cfg.output_path(suffix + '.log'), cfg.nstlog,
+                          precision=cfg.log_precision, width=cfg.log_width,
+                          step=True, time=True,
+                          potentialEnergy=True, kineticEnergy=True, totalEnergy=True,
+                          temperature=True, remainingTime=True, speed=True,
+                          totalSteps=total_steps, separator='  ', append=append))
 
 
 def finalize_simulation(cfg, ctx: RunContext, topology, start_epoch: float) -> None:

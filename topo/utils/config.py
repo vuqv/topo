@@ -77,14 +77,18 @@ class SimulationConfig:
     tau_t: Any = None
 
     # temperature protocol: constant-T equilibrium (default) vs. annealing.
-    # When anneal is on, the system is held at t_high then quenched/cooled down
-    # to ref_t -- ref_t is the low (refold) temperature, reused as-is (there is
-    # no separate t_low key). See topo.mdrun.protocol.temperature_schedule.
+    # When anneal is on the run has TWO phases: a quench phase (hold at t_high,
+    # then quench/cool to ref_t) followed by a production phase (md_steps at
+    # ref_t). The quench writes <outname>_quench.dcd/.log; production keeps the
+    # usual <outname>.dcd/.log. anneal_steps is SEPARATE from md_steps: the grand
+    # total is anneal_steps (+ anneal_ramp_steps for linear) + md_steps. ref_t is
+    # the low (refold) temperature, reused as-is (no separate t_low key).
+    # See topo.mdrun.protocol and SimulationConfig.quench_steps / total_steps.
     anneal: bool = False
     t_high: Any = None              # high (unfolding) temperature; kelvin when tcoupl on
-    anneal_steps: int = 0           # steps held at t_high before cooling
+    anneal_steps: int = 0           # quench-phase steps held at t_high (separate from md_steps)
     anneal_ramp: str = 'jump'       # 'jump' (delta quench) or 'linear' (cooling ramp)
-    anneal_ramp_steps: int = 0      # linear only: steps to ramp t_high -> ref_t
+    anneal_ramp_steps: int = 0      # linear only: quench-phase steps to ramp t_high -> ref_t
     anneal_ramp_increments: int = 20  # linear only: number of discrete T steps in the ramp
 
     # pressure coupling
@@ -164,6 +168,22 @@ class SimulationConfig:
         otherwise ``<output_dir>/<outname>.chk``.
         """
         return self.checkpoint if self.checkpoint else self.output_path('.chk')
+
+    def quench_steps(self) -> int:
+        """Total steps in the quench phase (``0`` when ``anneal`` is off).
+
+        The quench is a *separate* phase from production: it holds at ``t_high``
+        for ``anneal_steps`` and, for a linear ramp, additionally cools over
+        ``anneal_ramp_steps``. Production then runs ``md_steps`` at ``ref_t``.
+        """
+        if not self.anneal:
+            return 0
+        ramp = self.anneal_ramp_steps if self.anneal_ramp == 'linear' else 0
+        return self.anneal_steps + ramp
+
+    def total_steps(self) -> int:
+        """Grand total integration steps across the quench + production phases."""
+        return self.quench_steps() + self.md_steps
 
     def prepare_output_dir(self) -> None:
         """
@@ -286,16 +306,21 @@ def read_simulation_config(config_file: str, verbose: bool = True) -> Simulation
             raise ValueError("anneal = yes requires t_high (the high/unfolding temperature)")
         cfg.t_high = float(t_high_val) * unit.kelvin
         cfg.anneal_steps = int(str(params.get('anneal_steps', cfg.anneal_steps)).replace('_', ''))
+        if cfg.anneal_steps <= 0:
+            raise ValueError("anneal = yes requires anneal_steps > 0 (the quench-phase hold length)")
         cfg.anneal_ramp = str(params.get('anneal_ramp', cfg.anneal_ramp)).strip().lower()
         if cfg.anneal_ramp not in ('jump', 'linear'):
             raise ValueError(f"anneal_ramp must be 'jump' or 'linear', got {cfg.anneal_ramp!r}")
         if cfg.anneal_ramp == 'linear':
             cfg.anneal_ramp_steps = int(str(params.get('anneal_ramp_steps', cfg.anneal_ramp_steps)).replace('_', ''))
             cfg.anneal_ramp_increments = int(params.get('anneal_ramp_increments', cfg.anneal_ramp_increments))
-        log(f'Temperature annealing on: hold {cfg.t_high} for {cfg.anneal_steps} steps, '
-            f'then {cfg.anneal_ramp} to ref_t = {cfg.ref_t}'
+        log(f'Temperature annealing on -- separate quench phase ({cfg.quench_steps()} steps): '
+            f'hold {cfg.t_high} for {cfg.anneal_steps} steps, then {cfg.anneal_ramp} to ref_t = {cfg.ref_t}'
             + (f' over {cfg.anneal_ramp_steps} steps ({cfg.anneal_ramp_increments} increments)'
-               if cfg.anneal_ramp == 'linear' else ''))
+               if cfg.anneal_ramp == 'linear' else '')
+            + f'; then production for {cfg.md_steps} steps at ref_t. '
+            f'Quench -> <outname>_quench.dcd/.log, production -> <outname>.dcd/.log. '
+            f'Grand total = {cfg.total_steps()} steps.')
     else:
         log("Temperature annealing is off (constant-temperature equilibrium at ref_t)")
 
