@@ -162,16 +162,23 @@ def setup_simulation(cfg, built: BuiltSystem,
     # Reporters are attached per phase by the runner (see attach_reporters), so a
     # quench phase can write <outname>_quench.* while production writes
     # <outname>.*. Here we only record run provenance (package versions, hardware,
-    # GPU, timing) -- a side channel that does not affect the simulation. The
-    # planned-steps figure is the grand total (quench + production) minus whatever
-    # a restart has already completed.
+    # GPU, timing) -- a side channel that does not affect the simulation.
+    #
+    # Planned steps: a fresh run does the whole protocol (quench + production =
+    # total_steps); a restart skips the quench entirely and only finishes the
+    # remaining production (md_steps - done_steps, since done_steps is now
+    # production-relative).
+    if restart_active:
+        steps_planned = cfg.md_steps - done_steps
+    else:
+        steps_planned = cfg.total_steps()
     runinfo_path = cfg.output_path('_runinfo.log')
     topo.runinfo.write_run_start(
         runinfo_path,
         control_file=control_file,
         checkpoint_file=checkpoint,
         restart=restart_active,
-        steps_planned=cfg.total_steps() - done_steps,
+        steps_planned=steps_planned,
         simulation=simulation,
         use_gpu=(cfg.device == 'GPU'),
         ppn=cfg.ppn,
@@ -185,13 +192,12 @@ def setup_simulation(cfg, built: BuiltSystem,
                       runinfo_path=runinfo_path)
 
 
-def attach_reporters(cfg, simulation, suffix='', append=False, total_steps=None):
+def attach_reporters(cfg, simulation, suffix='', append=False, total_steps=None,
+                     checkpoint=True):
     """(Re)attach the checkpoint / trajectory / log reporters for one phase.
 
     Replaces ``simulation.reporters`` so the runner can switch output file sets
     between the quench phase (``suffix='_quench'``) and production (``suffix=''``).
-    All phases share the single checkpoint (``<outname>.chk``) so a restart can
-    resume from the global step count regardless of which phase it stopped in.
 
     Parameters
     ----------
@@ -200,12 +206,16 @@ def attach_reporters(cfg, simulation, suffix='', append=False, total_steps=None)
         ``'_quench'`` -> ``<outname>_quench.dcd`` / ``.log``.
     append : bool
         Append to (rather than truncate) the DCD/log -- used when a restart
-        resumes within this phase, so the log header is not re-written.
+        resumes this phase, so the log header is not re-written.
     total_steps : int, optional
         Value reported as the run length for the log's remaining-time/speed
-        columns. The OpenMM step counter is continuous across phases, so for the
-        production phase of an annealing run this should be the grand total
-        (``cfg.total_steps()``); defaults to ``cfg.md_steps``.
+        columns; defaults to ``cfg.md_steps``. Each phase keeps its own step
+        clock (the quench clock is reset before production), so this is the
+        phase length, not a grand total.
+    checkpoint : bool
+        Whether to write the ``<outname>.chk`` checkpoint. The quench phase sets
+        this ``False`` -- it is short and never restarted, so the checkpoint only
+        ever holds production state and a restart resumes production cleanly.
     """
     if total_steps is None:
         total_steps = cfg.md_steps
@@ -213,7 +223,8 @@ def attach_reporters(cfg, simulation, suffix='', append=False, total_steps=None)
     # Checkpoint frequency (nstchk) is independent of the trajectory frequency
     # (nstxout); nstchk defaults to nstxout when not set in the config.
     simulation.reporters = []
-    simulation.reporters.append(mm.app.CheckpointReporter(cfg.checkpoint_path(), cfg.nstchk))
+    if checkpoint:
+        simulation.reporters.append(mm.app.CheckpointReporter(cfg.checkpoint_path(), cfg.nstchk))
     simulation.reporters.append(
         mm.app.DCDReporter(cfg.output_path(suffix + '.dcd'), cfg.nstxout,
                            enforcePeriodicBox=bool(cfg.pbc), append=append))

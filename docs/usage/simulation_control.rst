@@ -351,10 +351,18 @@ Temperature protocol (``anneal`` / ``t_high`` / ``anneal_*``)
     is ``anneal_steps`` (+ ``anneal_ramp_steps`` for ``linear``) + ``md_steps``.
     For ``anneal_ramp = jump`` the drop to ``ref_t`` is instantaneous and lands
     exactly on the boundary between the two files. ``ref_t`` is always the low /
-    refold temperature — there is no separate ``t_low`` key. The OpenMM step
-    counter is continuous across phases (the production ``Step`` column starts at
-    the quench length), and a single checkpoint ``<outname>.chk`` covers the whole
-    run. The runner prints both phases at startup.
+    refold temperature — there is no separate ``t_low`` key. The runner prints
+    both phases at startup.
+
+    The quench is a **one-time preparation**: it writes no checkpoint, and the
+    step/time clock is **reset to zero** when production starts, so the production
+    run looks like an ordinary standalone run (``Step`` from 0) and the single
+    checkpoint ``<outname>.chk`` holds only production state. Positions and
+    velocities carry over in the same context. Consequently **restart applies to
+    production only**: ``restart = yes`` skips the quench and resumes production
+    from the checkpoint (appending to ``<outname>.dcd`` / ``.log``); a run killed
+    during the short quench has no checkpoint yet, so a restart falls back to a
+    fresh run and simply redoes the quench.
 
     Choose ``jump`` for clean folding kinetics (folding happens at a single
     temperature) and ``linear`` for maximum refolding yield. Crucially, a Langevin
@@ -362,9 +370,7 @@ Temperature protocol (``anneal`` / ``t_high`` / ``anneal_*``)
     ``anneal_steps`` must be **many** relaxation times (and long enough to actually
     unfold the protein) — with a production-typical ``tau_t = 0.01`` ps⁻¹ (≈100 ps
     relaxation) that means a hold of many nanoseconds. Annealing requires
-    ``tcoupl = yes`` and composes with restarts: a restart resumes whichever phase
-    it stopped in (appending to that phase's files). See
-    :doc:`../tutorials/06_anneal` for a full walkthrough.
+    ``tcoupl = yes``. See :doc:`../tutorials/06_anneal` for a full walkthrough.
 
 Periodic boundary conditions
     Turning ``pbc`` on affects the non-bonded forces and how coordinates are

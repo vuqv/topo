@@ -75,27 +75,34 @@ def mdrun():
     ctx = engine.setup_simulation(cfg, built, control_file=args.input)
     sim = ctx.simulation
 
-    # 3. Run the temperature protocol. The OpenMM step counter is continuous
-    #    across phases, so a restart resumes whichever phase it stopped in
-    #    (ctx.done_steps is the global completed-step count).
+    # 3. Run the temperature protocol.
     prod = production_schedule(cfg)
     if cfg.anneal:
-        # --- Quench phase (writes <outname>_quench.*) ---
         qsched = quench_schedule(cfg)
-        quench_total = cfg.quench_steps()
         print(f"Temperature protocol [quench -> _quench.*]: {describe_schedule(qsched)}")
-        print(f"Temperature protocol [production -> .*]:    {describe_schedule(prod)}"
-              f"  (grand total {cfg.total_steps()} steps)")
-        if ctx.done_steps < quench_total:
-            engine.attach_reporters(cfg, sim, suffix='_quench',
-                                    append=ctx.restart_active, total_steps=quench_total)
-            run_protocol(sim, qsched, done_steps=ctx.done_steps)
+        print(f"Temperature protocol [production -> .*]:    {describe_schedule(prod)}")
+        if ctx.restart_active:
+            # A restart resumes PRODUCTION only. The quench is a one-time prep
+            # whose step clock was reset, so the checkpoint is production-relative.
+            print(f"Restart: skipping quench, resuming production from step {ctx.done_steps}")
+            prod_done = ctx.done_steps
+        else:
+            # Fresh run: run the quench phase (writes <outname>_quench.*, no
+            # checkpoint -- it is short and never restarted), then reset the
+            # step/time clock so production is a clean run from step 0. Positions
+            # and velocities carry over in the same context, so a `jump` is simply
+            # the hot structure suddenly thermostatted at ref_t.
+            engine.attach_reporters(cfg, sim, suffix='_quench', append=False,
+                                    total_steps=cfg.quench_steps(), checkpoint=False)
+            run_protocol(sim, qsched, done_steps=0)
+            sim.context.setStepCount(0)
+            sim.context.setTime(0.0)
+            sim.currentStep = 0
+            prod_done = 0
 
-        # --- Production phase (writes <outname>.*) at ref_t ---
-        prod_done = max(0, ctx.done_steps - quench_total)
-        prod_append = ctx.restart_active and ctx.done_steps > quench_total
-        engine.attach_reporters(cfg, sim, suffix='', append=prod_append,
-                                total_steps=cfg.total_steps())
+        # --- Production phase (writes <outname>.*) at ref_t, step clock from 0 ---
+        engine.attach_reporters(cfg, sim, suffix='', append=ctx.restart_active,
+                                total_steps=cfg.md_steps, checkpoint=True)
         run_protocol(sim, prod, done_steps=prod_done)
     else:
         # Plain equilibrium: a single constant-ref_t production run.

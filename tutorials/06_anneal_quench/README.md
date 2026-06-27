@@ -38,9 +38,13 @@ Two consequences worth internalizing:
   analysis. `ref_t` is always the low / refold temperature; there is **no
   separate `t_low` key**.
 
-The OpenMM step counter runs **continuously** across both phases, so the
-production log's `Step` column starts at `quench_steps` (it is honest elapsed
-time, not a reset). A single checkpoint `<outname>.chk` covers the whole run.
+The quench is treated as a **one-time preparation step**: it writes **no
+checkpoint**, and the step/time clock is **reset to zero** when production
+begins, so the production run looks exactly like an ordinary standalone run
+(its `Step` column starts at 0). Positions and velocities carry over, so a
+`jump` is simply the hot structure suddenly thermostatted at `ref_t`. The single
+checkpoint `<outname>.chk` therefore holds **only production state**, which keeps
+restarts clean (see below).
 
 When the run starts, the runner prints both phases:
 
@@ -144,7 +148,7 @@ p = readOpenMMReporterFile("traj_jump/traj.log")
 print("quench     mean T:", round(np.array(q["Temperature (K)"]).mean()))   # ~600 K
 print("production mean T:", round(np.array(p["Temperature (K)"]).mean()))   # ~300 K
 print("production steps :", int(np.array(p["Step"]).min()), "..",
-                            int(np.array(p["Step"]).max()))                 # 3100 .. 6000
+                            int(np.array(p["Step"]).max()))                 # 100 .. 3000 (reset to 0)
 ```
 (Instantaneous CG temperatures are noisy for a small chain — judge the *mean* of
 each file, not single frames.)
@@ -172,20 +176,21 @@ illustrative — increase `anneal_steps` and `md_steps` for a meaningful curve.
 
 ## Annealing + restart
 
-Restarts (Tutorial 3) compose with annealing. The schedule is defined over the
-**continuous** global step count and there is a single checkpoint, so a restart
-resumes **whichever phase it stopped in**:
+Restart (Tutorial 3) applies to the **production phase only** — the quench is a
+short, one-time preparation that is never restarted. Because the checkpoint holds
+production state and the production clock starts at 0, a restart behaves exactly
+like restarting a normal run:
 
-- **Interrupted during the quench** (`done < quench_steps`): the run appends to
-  `_quench.dcd` / `.log`, finishes the quench, then starts production fresh.
-- **Interrupted during production** (`done ≥ quench_steps`): the quench phase is
-  skipped entirely (its files are already complete), and the run appends to the
-  production `.dcd` / `.log`.
+- `restart = yes` **skips the quench entirely** and resumes production from
+  `<outname>.chk`, appending to the production `.dcd` / `.log`. The `_quench.*`
+  files from the original run are left untouched.
+- `md_steps` is the **production total**; the runner runs `md_steps − steps_done`
+  more production steps. To extend production, raise `md_steps`.
 
-As always, set `restart = yes`, keep `output_dir` / `outname` / the protocol keys
-identical between stages, and remember `md_steps` is the **production total** (the
-runner computes how many production steps remain). To add more production, raise
-`md_steps`.
+Keep `output_dir` / `outname` / the protocol keys identical between stages. (If a
+run is killed *during* the quench, no checkpoint exists yet, so `restart = yes`
+simply falls back to a fresh run and redoes the short quench — which is what you
+want.)
 
 ## Key takeaways
 
@@ -194,6 +199,9 @@ runner computes how many production steps remain). To add more production, raise
 - **`anneal_steps` is separate from `md_steps`**; the grand total is their sum
   (plus the linear ramp). `md_steps` is production-only.
 - **Two trajectories** keep the hot hold out of your production ensemble.
+- **Production resets to step 0** and owns the only checkpoint, so restarting an
+  annealed run is identical to restarting a normal run — the quench is never
+  redone.
 - **`ref_t` is the low temperature** — reused directly, no `t_high`/`t_low`
   bookkeeping.
 - **`jump` for kinetics, `linear` for yield.**
