@@ -76,6 +76,17 @@ class SimulationConfig:
     ref_t: Any = 300.0
     tau_t: Any = None
 
+    # temperature protocol: constant-T equilibrium (default) vs. annealing.
+    # When anneal is on, the system is held at t_high then quenched/cooled down
+    # to ref_t -- ref_t is the low (refold) temperature, reused as-is (there is
+    # no separate t_low key). See topo.mdrun.protocol.temperature_schedule.
+    anneal: bool = False
+    t_high: Any = None              # high (unfolding) temperature; kelvin when tcoupl on
+    anneal_steps: int = 0           # steps held at t_high before cooling
+    anneal_ramp: str = 'jump'       # 'jump' (delta quench) or 'linear' (cooling ramp)
+    anneal_ramp_steps: int = 0      # linear only: steps to ramp t_high -> ref_t
+    anneal_ramp_increments: int = 20  # linear only: number of discrete T steps in the ramp
+
     # pressure coupling
     pcoupl: bool = False
     ref_p: Any = 1.0
@@ -264,6 +275,29 @@ def read_simulation_config(config_file: str, verbose: bool = True) -> Simulation
             f'{cfg.ref_t} and time constant: {cfg.tau_t}')
     else:
         log("Temperature coupling is off")
+
+    # Temperature protocol. anneal = no (default) -> constant-T equilibrium at
+    # ref_t. anneal = yes -> hold at t_high then quench/cool to ref_t.
+    cfg.anneal = bool(strtobool(str(params.get('anneal', cfg.anneal))))
+    if cfg.anneal:
+        assert cfg.tcoupl, "annealing requires temperature coupling (tcoupl = yes)"
+        t_high_val = params.get('t_high', None)
+        if t_high_val is None or str(t_high_val).strip() == '':
+            raise ValueError("anneal = yes requires t_high (the high/unfolding temperature)")
+        cfg.t_high = float(t_high_val) * unit.kelvin
+        cfg.anneal_steps = int(str(params.get('anneal_steps', cfg.anneal_steps)).replace('_', ''))
+        cfg.anneal_ramp = str(params.get('anneal_ramp', cfg.anneal_ramp)).strip().lower()
+        if cfg.anneal_ramp not in ('jump', 'linear'):
+            raise ValueError(f"anneal_ramp must be 'jump' or 'linear', got {cfg.anneal_ramp!r}")
+        if cfg.anneal_ramp == 'linear':
+            cfg.anneal_ramp_steps = int(str(params.get('anneal_ramp_steps', cfg.anneal_ramp_steps)).replace('_', ''))
+            cfg.anneal_ramp_increments = int(params.get('anneal_ramp_increments', cfg.anneal_ramp_increments))
+        log(f'Temperature annealing on: hold {cfg.t_high} for {cfg.anneal_steps} steps, '
+            f'then {cfg.anneal_ramp} to ref_t = {cfg.ref_t}'
+            + (f' over {cfg.anneal_ramp_steps} steps ({cfg.anneal_ramp_increments} increments)'
+               if cfg.anneal_ramp == 'linear' else ''))
+    else:
+        log("Temperature annealing is off (constant-temperature equilibrium at ref_t)")
 
     cfg.pbc = bool(strtobool(str(params.get('pbc', cfg.pbc))))
     if cfg.pbc:

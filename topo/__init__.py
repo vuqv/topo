@@ -20,7 +20,7 @@ The first class, geometry, contains methods to calculate the geometrical paramet
 
 The library is open-source and offers flexibility.
 """
-__all__ = ['system', 'models', 'runinfo',
+__all__ = ['system', 'models', 'runinfo', 'engine',
            'topoReporter',
            'read_simulation_config', 'SimulationConfig',
            'make_noninteracting_copies', 'replicate_system_intra_only',
@@ -45,3 +45,6 @@ from . import analysis
 from .analysis.native_contacts import (load_domains, reference_residue_geometry,
                                        build_native_contacts,
                                        fraction_native_contacts)
+# engine uses topo.<...> only at call time, so importing it last avoids any
+# circular-import issue while making `topo.engine` available.
+from . import engine
