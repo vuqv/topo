@@ -16,7 +16,7 @@ import numpy as np
 from .dihedral import load_dihedral_params
 
 protein_list = ["MET", "GLY", "LYS", "THR", "ARG", "ALA", "ASP", "GLU", "TYR", "VAL", "LEU", "GLN", "TRP", "PHE", "SER",
-                "HIS", "ASN", "PRO", "CYS", "ILE", "ALY", "SEP", "TPO", "PTR"]
+                "HIS", "ASN", "PRO", "CYS", "ILE"]
 nucleic_list = ["A", "C", "G", "U"]
 parameters = {
     "topo": {

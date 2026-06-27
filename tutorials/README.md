@@ -21,6 +21,15 @@ The **ready-to-run files** for each tutorial (PDB, `md.ini`, `run_simulation.py`
 …) live in the matching folder under
 [`tutorials/`](https://github.com/vuqv/topo/tree/main/tutorials) in the repository.
 
+**Reference docs** that complement the tutorials:
+
+- [The TOPO model: theory & force field](https://vuqv.github.io/topo/usage/model_theory.html) — every energy term, its formula, constants, and parameter sources. Read this to understand *why* the model behaves as it does.
+- [Simulation control options](https://vuqv.github.io/topo/usage/simulation_control.html) — every `md.ini` option.
+- [Domain definition file](https://vuqv.github.io/topo/usage/domain_definition.html) — the `domain.yaml` format.
+- [Native-contact (Q) analysis](https://vuqv.github.io/topo/usage/native_contacts.html) — measuring how folded the protein is.
+- [Output files & log format](https://vuqv.github.io/topo/usage/outputs.html) — every file a run writes, and how to parse the log.
+- [Using TOPO from Python](https://vuqv.github.io/topo/usage/python_api.html) — the scripting API.
+
 ---
 
 ## What is TOPO? (the 1-minute version)
@@ -42,6 +51,9 @@ The force field has these terms:
 
 Because the native state is the energy minimum, TOPO is ideal for studying
 folding/unfolding, domain motions, and mechanical/thermal stability.
+
+For the full functional forms, constants, and where each parameter comes from,
+see [The TOPO model: theory & force field](https://vuqv.github.io/topo/usage/model_theory.html).
 
 ## How you run it
 

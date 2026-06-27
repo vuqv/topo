@@ -34,6 +34,12 @@ simplest possible configuration.
   hydrogen bonds and writes `P0CX28_clean_stride.dat`. You don't manage this file
   by hand.
 
+> **Want the full theory?** The force field — bonds, the bimodal Gaussian angle,
+> sequence-dependent periodic torsions, Debye–Hückel electrostatics, and the
+> 12-10-6 structure-based contact potential — is documented term by term, with
+> all constants and parameter sources, in
+> [The TOPO model: theory & force field](https://vuqv.github.io/topo/usage/model_theory.html).
+
 ## Step-by-step
 
 ### 1. Check your environment
