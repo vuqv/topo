@@ -97,7 +97,7 @@ Non-bonded potentials
 
 **Structure-based contacts**
 
-Native contacts are built by ``topo.utils.build_nonbonded_interaction.build_nonbonded_interaction`` from:
+Native contacts are built by ``topo.utils.nonbonded.build_nonbonded_interaction`` from:
 
 - Hydrogen bonds (STRIDE): 0.75 kcal/mol per H-bond; pairs with 2+ H-bonds are capped at 1.5 kcal/mol.
 - Backbone–sidechain and sidechain–sidechain contacts from distances (e.g. 4.5 Å cutoff) and optional domain scaling (YAML).

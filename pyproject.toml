@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "topo"
+version = "0.1.0"
+description = "TOPOlogy-based coarse-grained (structure-based / Go-like) model for folded proteins, built on OpenMM."
+readme = "README.md"
+requires-python = ">=3.9"
+# Runtime dependencies. Floors are the oldest versions known to work; no upper
+# caps (the package runs on current releases, e.g. numpy 2.x / openmm 8.x).
+# All are import-time requirements of `import topo`.
+dependencies = [
+    "numpy>=1.22",
+    "openmm>=7.7",
+    "parmed>=3.4",
+    "MDAnalysis>=2.2",
+    "mdtraj>=1.9.7",
+    "pandas>=1.4",
+    "pyyaml>=6.0",
+]
+
+[project.scripts]
+# Console command for the simulation runner: `topo-mdrun -f md.ini`
+topo-mdrun = "topo.mdrun:mdrun"
+# Console command for the strength (n_scale) optimizer: `topo-optimize -f optimize.ini`
+topo-optimize = "topo.optimize:optimize"
+
+[tool.setuptools.packages.find]
+# Only ship the importable package (not tutorials/docs/etc. at the repo root).
+include = ["topo*"]

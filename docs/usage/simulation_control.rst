@@ -11,6 +11,18 @@ required.
 * Every option below has a default **except** the ones marked *required*; you
   only need to set the options you want to change.
 
+Running a simulation
+--------------------
+
+The runner lives in the package as :mod:`topo.mdrun`. Once TOPO is installed
+(``pip install -e .`` from the repo root) any of these are equivalent:
+
+.. code-block:: bash
+
+    topo-mdrun -f md.ini              # installed console command
+    python -m topo.mdrun -f md.ini    # module form
+    python run_simulation.py -f md.ini  # tutorial shim (calls topo.mdrun)
+
 Example ``md.ini``:
 
 .. code-block::
@@ -325,7 +337,9 @@ Multi-copy runs (``n_copies`` / ``copy_shift``)
     structure-based contacts) is restricted to intra-copy interaction groups, so
     the total potential energy is exactly ``n_copies ×`` the single-chain energy.
     ``copy_shift`` sets the initial x-offset between copies (layout only). The
-    standard ``run_simulation.py`` replicates automatically via
+    runner (:mod:`topo.mdrun`) replicates automatically via
     :func:`topo.make_noninteracting_copies` whenever ``n_copies > 1``; afterwards
-    split the combined trajectory into per-chain DCDs for analysis. See
-    :doc:`../tutorials/04_multicopy` for a complete walkthrough.
+    split the combined trajectory into per-copy DCDs with
+    :func:`topo.split_chains` (memory-bounded streaming; CLI
+    ``python -m topo.utils.multichain``). See :doc:`../tutorials/04_multicopy` for
+    a complete walkthrough.

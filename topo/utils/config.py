@@ -18,12 +18,26 @@ OpenMM units already applied where appropriate (``dt``, ``ref_t``, ``tau_t``,
 import configparser
 from dataclasses import dataclass, field
 from pathlib import Path
-from distutils.util import strtobool
 from json import loads
 from typing import Any, List, Optional
 
 import openmm as mm
 from openmm import unit
+
+
+def strtobool(value):
+    """Convert a truthy/falsy string to 0/1.
+
+    Local replacement for ``distutils.util.strtobool`` (distutils was removed in
+    Python 3.12). Accepts the same vocabulary: true/yes/on/1 -> 1,
+    false/no/off/0 -> 0 (case-insensitive); anything else raises ValueError.
+    """
+    v = str(value).strip().lower()
+    if v in ("y", "yes", "t", "true", "on", "1"):
+        return 1
+    if v in ("n", "no", "f", "false", "off", "0"):
+        return 0
+    raise ValueError(f"invalid truth value {value!r}")
 
 
 @dataclass

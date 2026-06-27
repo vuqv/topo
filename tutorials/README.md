@@ -14,6 +14,7 @@ the concepts involved. Work through them in order.
 | 2 | [Multidomain & domain scaling](https://vuqv.github.io/topo/tutorials/02_multidomain.html) | Multidomain proteins: per-domain contact scaling via `domain.yaml`, including a discontiguous domain. |
 | 3 | [Restart & outputs](https://vuqv.github.io/topo/tutorials/03_restart.html) | Continuing a run from a checkpoint, and a tour of every output file. |
 | 4 | [Many copies in one run](https://vuqv.github.io/topo/tutorials/04_multicopy.html) | Run N non-interacting chains at once to fill the GPU, then split into per-chain trajectories. |
+| 5 | [Optimizing the contact strength](https://vuqv.github.io/topo/tutorials/05_opt_nscal.html) | Automatically search the per-domain/interface `strength` (*n*<sub>scale</sub>) that keeps each domain folded, instead of hard-coding it. |
 
 The **ready-to-run files** for each tutorial (PDB, `md.ini`, `run_simulation.py`,
 …) live in the matching folder under
@@ -44,15 +45,18 @@ folding/unfolding, domain motions, and mechanical/thermal stability.
 ## How you run it
 
 Every simulation is driven by a plain-text config file (conventionally
-`md.ini`) and launched with:
+`md.ini`) and launched with either of:
 
 ```bash
-python run_simulation.py -f md.ini
+python -m topo.mdrun -f md.ini          # the canonical package runner
+python run_simulation.py -f md.ini    # same thing, from inside a tutorial folder
 ```
 
-`run_simulation.py` reads `md.ini`, builds the CA model from your PDB
-(`topo.models.buildCoarseGrainModel`), and runs Langevin dynamics. The same
-script is copied into each tutorial folder so every example is self-contained.
+The runner reads `md.ini`, builds the CA model from your PDB
+(`topo.models.buildCoarseGrainModel`), and runs Langevin dynamics. It lives in
+the package as `topo.mdrun`; each tutorial folder keeps a tiny `run_simulation.py`
+that just calls it (`from topo.mdrun import mdrun`), so every example stays
+self-contained while the runner has a single canonical implementation.
 
 A full reference for `md.ini` options lives in
 [Simulation control options](https://vuqv.github.io/topo/usage/simulation_control.html);

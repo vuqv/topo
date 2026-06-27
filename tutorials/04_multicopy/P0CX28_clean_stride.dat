@@ -1,6 +1,6 @@
 REM  -------------------- Secondary structure summary -------------------  ~~~~
 REM                                                                        ~~~~
-CHN  P0CX28_clean.pdb A                                                    ~~~~
+CHN  /storage/work/qzv5006/src/topo/tutorials A                            ~~~~
 REM                                                                        ~~~~
 REM                .         .         .         .         .               ~~~~
 SEQ  1    MVNVPKTRKTYCKGKTCRKHTQHKVTQYKAGKASLFAQGKRRYDRKQSGF   50          ~~~~
@@ -152,7 +152,7 @@ REM  A2 is the angle between the planes of acceptor complex and N..O=C     ~~~~
 REM                                                                        ~~~~
 HBT  37                                                                    ~~~~
 HBI  0                                                                     ~~~~
-HBC  37      P0CX28_clean.pdb A  106                                       ~~~~
+HBC  37      /storage/work/qzv5006/src/topo/tutorials/04_multicopy/P0CX28_clean.pdb A  106 ~~~~
 REM                                                                        ~~~~
 REM  |--Residue 1--|     |--Residue 2--|  N-O N..O=C O..N-C     A1     A2  ~~~~
 DNR  VAL A    2    1 ->  HIS A   90   89  3.0  148.7  117.2   12.7   63.2  ~~~~

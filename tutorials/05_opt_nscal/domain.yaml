@@ -1,0 +1,14 @@
+n_residues: 139
+
+intra_domains:
+  A:
+    residues: [1-90]   # two segments, one domain
+    class: beta
+    strength: 1.8120
+  B:
+    residues: [91-139]
+    class: alpha
+    strength: 1.4704
+
+inter_domains:
+  A-B: 1.8611                    # set to 0.0 to remove the interface; omitting the line keeps it at 1.0

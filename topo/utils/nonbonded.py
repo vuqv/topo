@@ -20,7 +20,7 @@ Main workflow
 
 Typical use
 -----------
->>> from topo.utils.build_nonbonded_interaction import build_nonbonded_interaction
+>>> from topo.utils.nonbonded import build_nonbonded_interaction
 >>> distance_matrix, energy_matrix = build_nonbonded_interaction(
 ...     "protein.pdb", "domain.yaml", "stride.dat"
 ... )
@@ -377,7 +377,7 @@ def get_bs_contact_matrix(u: mda.Universe, cutoff: float = DEFAULT_CUTOFF) -> np
     Notes
     -----
     Backbone: protein backbone atoms excluding H. Sidechain: protein non-backbone
-    excluding H. Pairs within |resid_i - resid_j| <= LOCAL_SEPARATION are excluded,
+    excluding H. Pairs within abs(resid_i - resid_j) <= LOCAL_SEPARATION are excluded,
     but only when both residues are in the same chain; residues in different chains
     are never excluded by sequence separation (multi-chain safe).
     """

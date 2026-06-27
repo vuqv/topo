@@ -20,21 +20,28 @@ The first class, geometry, contains methods to calculate the geometrical paramet
 
 The library is open-source and offers flexibility.
 """
-__all__ = ['system', 'models', 'dynamics', 'build_structure', 'runinfo',
+__all__ = ['system', 'models', 'runinfo',
            'topoReporter',
            'read_simulation_config', 'SimulationConfig',
            'make_noninteracting_copies', 'replicate_system_intra_only',
-           'replicate_topology', 'replicate_positions', 'split_indices']
+           'replicate_topology', 'replicate_positions', 'split_indices',
+           'split_chains',
+           'analysis',
+           'load_domains', 'reference_residue_geometry', 'build_native_contacts',
+           'fraction_native_contacts']
 
 from .core import geometry
 from .core import models
 from .core import system
-from .dynamics import dynamics
 from .parameters import model_parameters
 from .reporter import topoReporter
-from .utils import build_structure
 from .utils import runinfo
 from .utils.config import read_simulation_config, SimulationConfig
 from .utils.multichain import (make_noninteracting_copies,
                                replicate_system_intra_only, replicate_topology,
-                               replicate_positions, split_indices)
+                               replicate_positions, split_indices,
+                               split_chains)
+from . import analysis
+from .analysis.native_contacts import (load_domains, reference_residue_geometry,
+                                       build_native_contacts,
+                                       fraction_native_contacts)

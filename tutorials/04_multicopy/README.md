@@ -94,11 +94,15 @@ PSF only, no PDB): `traj/traj.dcd` (all chains), `traj/traj.log`, `traj/traj.chk
 ```bash
 python split_chains.py -f md.ini
 ```
-This writes `traj/traj_chain{0..9}.dcd` — one ordinary single-chain trajectory
-per copy. Load each with the single-chain PSF:
+This writes `traj/traj_{0..9}.dcd` — one ordinary single-chain trajectory per
+copy (each recentred per frame; pass `center=False` to
+`topo.split_chains` to keep raw coordinates). It uses the package
+routine `topo.split_chains`, which streams the combined DCD in chunks
+so it scales to trajectories too large to fit in memory. Load each with the
+single-chain PSF:
 ```python
 import MDAnalysis as mda
-u = mda.Universe("traj/traj.psf", "traj/traj_chain0.dcd")
+u = mda.Universe("traj/traj.psf", "traj/traj_0.dcd")
 # RMSD, Q, Rg, ... per independent trajectory
 ```
 

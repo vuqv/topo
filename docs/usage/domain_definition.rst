@@ -4,8 +4,8 @@ Domain definition file (``domain.yaml``)
 The domain definition file tells TOPO how to scale the **sidechain–sidechain
 (SS) contact energies** of the structure-based non-bonded potential on a
 per-domain basis. It is passed through ``domain_def`` in ``md.ini`` and consumed
-by :func:`topo.utils.build_nonbonded_interaction.read_yaml_config` and
-:func:`~topo.utils.build_nonbonded_interaction.get_scaling_ss_matrix`.
+by :func:`topo.utils.nonbonded.read_yaml_config` and
+:func:`~topo.utils.nonbonded.get_scaling_ss_matrix`.
 
 It is **optional**: if you omit ``domain_def``, every SS contact is scaled by
 1.0 (i.e. no domain scaling at all).
@@ -20,9 +20,11 @@ Quick reference
     intra_domains:                       # REQUIRED: at least one domain
       A:
         residues: [1-117, 166-214]       # list of ranges ("a-b", inclusive) and/or ints
+        class: alpha-beta                # OPTIONAL: structural class (optimizer only)
         strength: 1.1556                 # SS-contact scale factor WITHIN domain A
       B:
         residues: [118-165]
+        class: alpha
         strength: 1.6871
     inter_domains:                       # OPTIONAL: scale factor BETWEEN domains
       A-B: 1.8611                         # key is "<domain1>-<domain2>"
@@ -46,6 +48,12 @@ How it is interpreted
   stored symmetrically, so ``A-B`` also covers ``B-A``.
 * Only the **SS** part of the contact energy is scaled. The hydrogen-bond and
   backbone–sidechain contributions are not affected by these factors.
+* ``class`` is an **optional** per-domain field (``alpha``, ``beta`` or
+  ``alpha-beta``; ``a``/``b``/``c`` accepted). It is used **only** by the strength
+  optimizer (:doc:`../tutorials/05_opt_nscal`) to pick which *n*\ :sub:`scale`
+  ladder a domain climbs, and is **ignored** by the runner — the YAML reader only
+  reads ``residues`` and ``strength``. Include it on domains you intend to
+  optimize; omit it otherwise.
 
 .. important::
 

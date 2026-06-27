@@ -13,7 +13,7 @@ parameters : dict
 """
 import numpy as np
 
-from .load_dihedral_params import load_dihedral_params
+from .dihedral import load_dihedral_params
 
 protein_list = ["MET", "GLY", "LYS", "THR", "ARG", "ALA", "ASP", "GLU", "TYR", "VAL", "LEU", "GLN", "TRP", "PHE", "SER",
                 "HIS", "ASN", "PRO", "CYS", "ILE", "ALY", "SEP", "TPO", "PTR"]
@@ -124,18 +124,15 @@ parameters = {
             "radii": 0.586,
             "charge": 0.0,
         },
-        # Parameters for RNA 
-        """
-        nucleotides containing pyrimidines and purines were represented as 3 and 4 interaction sites, respectively, 
-        with one interaction located at the phosphate position and having a q=-1e charge, another at the centroid of the ribose ring, 
-        and one at the centroid of each conjugated ring in the base.
-        pyrimidine bases: C, T (one ring)
-        purine bases: A, G (two rings)- in CG model will have two BR beads.
-
-        Be careful on sigma_ij: (only used for non-native contacts)
-        Two conventions exist: sigma_ij = 0.5 * (sigma_i + sigma_j), or
-        R_ij = (R_i + R_j).
-        """
+        # Parameters for RNA.
+        # Nucleotides containing pyrimidines and purines are represented as 3 and 4
+        # interaction sites, respectively, with one interaction at the phosphate
+        # position (q = -1e), another at the centroid of the ribose ring, and one at
+        # the centroid of each conjugated ring in the base.
+        #   pyrimidine bases: C, U (one ring)
+        #   purine bases:     A, G (two rings) - two BR beads in the CG model.
+        # Be careful with sigma_ij (only used for non-native contacts): two
+        # conventions exist, sigma_ij = 0.5 * (sigma_i + sigma_j) or R_ij = R_i + R_j.
         "P": {
             "mass": 95.00,
             "radii": 0.710,

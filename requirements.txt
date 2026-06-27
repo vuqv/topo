@@ -1,20 +1,23 @@
-# This file may be used to create an environment using:
-# $ conda create --name <env> --file <this file>
-# platform: linux-64
-_libgcc_mutex=0.1=conda_forge
-_openmp_mutex=4.5=2_gnu
+# TOPO runtime dependencies (mirrors [project].dependencies in pyproject.toml).
+#
+# Preferred install is `pip install -e .`, which reads pyproject.toml directly.
+# This file is provided for environments that install dependencies separately,
+# e.g. with conda/mamba:
+#     mamba install -c conda-forge --file requirements.txt
+#
+# Floors are the oldest versions known to work; no upper caps (the package runs
+# on current releases, e.g. numpy 2.x / openmm 8.x). Python >= 3.9.
 
-parmed=3.4.3
-python=3.10.5
-numpy>=1.22.4
-openmm>=7.7.0
-parmed>=3.4.3
-git>=2.37.3
-mdanalysis>=2.2.0
-matplotlib>=3.5.3
-pandas>=1.4.4
-numba>=0.55.2
+numpy>=1.22
+openmm>=7.7
+parmed>=3.4
+mdanalysis>=2.2
 mdtraj>=1.9.7
-scipy>=1.9.1
-PeptideBuilder
-biopython
+pandas>=1.4
+pyyaml>=6.0
+
+# Optional — only needed by the standalone analysis tools under scripts/
+# (not by the topo package or the tutorials):
+#   scipy>=1.9
+#   matplotlib>=3.5
+#   numba>=0.55

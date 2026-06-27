@@ -8,7 +8,7 @@ import openmm as mm
 import openmm.unit as unit
 import parmed as pmd
 import warnings
-from ..parameters import model_parameters
+from ..parameters import parameters as model_params, protein_list
 
 
 # from openmm import *
@@ -143,8 +143,8 @@ class system:
         self.bonds = OrderedDict()
         self.bonds_indexes = []
         self.n_bonds = None
-        self.bond_length_protein = model_parameters.parameters[model]["bond_length_protein"]
-        self.bond_length_nucleic = model_parameters.parameters[model]["bond_length_nucleic"]
+        self.bond_length_protein = model_params[model]["bond_length_protein"]
+        self.bond_length_nucleic = model_params[model]["bond_length_nucleic"]
         self.bondedTo = None
         self.harmonicBondForce = None
 
@@ -160,7 +160,7 @@ class system:
         self.periodicTorsionForce = None
 
         # Exclusion rule for nonbonded forces
-        self.bonded_exclusions_index = model_parameters.parameters[model]["bonded_exclusions_index"]
+        self.bonded_exclusions_index = model_params[model]["bonded_exclusions_index"]
 
         # Structure-based (native + non-native) contact non-bonded force
         self.custom_non_bonded_force = None
@@ -318,7 +318,7 @@ class system:
                 self.bonds[bond] = (bond_length_nucleic, None)
             """
 
-            is_protein_connect = all(bond[i].residue.name in model_parameters.protein_list for i in [0, 1])
+            is_protein_connect = all(bond[i].residue.name in protein_list for i in [0, 1])
             bond_length = self.bond_length_protein if is_protein_connect else self.bond_length_nucleic
             # print(bond_length)
             bond_length = bond_length * unit.nanometer
@@ -426,7 +426,7 @@ class system:
         -------
         None
         """
-        bond_force_constant = model_parameters.parameters[self.model]["bond_force_constant"]
+        bond_force_constant = model_params[self.model]["bond_force_constant"]
 
         system._setParameters(self.bonds, bond_force_constant)
 
@@ -578,15 +578,17 @@ class system:
         # read the parameter for Periodic Torsion angle, which phase and force constant is depend on two middle residues type
         # print(f"current dir : {os.getcwd()}")
 
-        dihedral_params = model_parameters.parameters[self.model]["dihedral_params"]
+        dihedral_params = model_params[self.model]["dihedral_params"]
         # print(dihedral_params)
 
         self.periodicTorsionForce = mm.PeriodicTorsionForce()
         for torsion in self.torsions:
-            # each torsion has 4 periodicity.
+            # the phase/force constant depend on the two middle residues' types
+            res1 = torsion[1].residue.name
+            res2 = torsion[2].residue.name
+            # each torsion has 4 periodicities.
             for j in range(1, 5):
-                delta_j = dihedral_params[str((str(torsion[1].residue.name), str(torsion[2].residue.name), j))][1]
-                k_D_j = dihedral_params[str((str(torsion[1].residue.name), str(torsion[2].residue.name), j))][2]
+                _, delta_j, k_D_j = dihedral_params[(res1, res2, j)]
                 self.periodicTorsionForce.addTorsion(torsion[0].index, torsion[1].index, torsion[2].index, torsion[3].index,
                                                      j, delta_j, k_D_j)
                 # print(f"{torsion[0].residue.name}, {torsion[1].residue.name}, {torsion[2].residue.name}, {torsion[3].residue.name}, {j}: {k_D_j:.6f}\t{delta_j:.6f}")
@@ -1080,7 +1082,7 @@ class system:
         None
         """
         # Load mass parameters from parameters package
-        params = model_parameters.parameters[self.model]
+        params = model_params[self.model]
         masses = []
         for r in self.topology.residues():
             if r.name in params:
@@ -1108,7 +1110,7 @@ class system:
         """
 
         # Load radii from parameters package
-        params = model_parameters.parameters[self.model]
+        params = model_params[self.model]
 
         radii = []
 
@@ -1135,7 +1137,7 @@ class system:
         """
 
         # Load charge from parameters package
-        params = model_parameters.parameters[self.model]
+        params = model_params[self.model]
         charge = []
 
         for r in self.topology.residues():

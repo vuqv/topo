@@ -23,6 +23,7 @@ After the run, the atoms of copy *k* are the contiguous block
 the trajectory trivial.
 """
 import copy as _copy
+from pathlib import Path
 from typing import List, Tuple
 
 import numpy as np
@@ -229,3 +230,132 @@ def make_noninteracting_copies(system: mm.System, topology: mm.app.Topology,
     full_topology = replicate_topology(topology, n_copies)
     full_positions = replicate_positions(positions, n_copies, shift=shift)
     return full_system, full_topology, full_positions
+
+
+# --------------------------------------------------------------------------- #
+# The inverse operation: split a combined multi-copy trajectory back into one
+# DCD per copy. Streaming + chunked so arbitrarily large combined DCDs (that do
+# not fit in memory) are handled in a single pass.
+# --------------------------------------------------------------------------- #
+def split_chains(combined_dcd, output_paths, *, chunk_size: int = 1000,
+                         center: bool = True):
+    """Split a combined multi-copy DCD into one DCD per copy.
+
+    The combined trajectory's atoms are assumed to be ``n_copies`` contiguous
+    equal-size blocks (the layout produced by :func:`make_noninteracting_copies`
+    / :func:`split_indices`), so copy *k* is atoms ``[k*m : (k+1)*m]``.
+
+    **Memory-bounded streaming.** The combined DCD is read in chunks of
+    ``chunk_size`` frames and each chunk is written straight to the per-copy
+    files, so peak memory is ``chunk_size * n_atoms * 3`` floats regardless of how
+    long the trajectory is — a combined DCD too large to fit in memory is handled
+    fine. A single pass over the input writes all copies.
+
+    Coordinates stay in Å throughout (mdtraj's low-level DCD read **and** write
+    are both in Å), so no unit conversion is needed or applied.
+
+    Parameters
+    ----------
+    combined_dcd : str or Path
+        The combined multi-copy DCD.
+    output_paths : sequence of str or Path
+        One output DCD path per copy; ``n_copies = len(output_paths)``. Parent
+        directories are created as needed.
+    chunk_size : int, optional
+        Frames read/written per chunk (default 1000).
+    center : bool, optional
+        If True (default), translate each copy to its own centre of geometry per
+        frame, so every per-copy trajectory is centred at the origin and the
+        inter-copy ``copy_shift`` offset is removed. Set False to preserve the raw
+        coordinates exactly.
+
+    Returns
+    -------
+    (n_copies, atoms_per_copy, n_frames) : tuple[int, int, int]
+    """
+    from mdtraj.formats import DCDTrajectoryFile
+
+    output_paths = [str(p) for p in output_paths]
+    n_copies = len(output_paths)
+    if n_copies < 1:
+        raise ValueError("output_paths must list at least one copy")
+    for p in output_paths:
+        Path(p).parent.mkdir(parents=True, exist_ok=True)
+
+    writers = [DCDTrajectoryFile(p, "w") for p in output_paths]
+    atoms_per_copy = None
+    n_frames = 0
+    try:
+        with DCDTrajectoryFile(str(combined_dcd), "r") as reader:
+            while True:
+                xyz, _cell_len, _cell_ang = reader.read(n_frames=chunk_size)
+                if xyz.shape[0] == 0:
+                    break
+                if atoms_per_copy is None:
+                    total_atoms = xyz.shape[1]
+                    if total_atoms % n_copies != 0:
+                        raise ValueError(
+                            f"combined DCD has {total_atoms} atoms, not divisible "
+                            f"by n_copies={n_copies}")
+                    atoms_per_copy = total_atoms // n_copies
+                for k in range(n_copies):
+                    sub = xyz[:, k * atoms_per_copy:(k + 1) * atoms_per_copy, :]
+                    if center:
+                        sub = sub - sub.mean(axis=1, keepdims=True)
+                    writers[k].write(sub)
+                n_frames += xyz.shape[0]
+    finally:
+        for w in writers:
+            w.close()
+    return n_copies, atoms_per_copy, n_frames
+
+
+def _split_cli():
+    """CLI: ``python -m topo.utils.multichain`` — split a combined multi-copy DCD."""
+    import argparse
+
+    p = argparse.ArgumentParser(
+        prog="python -m topo.utils.multichain",
+        description="Split a combined multi-copy DCD into one DCD per copy "
+                    "(streaming; handles DCDs too large to fit in memory).")
+    p.add_argument("-f", "--combined-dcd", required=True,
+                   help="Combined multi-copy DCD.")
+    group = p.add_mutually_exclusive_group(required=True)
+    group.add_argument("-n", "--n-copies", type=int, help="Number of copies.")
+    group.add_argument("-tp", "--template-psf",
+                       help="Single-chain PSF; n_copies is inferred from the "
+                            "combined DCD's atom count.")
+    p.add_argument("-o", "--output-dir", default="split_trajs",
+                   help="Output directory (default: split_trajs).")
+    p.add_argument("--outname", default="traj",
+                   help="Output basename -> <outname>_<k>.dcd (default: traj).")
+    p.add_argument("--chunk-size", type=int, default=1000,
+                   help="Frames per chunk (default: 1000).")
+    p.add_argument("--no-center", action="store_true",
+                   help="Preserve raw coordinates (default: centre each copy per frame).")
+    args = p.parse_args()
+
+    if args.n_copies is not None:
+        n_copies = args.n_copies
+    else:
+        from openmm.app import CharmmPsfFile
+        from mdtraj.formats import DCDTrajectoryFile
+        atoms_per_copy = CharmmPsfFile(args.template_psf).topology.getNumAtoms()
+        with DCDTrajectoryFile(args.combined_dcd, "r") as reader:
+            xyz, _, _ = reader.read(n_frames=1)
+        total = xyz.shape[1]
+        if total % atoms_per_copy != 0:
+            raise SystemExit(f"DCD atoms ({total}) not divisible by template "
+                             f"atoms ({atoms_per_copy}).")
+        n_copies = total // atoms_per_copy
+
+    out_dir = Path(args.output_dir)
+    out_paths = [out_dir / f"{args.outname}_{k}.dcd" for k in range(n_copies)]
+    nc, apc, nf = split_chains(args.combined_dcd, out_paths,
+                                           chunk_size=args.chunk_size,
+                                           center=not args.no_center)
+    print(f"Split {nf} frames into {nc} copies of {apc} atoms each -> {out_dir}/")
+
+
+if __name__ == "__main__":
+    _split_cli()
