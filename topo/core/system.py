@@ -532,14 +532,17 @@ class system:
         Add Gaussian functional form of angle.
         Note that in openMM log is neutral logarithm.
 
-        Angle potential takes a Gaussian functional form.
+        Angle potential takes a bimodal (double-Gaussian, log-sum-exp) form:
 
         .. math::
-            U_{angle}(\\theta) = \\frac{-1}{\gamma}
-                \\ln{[e^{-\gamma[k_\\alpha( \\theta-\\theta_\\alpha)^2+\\epsilon_\\alpha]}
-                +e^{-\\gamma k_\\beta(\\theta-\\theta_\\beta)^2}]}
 
-        Angle potential is taken from reference:
+            U_\mathrm{angle}(\theta) = -\frac{1}{\gamma}
+            \ln\left[ e^{-\gamma\left[k_\alpha(\theta-\theta_\alpha)^2 + \epsilon_\alpha\right]}
+            + e^{-\gamma k_\beta(\theta-\theta_\beta)^2} \right]
+
+        with basins at :math:`\theta_\alpha = 91.7^\circ` and
+        :math:`\theta_\beta = 130.0^\circ`. See the model-theory documentation for
+        all constants.
         """
 
         # Reference angles and gamma use the precise degree->radian / unit
@@ -571,8 +574,20 @@ class system:
 
 
     def addPeriodicTorsionForce(self) -> None:
-        """
-        Torsion potential in Ed's model, which is used periodic torsion angle.
+        r"""
+        Add the sequence-dependent periodic torsion potential.
+
+        Each backbone dihedral uses a periodic torsion with four periodicities:
+
+        .. math::
+
+            U_\mathrm{torsion}(\varphi) =
+            \sum_{n=1}^{4} k_{D,n}\left[1 + \cos(n\varphi - \delta_n)\right]
+
+        The force constants :math:`k_{D,n}` and phases :math:`\delta_n` depend on
+        the two central residues of the dihedral and are read from
+        ``topo/parameters/data/dihedral_params.csv`` (scaled by a 0.756
+        calibration factor; see :func:`topo.parameters.dihedral.load_dihedral_params`).
         """
 
         # read the parameter for Periodic Torsion angle, which phase and force constant is depend on two middle residues type
@@ -598,18 +613,18 @@ class system:
         r"""
         Creates a nonbonded force term for electrostatic interaction DH potential.
 
-        Creates an :code:`mm.CustomNonbondedForce()` object with the parameters
-        sigma and epsilon given to this method. The custom non-bonded force
-        is initialized with the formula:
+        Creates an :code:`mm.CustomNonbondedForce()` object implementing the
+        screened-Coulomb (Debye-Huckel / Yukawa) potential:
 
         .. math::
-            energy = f \\times \\frac{q_1q_2}{\epsilon_r \\times r}\\times e^{(-r/lD)}
 
+            U^\mathrm{el}_{ij}(r) = f\,\frac{q_i q_j}{\epsilon_r\, r}\, e^{-r/l_D}
 
-        where :math:`f=\\frac{1}{4\\pi\\epsilon_0}=138.935458` is the factor for short to convert dimensionless
-        in calculation to :math:`kj.nm/(mol\\times e^2)` unit.
-
-        :math:`\\epsilon_r=80`: Dielectric constant of water at 100mM mono-valent ion
+        where :math:`f = 1/4\pi\epsilon_0 = 138.935458\ \mathrm{kJ\,nm\,mol^{-1}\,e^{-2}}`
+        is the Coulomb constant in MD units, :math:`\epsilon_r = 78.5` is the
+        relative dielectric of water, and :math:`l_D = 1.0\ \mathrm{nm}` is the
+        Debye screening length (about 100 mM monovalent salt). A 2.0 nm cutoff
+        with a switching function at 1.8 nm is used.
 
         The force object is stored at the :code:`yukawaForce` attribute.
 
@@ -663,8 +678,54 @@ class system:
    
 
     def addCustomNonBondedForce(self, distance_matrix, energy_matrix, use_pbc):
-        """
-        Add a custom non-bonded force to the system.
+        r"""
+        Add the structure-based (native + non-native) contact non-bonded force.
+
+        Creates an :code:`mm.CustomNonbondedForce()` implementing a 12-10-6
+        (Go-type) pairwise potential, with per-pair well position
+        :math:`R_{ij}` and well depth :math:`\varepsilon_{ij}` supplied as
+        tabulated functions of the two particles' ids:
+
+        .. math::
+
+            U^\mathrm{nb}_{ij}(r) = \varepsilon_{ij}\left[
+                13\left(\frac{R_{ij}}{r}\right)^{12}
+              - 18\left(\frac{R_{ij}}{r}\right)^{10}
+              +  4\left(\frac{R_{ij}}{r}\right)^{6}
+            \right]
+
+        The well minimum is at :math:`r = R_{ij}`, where
+        :math:`U^\mathrm{nb}_{ij} = -\varepsilon_{ij}`, so :math:`R_{ij}` is the
+        preferred distance and :math:`\varepsilon_{ij}` is the well depth. Both
+        matrices are produced by
+        :func:`topo.utils.nonbonded.build_nonbonded_interaction`:
+
+        * **Native contacts** (residue pairs in contact in the input structure):
+          :math:`R_{ij}` is the native Ca-Ca distance and
+          :math:`\varepsilon_{ij}` is the sum of hydrogen-bond, backbone-sidechain
+          and (domain-scaled) sidechain-sidechain energies.
+        * **Non-native pairs**: a soft excluded-volume repulsion -- a negligible
+          well depth with :math:`R_{ij} = \tfrac12(\sigma_i + \sigma_j)`.
+
+        A 2.0 nm cutoff with a switching function at 1.8 nm is used, and pairs
+        two or fewer bonds apart (1-2 and 1-3 neighbours) are excluded. The force
+        object is stored at the :code:`custom_non_bonded_force` attribute.
+
+        Parameters
+        ----------
+        distance_matrix : numpy.ndarray
+            Symmetric (n_atoms x n_atoms) matrix of well positions
+            :math:`R_{ij}` in nm. Looked up per pair via ``R_table(id1, id2)``.
+        energy_matrix : numpy.ndarray
+            Symmetric (n_atoms x n_atoms) matrix of well depths
+            :math:`\varepsilon_{ij}` in kJ/mol. Looked up via
+            ``eps_table(id1, id2)``.
+        use_pbc : bool
+            If True, use ``CutoffPeriodic``; otherwise ``CutoffNonPeriodic``.
+
+        Returns
+        -------
+        None
         """
         table_R_ravel = distance_matrix.ravel().tolist()
         table_eps_ravel = energy_matrix.ravel().tolist()
