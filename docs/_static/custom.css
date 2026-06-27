@@ -1,0 +1,44 @@
+/* TOPO docs — full-width, responsive tweaks for the Furo theme.
+   Furo constrains the content column (~46rem) for readability; for a
+   reference manual with wide tables we want the content to use the full
+   available width and let table cells wrap instead of scrolling. */
+
+/* 1. Full-width content column.
+   Furo centres .content at max-width: var(--content-width). Removing the cap
+   lets the article fill all space between the left nav and the right TOC.
+   The theme is still responsive: both sidebars collapse on narrow screens. */
+:root {
+    --content-width: 100%;
+}
+
+.content {
+    max-width: 100%;
+}
+
+/* 2. Wrapping, full-width tables.
+   By default long cells force the table wider than the viewport, so it scrolls
+   left-right. Let cell text wrap (and break very long tokens) so the whole
+   table fits. A wrapper still provides horizontal scroll as a graceful
+   fallback for genuinely un-wrappable content (e.g. long code). */
+article table.docutils {
+    width: 100%;
+    table-layout: auto;
+}
+
+article table.docutils td,
+article table.docutils th {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.table-wrapper {
+    overflow-x: auto;
+}
+
+/* Keep inline code/literals inside cells from forcing overflow. */
+article table.docutils code,
+article table.docutils .literal {
+    white-space: normal;
+    overflow-wrap: anywhere;
+}

@@ -77,9 +77,9 @@ pdf_documents = [('index', u'rst2pdf', u'TOPO', u'Quyen Vu'),]
 #    'jax': ['input/TeX', 'output/HTML-CSS'],
 #}
 
-html_sidebars = {
-    '**': ['localtoc.html', 'sourcelink.html', 'searchbox.html'],
-}
+# Let Furo supply its own sidebar (global nav + search + local TOC). Overriding
+# html_sidebars with the basic templates would remove Furo's navigation, so we
+# leave it at the theme default.
 
 
 
@@ -116,27 +116,18 @@ pygments_style = 'sphinx'
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
-html_theme = 'sphinx_rtd_theme'
+html_theme = 'furo'
 
-# Theme options are theme-specific and customize the look and feel of a theme
-# further.  For a list of options available for each theme, see the
-# documentation.
-#
-# html_theme_options = {}
+# Theme options are theme-specific. Furo is a modern, responsive theme; the
+# options below tune its sidebar/navigation. Full-width content and wrapping
+# tables are handled in _static/custom.css (see html_css_files).
 html_theme_options = {
-    'analytics_id': 'G-XXXXXXXXXX',  # Provided by Google in your dashboard
-    'analytics_anonymize_ip': False,
-    'logo_only': False,
-    'display_version': True,
-    'prev_next_buttons_location': 'bottom',
-    'style_external_links': False,
-    'vcs_pageview_mode': '',
-    # 'style_nav_header_background': 'white',
-    'navigation_depth': 5,
-    'collapse_navigation': False,
-    'sticky_navigation': False,
-    'includehidden': True,
-    'titles_only': False
+    'navigation_with_keys': True,
+    'sidebar_hide_name': False,
+    # Source-repository links shown in the right-hand sidebar.
+    'source_repository': 'https://github.com/vuqv/topo/',
+    'source_branch': 'main',
+    'source_directory': 'docs/',
 }
 
 # Add any paths that contain custom static files (such as style sheets) here,
@@ -144,6 +135,8 @@ html_theme_options = {
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ['_static']
 html_logo = "_static/logo.svg"
+# Custom CSS: full-width content + wrapping tables (see _static/custom.css).
+html_css_files = ['custom.css']
 # Custom sidebar templates, must be a dictionary that maps document names
 # to template names.
 #
