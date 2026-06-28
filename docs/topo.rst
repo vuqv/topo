@@ -36,6 +36,24 @@ The strength (n_scale) optimizer (``topo-optimize`` / ``python -m topo.optimize`
    :undoc-members:
    :show-inheritance:
 
+topo.translation module
+-----------------------
+
+The protein synthesis (nascent-chain elongation) runner
+(``topo-elongate`` / ``python -m topo.translation``) and the rigid-ribosome
+scenery it uses. See the :doc:`usage/protein_synthesis` reference and
+Tutorial 7.
+
+.. automodule:: topo.translation.elongate
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: topo.translation.ribosome
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 Module contents
 ---------------
 

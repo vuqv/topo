@@ -36,6 +36,7 @@ unfolding, thermal/mechanical stability, and multidomain motions.
    usage/native_contacts
    usage/outputs
    usage/python_api
+   usage/protein_synthesis
 
 .. toctree::
    :maxdepth: 1

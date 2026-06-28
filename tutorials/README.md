@@ -16,6 +16,7 @@ the concepts involved. Work through them in order.
 | 4 | [Many copies in one run](https://vuqv.github.io/topo/tutorials/04_multicopy.html) | Run N non-interacting chains at once to fill the GPU, then split into per-chain trajectories. |
 | 5 | [Optimizing the contact strength](https://vuqv.github.io/topo/tutorials/05_opt_nscal.html) | Automatically search the per-domain/interface `strength` (*n*<sub>scale</sub>) that keeps each domain folded, instead of hard-coding it. |
 | 6 | [Temperature annealing & quenching](https://vuqv.github.io/topo/tutorials/06_anneal.html) | Run a temperature protocol — hold the protein hot to unfold it, then T-jump (or slow-cool) back to `ref_t` to study refolding. |
+| 7 | [Protein synthesis](https://vuqv.github.io/topo/tutorials/07_protein_synthesis.html) | Synthesize a protein vectorially on a rigid coarse-grained ribosome (grow N→C one residue per step), then eject it — and make a movie of the chain emerging from the exit tunnel. |
 
 The **ready-to-run files** for each tutorial (PDB, `md.ini`, `run_simulation.py`,
 …) live in the matching folder under
@@ -29,6 +30,7 @@ The **ready-to-run files** for each tutorial (PDB, `md.ini`, `run_simulation.py`
 - [Native-contact (Q) analysis](https://vuqv.github.io/topo/usage/native_contacts.html) — measuring how folded the protein is.
 - [Output files & log format](https://vuqv.github.io/topo/usage/outputs.html) — every file a run writes, and how to parse the log.
 - [Using TOPO from Python](https://vuqv.github.io/topo/usage/python_api.html) — the scripting API.
+- [Protein synthesis](https://vuqv.github.io/topo/usage/protein_synthesis.html) — the `topo.translation` elongation runner: `elongate.ini` options, the rigid-ribosome force field, the tRNA tether, and the movie tool.
 
 ---
 

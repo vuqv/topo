@@ -11,4 +11,5 @@
 04_multicopy
 05_opt_nscal
 06_anneal
+07_protein_synthesis
 ```

@@ -1,16 +1,17 @@
 # Tasks
-- [x] change main function in mdrun.py to mdrun
-- [x] can the dynamic module change to mdrun module? mdrun module still exposed to the bash, topo-mdrun -f md.ini
-- [x] the temperature quenching or equilibrium (conventional mdrun) is handle by option in md.ini, has option: e.g: 
-- [x] topo-simulation and dynamics.py seem old, remove if safe
-- [x] optimization:
-  - [x] config file has optional option: min_contacts [default is 0], this set the contact threshold to run the optimize the strength of domain/interface.
-  - [x] for example, two domains has very few contact, meaning their interaction is not strong and hance can be consider as do not folded/stable so do not optimize their strength, just set to the first level of interface and not optimize. Same for intra-domain.
-- [x] run_simulation.py is now not needed, is this line from opimization needed:
-SCRIPT_DIR = Path(__file__).resolve().parent  # for the run_simulation/split scripts
-- [x] Revise the optimization to production code, Turn it into optimize module and expose to system at: topo-optimize
-- [ ] For multichain simulations, it is good to always separate chain to add appendix _1..N to the trajectory.dcd
-- [ ] docs still need to be revised for comprehensive
+- [ ] Auto-split per-chain trajectories — **multi-copy runs only** (`n_copies > 1`, non-interacting copies):
+  - [ ] At end of run, optionally emit per-chain DCDs `traj_<k>.dcd` (+ appendix) so the manual `split_chains` step isn't needed. Make it a config flag (e.g. `split_chains = yes|no`), not unconditional.
+  - [ ] Keep the combined `traj.dcd` as the canonical/source-of-truth output; per-chain files are *derived* (don't replace the combined one — it's needed for some analyses and is the restart/append target).
+  - [ ] Per-chain centering applies to independent copies only (current `split_chains(center=True)`).
+  - [ ] Do **NOT** auto-split or auto-center genuine *interacting* multichain systems/complexes (see "interacting chains" below) — the inter-chain arrangement is the physics; splitting + independent centering would destroy it.
+  - [ ] Decide naming convention: code/optimizer currently use 0-based `traj_0..N-1`; note proposed 1-based `_1..N`. Pick one and document the mapping (e.g. `traj_1.dcd` = copy index 0).
+  - [ ] Note: if split runs at finalize, a restart re-splits the whole grown DCD (idempotent but redundant) — acceptable, or split incrementally.
 - [ ] interacting chains
-- [x] Remove shift initial coordinate (enigne), this may affect multichain/translation simulation
-- [x] anneal_steps is separated from mdstep. the two process write two dcd file.
+
+## Optional / later
+- [ ] OpenMM XML serialization support (discussed; revisit later):
+  - [ ] **System XML export** (`XmlSerializer.serialize(system)`): optional flag (e.g. `write_system_xml = yes`) to dump the fully-built System (all forces + tabulated contact R/eps matrices + exclusions) to `<outname>_system.xml`. Value: reproducibility/provenance (pins every force-field number), decouples build from run, and lets reruns load the model with no STRIDE installed.
+  - [ ] **State XML** as a *portable* restart alternative to the binary `.chk` (OpenMM checkpoints are not portable across GPU/OpenMM build/platform). Highest practical payoff for long resubmitted runs.
+  - [ ] *(optional)* run-from-XML import path in the runner: `system_xml = path` -> skip build, load forces from XML (still build the cheap CA topology from PDB for the Topology + positions).
+  - [ ] Caveats to handle: Topology not stored in System XML (pair with .psf/.pdb); n×n tabulated-function size for large complexes (few MB now, tens of MB for ribosome-nascent-chain); reconstruct topoReporter force-group *names* from group order after deserialize.
+  - Skip ForceField-template XML (amber14.xml-style): residue templates don't fit a structure-based contact model.
