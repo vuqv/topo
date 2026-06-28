@@ -28,13 +28,28 @@ unfolding, thermal/mechanical stability, and multidomain motions.
 
 .. toctree::
    :maxdepth: 1
-   :caption: User guide
+   :caption: Background & theory
 
    usage/model_theory
+
+.. toctree::
+   :maxdepth: 1
+   :caption: Running simulations
+
    usage/simulation_control
    usage/domain_definition
+
+.. toctree::
+   :maxdepth: 1
+   :caption: Analysis & output
+
    usage/native_contacts
    usage/outputs
+
+.. toctree::
+   :maxdepth: 1
+   :caption: Python & advanced features
+
    usage/python_api
    usage/protein_synthesis
 

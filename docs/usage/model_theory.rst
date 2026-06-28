@@ -14,11 +14,6 @@ and :mod:`topo.utils.nonbonded` (the contact energies); the numbers quoted are
 the values hard-coded there.
 
 
-.. contents:: On this page
-   :local:
-   :depth: 2
-
-
 What kind of model is this?
 ---------------------------
 
