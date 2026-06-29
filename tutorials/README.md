@@ -6,7 +6,17 @@ Hands-on, ready-to-run tutorials for the **TOPO** package — a topology-based
 
 Each subfolder is **one self-contained example**: it ships the input files you
 need, and its `README.md` walks you through the run step by step and explains
-the concepts involved. Work through them in order.
+the concepts involved. The tutorials fall into two parts — **(A)** simulating a
+folded protein with the coarse-grained model, and **(B)** co-translational
+synthesis (growing the chain on the ribosome). Work through them in order; Part B
+builds on Part A.
+
+### Part A — Coarse-grained protein simulation
+
+Model a folded protein as a one-bead-per-residue structure-based (Gō-like) model
+and run / analyze its dynamics: the basic workflow, multidomain scaling, restarts
+and outputs, many copies at once, contact-strength optimization, and temperature
+protocols.
 
 | # | Tutorial | What you learn |
 |---|----------|----------------|
@@ -16,7 +26,25 @@ the concepts involved. Work through them in order.
 | 4 | [Many copies in one run](https://vuqv.github.io/topo/tutorials/04_multicopy.html) | Run N non-interacting chains at once to fill the GPU, then split into per-chain trajectories. |
 | 5 | [Optimizing the contact strength](https://vuqv.github.io/topo/tutorials/05_opt_nscal.html) | Automatically search the per-domain/interface `strength` (*n*<sub>scale</sub>) that keeps each domain folded, instead of hard-coding it. |
 | 6 | [Temperature annealing & quenching](https://vuqv.github.io/topo/tutorials/06_anneal.html) | Run a temperature protocol — hold the protein hot to unfold it, then T-jump (or slow-cool) back to `ref_t` to study refolding. |
-| 7 | [Protein synthesis](https://vuqv.github.io/topo/tutorials/07_protein_synthesis.html) | Synthesize a protein vectorially on a rigid coarse-grained ribosome (grow N→C one residue per step), then eject it — and make a movie of the chain emerging from the exit tunnel. |
+
+### Part B — Translation (co-translational synthesis)
+
+Grow the nascent chain **residue by residue** on (or through) the ribosome, so it
+can fold *as it is synthesized*. These build on the Part A model and add the
+elongation drivers (`topo-elongate`, `topo-csp`): vectorial synthesis, an analytic
+exit tunnel, codon-resolved kinetics, and a reproduction + validation of O'Brien's
+continuous-synthesis protocol.
+
+Status legend: ✅ works · ⚠️ works with a caveat · ❌ does not run to completion here.
+
+| # | Tutorial | Status | What it is |
+|---|----------|--------|------------|
+| 7 | [Protein synthesis](https://vuqv.github.io/topo/tutorials/07_protein_synthesis.html) | ✅ works | **The foundation.** Synthesize a protein vectorially on a rigid coarse-grained ribosome with `topo-elongate`: grow the chain N→C one residue per step at a **fixed** `n_steps`, restraining the C-terminus to the ribosome P-site, then eject it — and make a movie of the chain emerging from the exit tunnel. |
+| 9 | [Co-translational synthesis through an analytic tunnel](https://github.com/vuqv/topo/tree/main/tutorials/09_translation_cylinder) | ✅ works | A variant of Tutorial 7 with **no ribosome beads**: the exit tunnel is modelled analytically as a cylindrical bore drilled through an infinite wall (a "hole in a wall"). The nascent chain is the only system, so it is fast and never jams, and the folded protein **folds co-translationally** as it extrudes and clears the bore. A standalone `cylinder.py` reusing the unchanged `topo.translation` machinery. |
+| 10 | [Continuous synthesis (O'Brien CSP)](https://github.com/vuqv/topo/tree/main/tutorials/10_csp_obrien) | ⚠️ demo only | **The kinetic upgrade of Tutorial 7.** Synthesize with **codon-resolved kinetics** using `topo-csp`: time each residue from its mRNA codon and add it through O'Brien's three sub-stages (peptidyl transfer → translocation → tRNA binding). The short clamped demo runs fine, but a **full-length run blows up** (≈5/306 stages → PotE ~10¹³; see its `OBSERVATIONS.md`). That bug is **fixed in Tutorials 12/13** (the dt-halving stability guard in `run_length`); re-run against the patched `topo` to make it work. |
+| 11 | [O'Brien CSP reference (legacy/CHARMM)](https://github.com/vuqv/topo/tree/main/tutorials/11_reproduce_csp) | ❌ does not synthesize here | **The reference, not a topo runner.** The raw O'Brien `continuous_synthesis_v6.py` + its CHARMM `setup/` (`.psf/.top/.prm/.cor`), `.cntrl` files, the `ribosome_traffic` binary, SLURM script and outputs. In this environment the script exits cleanly ("All Done", exit 0) but **only sets up length 1 and never elongates** (`traj/1/` holds just `rnc_l1.psf`) — which is exactly why the topo port (10/12/13) exists. Kept as the protocol Tutorials 12/13 are validated against and the source of the CHARMM-ingest path. See its `README.md`. |
+| 12 | [Reproducing O'Brien CSP on 4c5c](https://github.com/vuqv/topo/tree/main/tutorials/12_auto) | ✅ works (validated) | A **validated reproduction** of O'Brien's protocol on the 4c5c system with `topo-csp`: maps the reference `cont_synth_ecoli.cntrl` onto `csp.ini`, runs L=1→10 with production kinetics, and checks energies, ejection and per-codon dwell times against the bundled reference (Tutorial 11) run. Adds the per-stage **stability guard** that fixes the Tutorial-10 blow-ups (see its `WHY_10_FAILS.md`). |
+| 13 | [Full-length validation of the Tutorial-12 fix](https://github.com/vuqv/topo/tree/main/tutorials/13_validate_claude_fix12) | ✅ works (validated) | **Validates Tutorial 12 at full scale** — synthesizes the *entire* 306-residue 4c5c chain, the regime where Tutorial 10 blew up. **Works as expected:** all 306 residues synthesize with **zero** stage blow-ups (919 stages scanned, worst max\|PotE\| ≈ 1755 kJ/mol), confirming the dt-halving stability guard holds across the whole chain. Includes a VMD movie of the full chain growing out of the exit tunnel. |
 
 The **ready-to-run files** for each tutorial (PDB, `md.ini`, `run_simulation.py`,
 …) live in the matching folder under

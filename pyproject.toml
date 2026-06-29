@@ -32,6 +32,12 @@ topo-elongate = "topo.translation.elongate:elongate"
 # Console command to stitch the per-length trajectories into one VMD movie:
 # `topo-elongate-movie -o synth_out`
 topo-elongate-movie = "topo.translation.make_movie:main"
+# Console command for the O'Brien continuous synthesis protocol (per-codon, 3-stage
+# elongation): `topo-csp -f csp.ini`
+topo-csp = "topo.csp.csp:csp"
+# Console command to stitch the CSP per-residue/-stage trajectories into one VMD
+# movie: `topo-csp-movie -o synth_out`
+topo-csp-movie = "topo.csp.make_movie:main"
 
 [tool.setuptools.packages.find]
 # Only ship the importable package (not tutorials/docs/etc. at the repo root).

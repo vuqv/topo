@@ -136,6 +136,34 @@ def stitch_movie(out_root: str, out_prefix: str = "movie",
         n = len(mda.Universe(psf).atoms)
         segments.append((name, n, psf, dcd))
 
+    return stitch_segments(out_root, segments, out_prefix=out_prefix, park=park,
+                           ribosome_pdb=ribosome_pdb, verbose=verbose)
+
+
+def stitch_segments(out_root: str, segments: List[Tuple[str, int, str, str]],
+                    out_prefix: str = "movie", park: str = "sentinel",
+                    ribosome_pdb: Optional[str] = None,
+                    verbose: bool = True) -> Tuple[str, str, str]:
+    """Pad and concatenate an ordered list of trajectory ``segments`` into a movie.
+
+    The reusable core shared by the elongation movie (:func:`stitch_movie`) and the
+    CSP movie (:mod:`topo.csp.make_movie`). ``segments`` is an ordered list of
+    ``(label, n_atoms, psf, dcd)`` -- each a standalone trajectory with ``n_atoms``
+    beads; every frame is padded up to the widest segment (``N`` = max ``n_atoms``)
+    by parking the extra (not-yet-synthesized) beads, and the segments are written
+    back-to-back in the given order. Also writes a ready-to-run ``<out_prefix>.tcl``.
+    """
+    import MDAnalysis as mda  # heavy; import only when actually stitching
+
+    def log(msg: str) -> None:
+        if verbose:
+            print(msg)
+
+    if park not in ("sentinel", "cterm"):
+        raise ValueError(f"park must be 'sentinel' or 'cterm', got {park!r}.")
+    if not segments:
+        raise SystemExit("no trajectory segments to stitch.")
+
     out_psf = os.path.join(out_root, f"{out_prefix}.psf")
     out_dcd = os.path.join(out_root, f"{out_prefix}.dcd")
     out_tcl = os.path.join(out_root, f"{out_prefix}.tcl")
@@ -153,23 +181,36 @@ def stitch_movie(out_root: str, out_prefix: str = "movie",
     log(f"Parking not-yet-synthesized beads: {park}")
 
     total_frames = 0
+    skipped = 0
     with mda.Writer(out_dcd, n_atoms=N) as writer:
         for label, n, psf, dcd in segments:
-            u = mda.Universe(psf, dcd)
-            nfr = 0
-            for _ in u.trajectory:
-                coords = np.empty((N, 3), dtype=np.float32)
-                coords[:n] = u.atoms.positions
-                if n < N:
-                    if park == "sentinel":
-                        coords[n:] = SENTINEL_A
-                    else:  # stack on the current C-terminus (last real bead)
-                        coords[n:] = u.atoms.positions[n - 1]
-                full.atoms.positions = coords
-                writer.write(full.atoms)
-                nfr += 1
+            # A segment can be unreadable if its DCD is still being written (an
+            # in-progress run) or was truncated by a crash -- skip it (with a warning)
+            # rather than aborting the whole movie. Open + read inside the guard so a
+            # premature-EOF header error or a zero-frame DCD just drops that segment.
+            try:
+                u = mda.Universe(psf, dcd)
+                nfr = 0
+                for _ in u.trajectory:
+                    coords = np.empty((N, 3), dtype=np.float32)
+                    coords[:n] = u.atoms.positions
+                    if n < N:
+                        if park == "sentinel":
+                            coords[n:] = SENTINEL_A
+                        else:  # stack on the current C-terminus (last real bead)
+                            coords[n:] = u.atoms.positions[n - 1]
+                    full.atoms.positions = coords
+                    writer.write(full.atoms)
+                    nfr += 1
+            except Exception as exc:
+                skipped += 1
+                log(f"  {label:>12}: SKIPPED (unreadable/empty DCD: "
+                    f"{type(exc).__name__}: {exc})")
+                continue
             total_frames += nfr
             log(f"  {label:>12}: {nfr} frames")
+    if skipped:
+        log(f"  ({skipped} segment(s) skipped -- truncated or still being written)")
 
     log(f"Movie trajectory: {out_dcd}  ({total_frames} frames total)")
 
