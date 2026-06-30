@@ -36,7 +36,8 @@ Stable continuous synthesis: (1) full length (4c5c 1→306, then P0CX28 1→106)
 - [x] **D6** Quantitative match (4c5c): in-vivo dwell ratio **1.01×**, final R_g **1.06×** (both well
       within tolerance); fix path reproduces ref ≥ as well as legacy 12/13 while being more faithful
       (rigid AllBonds, no guard). in-silico ns ratio 0.02× = 50× scale_factor (documented, scale-indep).
-- [ ] **D7** Documented: `README.md` reproduce commands; `NOTES.md` table; add to `tutorials/README.md`.
+- [x] **D7** Documented: `README.md` (reproduce + results + §1b + clash finding); `NOTES.md` log;
+      `tutorials/README.md` rows 14 + 15 added.
 
 ## Phase 2 — P0CX28 (only after 4c5c D0–D7)
 - [ ] **D8** Repeat D0–D5/D5b/D7 in `P0CX28/` (L=1→106). D6 N/A (no reference) → internal consistency.
