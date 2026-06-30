@@ -10,7 +10,7 @@ trajectory for every sub-stage of every residue under ``synth_out_debug/``::
 Each length ``L`` has a different bead count, so the per-stage DCDs cannot be
 concatenated directly (VMD needs a constant atom count). This script discovers
 the segments in synthesis order and hands them to the shared stitching core
-(:func:`topo.csp.make_movie.stitch_movie`), which pads every frame up to the
+(:func:`topo.csp.movie.stitch_movie`), which pads every frame up to the
 final length -- parking not-yet-made beads -- and writes ``movie.psf`` /
 ``movie.dcd`` / ``movie.tcl``. The truncated ribosome is loaded as static
 scenery so you can watch the nascent chain grow stage by stage out of the exit
@@ -30,7 +30,7 @@ from __future__ import annotations
 
 import os
 
-from topo.csp.make_movie import stitch_movie
+from topo.csp.movie import stitch_movie
 
 # Run next to this script regardless of the caller's cwd.
 HERE = os.path.dirname(os.path.abspath(__file__))

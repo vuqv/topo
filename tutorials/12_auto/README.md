@@ -16,7 +16,7 @@ mechanics are in [`STAGES.md`](STAGES.md), and a post-mortem on why the earlier
 > **What was fixed to make this work.** The CSP port had a latent numerical bug: a
 > handful of stages diverge (PotE → ~10¹³ kJ/mol) at the 15 fs timestep with flexible
 > bonds when a new native contact forms a stiff Go well (see
-> `10_csp_obrien/OBSERVATIONS.md` #1). `topo.translation.elongate.run_length` now has
+> `10_csp_obrien/OBSERVATIONS.md` #1). `topo.csp.core.run_length` now has
 > a **per-stage stability guard**: it detects a diverging stage and re-runs it with a
 > halved timestep and proportionally more steps — preserving the physical dwell time
 > (`dwell = n_steps · dt`) while stabilising the integration. See

@@ -36,20 +36,56 @@ The strength (n_scale) optimizer (``topo-optimize`` / ``python -m topo.optimize`
    :undoc-members:
    :show-inheritance:
 
-topo.translation module
+topo.csp module
 -----------------------
 
-The protein synthesis (nascent-chain elongation) runner
-(``topo-elongate`` / ``python -m topo.translation``) and the rigid-ribosome
-scenery it uses. See the :doc:`usage/protein_synthesis` reference and
-Tutorial 7.
+The co-translational synthesis package. Its user-facing runner is the
+**codon-resolved Continuous Synthesis Protocol** (``topo-csp`` /
+``python -m topo.csp``) — see the :doc:`usage/continuous_synthesis` reference and
+Tutorials 12/13. The protocol is built on a shared, low-level MD engine
+(:mod:`topo.csp.core`) and rigid-ribosome scenery (:mod:`topo.csp.ribosome`), which
+the Tutorial-9 cylinder runner also reuses.
 
-.. automodule:: topo.translation.elongate
+Continuous Synthesis Protocol (kinetics + 3-stage loop)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. automodule:: topo.csp.protocol
+   :members:
+   :show-inheritance:
+
+.. automodule:: topo.csp.kinetics
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :exclude-members: ribosome_traffic_times
+
+Core MD engine & ribosome scenery (shared machinery)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. automodule:: topo.csp.core
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. automodule:: topo.translation.ribosome
+.. automodule:: topo.csp.ribosome
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Ribosome preparation & movie tools
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. automodule:: topo.csp.cg_ribosome
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: topo.csp.truncate_ribosome
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: topo.csp.movie
    :members:
    :undoc-members:
    :show-inheritance:

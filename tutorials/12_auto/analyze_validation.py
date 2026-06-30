@@ -28,7 +28,13 @@ HERE = Path(__file__).resolve().parent
 OUT = HERE / "synth_out"
 REF = HERE / "continuous_synthesis" / "output"
 RIBO_PDB = HERE / "ribosome_trunc.pdb"
-TUNNEL_WALL_X0_NM = 1.05            # csp_val.ini tunnel_wall_x0 (nm)
+# Tunnel wall plane: auto-derived from the ribosome structure (same rule as the CSP
+# runner -- lower P/A-site C-terminus hold plane = min(P.x, A.x) + ptc_offset), so
+# this check tracks the structure rather than a hardcoded value.
+from topo.csp.core import read_anchor, TRNA_TETHER_BOND_NM
+_pa = read_anchor(str(RIBO_PDB), "PtR", 76, "R")
+_aa = read_anchor(str(RIBO_PDB), "AtR", 76, "R")
+TUNNEL_WALL_X0_NM = float(min(_pa[0], _aa[0]) + TRNA_TETHER_BOND_NM)  # nm
 BLOWUP_LIMIT = 1.0e12              # D5 threshold (kJ/mol)
 
 

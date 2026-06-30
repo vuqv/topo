@@ -37,11 +37,11 @@ bead centroid is computed from the complete all-atom residue.
 
 Usage
 -----
-    python -m topo.translation.cg_ribosome -i ribosome.pdb -o ribosome_cg.pdb
+    python -m topo.csp.cg_ribosome -i ribosome.pdb -o ribosome_cg.pdb
 
 or as a library::
 
-    from topo.translation.cg_ribosome import coarse_grain
+    from topo.csp.cg_ribosome import coarse_grain
     coarse_grain("ribosome.pdb", "ribosome_cg.pdb")
 """
 from __future__ import annotations
@@ -67,7 +67,19 @@ PURINE_RING_5 = ["C4", "C5", "N7", "C8", "N9"]       # purine 5-ring (fused)
 
 
 def _centroid(coords):
-    """Mean of a list of (x, y, z); None if the list is empty."""
+    """Compute the geometric centroid of a set of 3D coordinates.
+
+    Parameters
+    ----------
+    coords : list of tuple of float
+        Sequence of ``(x, y, z)`` coordinates. May be empty.
+
+    Returns
+    -------
+    tuple of float or None
+        The component-wise mean ``(x, y, z)`` of the input coordinates, or
+        ``None`` if ``coords`` is empty.
+    """
     if not coords:
         return None
     n = len(coords)
@@ -112,9 +124,29 @@ def _parse_pdb(path):
 
 
 def _beads_for_residue(res, warn):
-    """Return a list of (atom_name, element, (x,y,z)) CG beads for one residue.
+    """Build the coarse-grained beads for a single residue.
 
-    Empty list if the residue type is not recognized (caller skips it).
+    Proteins map to one ``CA`` bead (residue name unchanged). Nucleotides map
+    to a phosphate bead (``P``, when present), a ribose-ring centroid bead
+    (``R``), and one base-ring centroid bead for pyrimidines (``BR1``) or two
+    for purines (``BR1`` + ``BR2``). Missing or insufficient atoms trigger a
+    warning via ``warn`` and the affected bead is skipped.
+
+    Parameters
+    ----------
+    res : dict
+        A residue dict as produced by :func:`_parse_pdb`, with keys
+        ``"resname"``, ``"chain"``, ``"resseq"`` and ``"atoms"`` (an
+        ``OrderedDict`` mapping atom name to ``(x, y, z)``).
+    warn : callable
+        Callback invoked with a single message string to record a warning
+        about missing atoms or an unrecognized residue.
+
+    Returns
+    -------
+    list of tuple
+        A list of ``(atom_name, element, (x, y, z))`` beads. Empty if the
+        residue type is not recognized (the caller skips it).
     """
     rn = res["resname"]
     atoms = res["atoms"]
@@ -172,6 +204,34 @@ def _pdb_atom_line(serial, name, resname, chain, resseq, icode, xyz, element, se
     Columns (1-indexed): serial 7-11, name 13-16, altLoc 17, resName 18-20,
     chainID 22, resSeq 23-26, iCode 27, x/y/z 31-54, occ 55-60, temp 61-66,
     segID 73-76, element 77-78.
+
+    Parameters
+    ----------
+    serial : int
+        Atom serial number; written modulo 100000.
+    name : str
+        Atom (bead) name. Names shorter than four characters are right-padded
+        with a leading space so the name occupies columns 14-16.
+    resname : str
+        Residue name; truncated to three characters.
+    chain : str
+        Chain identifier; the first character is used (a blank if falsy).
+    resseq : str
+        Residue sequence number; truncated to four characters.
+    icode : str
+        Insertion code; a blank is written if it is empty/whitespace.
+    xyz : tuple of float
+        Cartesian ``(x, y, z)`` coordinates in angstrom.
+    element : str
+        Element symbol; truncated to two characters.
+    segid : str, optional
+        Segment identifier preserved in columns 73-76; truncated to four
+        characters. Defaults to an empty string.
+
+    Returns
+    -------
+    str
+        A single newline-terminated PDB ``ATOM`` record.
     """
     # Atom name: 1-3 char names get a leading space (cols 13 blank, 14-16 name).
     name4 = name[:4] if len(name) >= 4 else (" " + name).ljust(4)
@@ -189,6 +249,13 @@ def coarse_grain(input_pdb: str, output_pdb: str, verbose: bool = True) -> dict:
     warnings_list = []
 
     def warn(msg):
+        """Record a warning message for the current coarse-graining run.
+
+        Parameters
+        ----------
+        msg : str
+            The warning message to append to the enclosing ``warnings_list``.
+        """
         warnings_list.append(msg)
 
     residues = _parse_pdb(input_pdb)
@@ -259,8 +326,21 @@ def coarse_grain(input_pdb: str, output_pdb: str, verbose: bool = True) -> dict:
 
 
 def main(argv=None):
+    """Command-line entry point for coarse-graining a structure.
+
+    Parses ``--input``/``-i`` and ``--output``/``-o`` arguments (both
+    required) and calls :func:`coarse_grain` to convert the all-atom input
+    PDB to a TOPO coarse-grained PDB (protein ``CA`` beads; RNA ``P``/``R``/
+    ``BR`` beads).
+
+    Parameters
+    ----------
+    argv : list of str, optional
+        Argument vector to parse. If ``None`` (the default), arguments are
+        read from ``sys.argv``.
+    """
     p = argparse.ArgumentParser(
-        prog="python -m topo.translation.cg_ribosome",
+        prog="python -m topo.csp.cg_ribosome",
         description="Coarse-grain a protein+RNA structure to the TOPO convention "
                     "(protein: CA; RNA: P/R/BR beads).")
     p.add_argument("-i", "--input", required=True, help="input all-atom PDB")

@@ -1,14 +1,14 @@
-# Implementation prompt — co-translational synthesis (`topo.translation`)
+# Implementation prompt — co-translational synthesis (`topo.csp`)
 
 Paste this (or point me at it) to start a fresh session. It is the build plan;
 the **full agreed design is in [`DESIGN.md`](DESIGN.md)** and the **structures /
 conventions / done work are in [`FILES.md`](FILES.md)** — read both first.
 
-> First instruction for the new session: **read `topo/translation/DESIGN.md` and
-> `topo/translation/FILES.md` in full before writing any code.** Everything below
+> First instruction for the new session: **read `topo/csp/DESIGN.md` and
+> `topo/csp/FILES.md` in full before writing any code.** Everything below
 > is already agreed there; do not re-litigate the design.
 
-Branch: `translation`. New module: `topo.translation` (sibling of `topo.mdrun` /
+Branch: `translation`. New module: `topo.csp` (sibling of `topo.mdrun` /
 `topo.optimize`), reusing `topo.engine` (build → setup → finalize) where possible.
 
 There are **two build steps: v1 then v2.** Do v1 fully (and test) before v2.
@@ -46,7 +46,7 @@ System = **nascent chain only**. The tRNA anchors are used purely as fixed
 *coordinates* (for placement + the restraint target); no ribosome particles in
 the System yet.
 
-Implement `topo/translation/elongate.py` (module + CLI) that does:
+Implement `topo/csp/elongate.py` (module + CLI) that does:
 
 1. **Precompute once:** run TOPO's contact builder on the full P0CX28 PDB →
    `R_full`, `eps_full`. Cache (and the STRIDE output).
@@ -111,7 +111,7 @@ and extrudes toward +x as it grows.
 - TOPO's `buildCoarseGrainModel` rebuilds contacts from the PDB and sets positions
   from it — for this work you need to (a) supply precomputed `L×L` matrices and
   (b) override positions. Plan a small extension or a dedicated build path in
-  `topo.translation` rather than calling the stock builder per step.
+  `topo.csp` rather than calling the stock builder per step.
 - `CustomNonbondedForce` requires one `addParticle` per System particle — that's
   why ribosome beads need dummy entries in the contact force (v2).
 - Rigid ribosome = mass 0 + `rm_cons_0_mass`-style handling so constraints on

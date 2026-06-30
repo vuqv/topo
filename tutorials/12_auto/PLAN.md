@@ -21,7 +21,7 @@ table are in [`NOTES.md`](NOTES.md); the elongation mechanics are in
 ## Reused (not re-implemented)
 
 - `topo.csp` (`csp.py`, `kinetics.py`) + `topo-csp` console script — the runner.
-- `topo.translation.elongate.run_length` and the rigid-ribosome / tunnel-wall /
+- `topo.csp.core.run_length` and the rigid-ribosome / tunnel-wall /
   build-once-subset machinery — the per-stage MD.
 
 ## Done

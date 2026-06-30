@@ -2,14 +2,14 @@
 
 This is the **full O'Brien continuous-synthesis protocol** -- the per-codon, 3-stage
 elongation cycle of ``continuous_synthesis_v6.py`` -- expressed in topo style. It is
-the kinetic upgrade of :mod:`topo.translation.elongate`: that driver grows the chain
+the kinetic upgrade of :mod:`topo.csp.core`: that driver grows the chain
 one residue per step at a *fixed* ``n_steps`` (collapsing the elongation cycle into a
 single MD segment); **this** driver times every residue from its codon and splits it
 into three sub-stages, exactly as O'Brien do.
 
 What is reused vs. new:
 
-- **Reused wholesale** from :mod:`topo.translation.elongate`: the per-length MD
+- **Reused wholesale** from :mod:`topo.csp.core`: the per-length MD
   machinery -- :func:`run_length` (build-once-subset contacts, coordinate seeding,
   rigid-ribosome scenery, tunnel wall, minimize/run/finalize), :func:`read_anchor`,
   :func:`precompute_contacts`, and :class:`ElongationParams` for all the MD/ribosome
@@ -31,8 +31,8 @@ stage       biology                                restraint target / seed
 Stage 3's final structure seeds the next residue's stage 1. The cold-start segment
 (``L == L0``) is laid down the tunnel from the P-anchor (no A-site delivery yet).
 Because CSP needs the restraint target to switch A<->P, it drives the **position
-restraint** path (``trna_tether`` is forced off); ``rigid_ribosome`` / ``tunnel_wall``
-/ excluded volume + electrostatics still work exactly as in build step v2.
+restraint** path (``trna_tether`` is forced off); the supplied ribosome is always
+rigid scenery and the tunnel wall + excluded volume + electrostatics are on.
 
 Drive it with an INI control file (see :func:`read_csp_config`)::
 
@@ -55,10 +55,10 @@ from typing import List, Optional
 import numpy as np
 import openmm as mm
 
-from topo.translation.elongate import (ElongationParams, TUNNEL_AXIS,
+from topo.csp.core import (ElongationParams, TUNNEL_AXIS,
                                        precompute_contacts, read_anchor,
                                        run_length, TRNA_TETHER_BOND_NM)
-from topo.translation.ribosome import load_ribosome
+from topo.csp.ribosome import load_ribosome
 from topo.utils.config import strtobool
 from topo.csp import kinetics
 
@@ -75,6 +75,36 @@ class CSPParams:
     here. ``elong.trna_tether`` is forced off by the runner (CSP needs the A<->P
     switchable position restraint), and ``elong.n_steps`` is ignored (each stage's
     step count comes from the kinetics).
+
+    Attributes
+    ----------
+    elong : ElongationParams
+        All MD / ribosome knobs (timestep, temperature, rigid ribosome, tunnel wall,
+        restraint constant, output, ...), reused unchanged from the elongation driver.
+    scale_factor : float
+        In-vivo-seconds -> in-silico-nanoseconds compression factor (default
+        ``4331293``). Larger -> fewer MD steps per residue -> faster run.
+    time_stage_1 : float
+        Mean peptidyl-transfer (peptide-bond) dwell time, seconds (default ``0.00034``).
+    time_stage_2 : float
+        Mean translocation dwell time, seconds (default ``0.004201``).
+    uniform_ta : bool
+        If True, ignore the mRNA and use ``uniform_mfpt`` for every codon.
+    uniform_mfpt : float
+        The uniform per-codon mean time (seconds) used when ``uniform_ta`` (default
+        ``0.05``).
+    random_seed : int or None
+        Seed for the first-passage-time sampler, for reproducible schedules.
+    max_steps_per_stage : int or None
+        Optional upper clamp on each stage's MD step count (``None`` = uncapped /
+        production); clamps MD steps only, not the dwell times in seconds.
+    min_steps_per_stage : int
+        Lower clamp on each stage's MD step count (default 1).
+    ejection_steps : int
+        Post-synthesis ejection-phase length in steps (release the C-terminus
+        restraint; ``0`` = skip).
+    dissociation_steps : int
+        Post-synthesis dissociation-phase length in steps (free run; ``0`` = skip).
     """
     elong: ElongationParams = field(default_factory=ElongationParams)
 
@@ -84,6 +114,8 @@ class CSPParams:
     time_stage_2: float = 0.004201      # mean translocation dwell (s)
     uniform_ta: bool = False            # ignore the mRNA; use uniform_mfpt for every codon
     uniform_mfpt: float = 0.05          # uniform mean codon time (s) when uniform_ta
+    # ribosome_traffic / initiation_rate: HIDDEN/deferred (off by default; not exposed
+    # in the docs or example csp.ini -- see topo/csp/TODO.md). Still parsed if present.
     ribosome_traffic: bool = False      # apply the external traffic correction if available
     initiation_rate: float = 0.083333   # translation initiation rate (1/s), traffic only
     random_seed: Optional[int] = None   # seed for the FPT sampler (reproducibility)
@@ -101,7 +133,7 @@ class CSPParams:
 # The continuous-synthesis loop
 # --------------------------------------------------------------------------
 def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
-                             L0: int, L_max: Optional[int] = None,
+                             L0: int = 1, L_max: Optional[int] = None,
                              out_root: str = "synth_out",
                              mrna: Optional[str] = None,
                              trans_times: Optional[str] = None,
@@ -115,19 +147,42 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
     full_pdb : str
         Full native PDB of the target protein (the nascent chain at full length).
     ribosome_pdb : str
-        Truncated CG ribosome PDB -- source of the P-/A-anchors (and, with
-        ``params.elong.rigid_ribosome``, the rigid scenery).
-    L0, L_max : int
-        Nascent-length schedule; ``L_max`` blank -> the full residue count.
+        Truncated CG ribosome PDB -- source of the P-/A-anchors and the rigid
+        (mass-0) scenery (always loaded; providing it is the signal to use it).
+    L0 : int, optional
+        First nascent length to synthesize (default ``1`` -- start from a single residue).
+    L_max : int or None, optional
+        Final nascent length (default ``None`` -> the full residue count of the protein).
     out_root : str
         Root output directory; each residue writes ``L_<L>/stage_<1,2,3>/``.
-    mrna, trans_times : str, optional
-        mRNA sequence file and per-codon time table -- the codon-resolved kinetics.
-        Not needed when ``params.uniform_ta`` (every codon gets ``uniform_mfpt``).
-    domain_def, stride_output_file : str, optional
-        Passed to the one-time contact precompute (n_scale / STRIDE).
+    mrna : str, optional
+        mRNA sequence file (one codon per residue) -- the codon-resolved kinetics.
+        Required for per-codon timing; not needed when ``params.uniform_ta``.
+    trans_times : str, optional
+        Per-codon mean-time table. ``None`` -> the bundled E. coli 310 K table
+        (organism-universal; see :func:`topo.csp.kinetics.default_trans_times_path`).
+    domain_def : str
+        Domain-definition file (``domain.yaml``) defining the protein's **native-contact
+        strengths** -- per-domain and per-interface Gō well-depth scaling (the
+        structure-based analog of O'Brien's ``nscal``). Required via the INI.
+    stride_output_file : str, optional
+        Precomputed STRIDE file for the contact build (skips re-running STRIDE).
     params : CSPParams, optional
         Run parameters (defaults to the dataclass defaults).
+
+    Returns
+    -------
+    None
+        Side-effecting: writes per-residue/-stage trajectories under
+        ``out_root/L_<L>/stage_<1,2,3>/``, a per-residue ``dwell_times.dat`` table,
+        and (if requested) ``ejection/`` and ``dissociation/`` phases.
+
+    Raises
+    ------
+    ValueError
+        If the length schedule is invalid (``1 <= L0 <= L_max <= N_full`` fails), or
+        if non-uniform kinetics are requested without ``mrna`` / ``trans_times``
+        (propagated from :func:`topo.csp.kinetics.build_mfpt_lists`).
     """
     if params is None:
         params = CSPParams()
@@ -145,20 +200,33 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
     print(f"A-anchor (AtR 76 R): {a_anchor} nm")
 
     # Hold/seed targets, offset into the tunnel (+x) from the anchor bead so the
-    # C-terminus does not sit on top of a ribosome bead (clash). Same auto rule as
-    # the elongation driver (tether bond length / 0.4 nm in v2; 0 in v1).
+    # C-terminus does not sit on top of a ribosome bead (clash). The supplied ribosome
+    # is always treated as rigid scenery, so the offset defaults to the tether bond
+    # length (override via `ptc_offset`).
     offset = ep.ptc_offset_nm
     if offset is None:
-        offset = TRNA_TETHER_BOND_NM if ep.rigid_ribosome else 0.0
+        offset = TRNA_TETHER_BOND_NM
     p_target = p_anchor + offset * TUNNEL_AXIS
     a_target = a_anchor + offset * TUNNEL_AXIS
 
-    # --- rigid ribosome (loaded once; identical every length) ---------------
-    ribo = None
-    if ep.rigid_ribosome:
-        ribo = load_ribosome(ribosome_pdb, model="topo")
-        print(f"Rigid ribosome: {ribo.n} beads from {ribosome_pdb} "
-              f"(mass-0 scenery; ribosome<->nascent forces on).")
+    # Tunnel wall plane (auto-derived from the structure -- never a stale user knob):
+    # place the one-sided wall at the LOWER (deeper-in-tunnel, smaller-x) of the two
+    # C-terminus hold planes, i.e. min(P,A anchor x) + ptc_offset (the P-site, where
+    # the nascent C-terminus is tethered). This blocks the chain from slipping below
+    # the synthesis point into the void left where the 50S was truncated, while the
+    # held C-terminus still sits at (just on) the plane. Recomputed for whatever
+    # ribosome PDB is supplied, so switching structures can never leave it wrong.
+    if ep.tunnel_wall:
+        ep.tunnel_wall_x0_nm = float(min(p_anchor[0], a_anchor[0]) + offset)
+        print(f"Tunnel wall plane: x >= {ep.tunnel_wall_x0_nm:.4f} nm "
+              f"(auto: lower P/A-site C-terminus hold plane = min(P.x,A.x)+ptc_offset).")
+
+    # --- rigid ribosome (always: the supplied PDB is rigid scenery) ---------
+    # Loaded once; identical at every length. Providing a ribosome PDB *is* the
+    # signal to treat it as rigid -- there is no separate on/off flag.
+    ribo = load_ribosome(ribosome_pdb, model="topo")
+    print(f"Rigid ribosome: {ribo.n} beads from {ribosome_pdb} "
+          f"(mass-0 scenery; ribosome<->nascent forces on).")
 
     # --- build-once-subset contacts on the full native structure ------------
     R_full, eps_full = precompute_contacts(full_pdb, domain_def, stride_output_file)
@@ -203,7 +271,7 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
         f"#   scale_factor={params.scale_factor:g}  dt={ep.dt_ps} ps  "
         f"time_stage_1={params.time_stage_1:g} s  time_stage_2={params.time_stage_2:g} s\n"
         f"#   timing={'uniform' if params.uniform_ta else 'per-codon'}  "
-        f"ribosome_traffic={'on' if params.ribosome_traffic else 'off'}  "
+        f"{'ribosome_traffic=on  ' if params.ribosome_traffic else ''}"
         f"random_seed={params.random_seed}\n"
         "#   t1/t2/t3 = sampled peptidyl-transfer / translocation / tRNA-binding "
         "dwell (s); steps = clamped integration steps actually run\n"
@@ -305,10 +373,40 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
 # --------------------------------------------------------------------------
 @dataclass
 class CSPConfig:
-    """Parsed contents of a CSP control file (``csp.ini``)."""
+    """Parsed contents of a CSP control file (``csp.ini``).
+
+    Bundles the run inputs (structures, the ``L0..L_max`` schedule, output directory,
+    one-time-precompute options) with the kinetic + MD :class:`CSPParams`. Produced
+    by :func:`read_csp_config` and consumed by :func:`csp` / passed straight to
+    :func:`run_continuous_synthesis`.
+
+    Attributes
+    ----------
+    pdb_file : str
+        Full native PDB of the target protein (the nascent chain at full length).
+    ribosome : str
+        Truncated CG ribosome PDB (P-/A-anchors; always rigid scenery).
+    L0 : int
+        Starting nascent-chain length (default ``1``).
+    L_max : int or None
+        Final length (``None`` -> the full residue count).
+    outdir : str
+        Root output directory (default ``"synth_out"``).
+    mrna, trans_times : str or None
+        mRNA sequence file and per-codon time table (required unless
+        ``params.uniform_ta``).
+    domain_def : str
+        Domain-definition file (contact-strength scaling); required via the INI.
+    stride_output_file : str or None
+        Precomputed STRIDE file for the one-time contact build (optional).
+    params : CSPParams
+        The kinetic + MD/ribosome run parameters.
+    config_file : str or None
+        Path of the INI file this config was parsed from (provenance).
+    """
     pdb_file: str
     ribosome: str
-    L0: int
+    L0: int = 1
     L_max: Optional[int] = None
     outdir: str = "synth_out"
     mrna: Optional[str] = None
@@ -322,24 +420,25 @@ class CSPConfig:
 def read_csp_config(config_file: str, verbose: bool = True) -> CSPConfig:
     """Parse a CSP control file (INI ``[OPTIONS]``) into a :class:`CSPConfig`.
 
-    Superset of ``elongate.ini``: the same structure / MD / ribosome keys (see
-    :func:`topo.translation.elongate.read_elongate_config`) **plus** the O'Brien
-    kinetic keys. Required: ``pdb_file``, ``ribosome``, ``L0``. Non-uniform timing
-    additionally requires ``mrna`` and ``trans_times``.
+    The structure / MD / ribosome keys configure the shared
+    :class:`topo.csp.core.ElongationParams` machinery; the O'Brien **kinetic keys**
+    are added on top. Required: ``pdb_file``, ``ribosome``, ``domain_def`` (the protein's
+    domain/contact-strength definition). ``L0`` (default ``1``) and ``L_max`` (default =
+    full residue count) are optional. Per-codon timing additionally requires ``mrna``
+    (``trans_times`` is optional).
 
     Kinetic keys
     ------------
     - ``mrna`` -- mRNA sequence file (raw nucleotides, wrapped ok); one codon per
-      residue + 1 stop.
-    - ``trans_times`` -- per-codon mean-time table (``CODON  seconds``).
+      residue + 1 stop. Required for per-codon timing (it is protein-specific).
+    - ``trans_times`` -- per-codon mean-time table (``CODON  seconds``). **Optional**:
+      defaults to the bundled E. coli 310 K table (the table is organism-universal,
+      so it is not protein-specific). See :func:`topo.csp.kinetics.default_trans_times_path`.
     - ``scale_factor`` -- in-vivo seconds -> in-silico ns compressor.
     - ``time_stage_1`` / ``time_stage_2`` -- mean peptidyl-transfer / translocation
       dwell (s); stage 3 = codon total minus these.
     - ``uniform_ta`` -- yes: ignore the mRNA, use ``uniform_mfpt`` for every codon.
     - ``uniform_mfpt`` -- the uniform mean codon time (s) when ``uniform_ta``.
-    - ``ribosome_traffic`` -- yes: apply the external ``ribosome_traffic`` binary's
-      correction if it is on PATH (else falls back to no traffic).
-    - ``initiation_rate`` -- translation initiation rate (1/s), traffic only.
     - ``random_seed`` -- seed for the FPT sampler (reproducible schedules).
     - ``max_steps_per_stage`` -- cap each stage's step count (the tutorial uses a
       small value for a ~2000-steps/residue test; blank = uncapped production).
@@ -347,13 +446,44 @@ def read_csp_config(config_file: str, verbose: bool = True) -> CSPConfig:
     - ``ejection_steps`` / ``dissociation_steps`` -- post-synthesis free runs
       (0 = skip).
 
-    MD / ribosome keys (same meaning as ``elongate.ini``): ``n_steps`` is **not**
-    used (step counts come from the kinetics); ``dt``, ``ref_t``, ``tau_t``,
-    ``nstout``, ``device``, ``ppn``, ``constraints``, ``restraint_k``, ``buffer``,
-    ``minimize``, ``rigid_ribosome``, ``tunnel_wall``, ``tunnel_wall_x0``,
-    ``tunnel_wall_k``, ``ptc_offset``, ``nascent_only_output``.
+    MD / ribosome keys: ``dt``, ``ref_t``, ``tau_t``, ``nstout``, ``device``, ``ppn``,
+    ``constraints``, ``restraint_k``, ``buffer``, ``minimize``, ``tunnel_wall``,
+    ``ptc_offset``. (The supplied ribosome is always rigid scenery -- there is no
+    ``rigid_ribosome`` key -- and output is always nascent-only, so there is no
+    ``nascent_only_output`` key either. The wall plane ``tunnel_wall_x0`` and stiffness
+    ``tunnel_wall_k`` are **not** keys -- the plane is auto-derived from the ribosome
+    structure at run time and the stiffness is a fixed model constant.)
+
+    Parameters
+    ----------
+    config_file : str
+        Path to the INI control file (must contain an ``[OPTIONS]`` section).
+    verbose : bool, optional
+        If True (default), echo the parsed configuration to stdout.
+
+    Returns
+    -------
+    CSPConfig
+        The parsed configuration (inputs, schedule and a populated
+        :class:`CSPParams`), ready to pass to :func:`run_continuous_synthesis`.
+
+    Raises
+    ------
+    FileNotFoundError
+        If ``config_file`` cannot be read.
+    ValueError
+        If the ``[OPTIONS]`` section is missing, a required key (``pdb_file``,
+        ``ribosome``, ``domain_def``) is absent/blank, or per-codon timing is requested
+        without ``mrna``.
     """
     def log(msg: str) -> None:
+        """Print a status message, but only when ``verbose`` is set.
+
+        Parameters
+        ----------
+        msg : str
+            The message to print to stdout.
+        """
         if verbose:
             print(msg)
 
@@ -365,6 +495,19 @@ def read_csp_config(config_file: str, verbose: bool = True) -> CSPConfig:
     o = cp["OPTIONS"]
 
     def opt(key: str) -> Optional[str]:
+        """Return an optional ``[OPTIONS]`` value, or ``None`` if absent/blank.
+
+        Parameters
+        ----------
+        key : str
+            The option name to look up in the ``[OPTIONS]`` section.
+
+        Returns
+        -------
+        str or None
+            The stripped value, or ``None`` if the key is missing or its value
+            is the empty string.
+        """
         v = o.get(key, None)
         if v is None:
             return None
@@ -372,25 +515,55 @@ def read_csp_config(config_file: str, verbose: bool = True) -> CSPConfig:
         return v if v != "" else None
 
     def req(key: str) -> str:
+        """Return a required ``[OPTIONS]`` value, raising if it is missing.
+
+        Parameters
+        ----------
+        key : str
+            The option name to look up in the ``[OPTIONS]`` section.
+
+        Returns
+        -------
+        str
+            The non-blank option value.
+
+        Raises
+        ------
+        ValueError
+            If the option is missing or blank.
+        """
         v = opt(key)
         if v is None:
             raise ValueError(f"{config_file}: required option '{key}' is missing or blank.")
         return v
 
     def as_int(s: str) -> int:
+        """Parse an integer string, tolerating ``_`` digit-group separators.
+
+        Parameters
+        ----------
+        s : str
+            The integer literal, optionally containing underscores (e.g.
+            ``"200_000"``).
+
+        Returns
+        -------
+        int
+            The parsed integer value.
+        """
         return int(str(s).replace("_", ""))
 
     log(f"Reading CSP parameters from {config_file} ...")
 
     pdb_file = req("pdb_file")
     ribosome = req("ribosome")
-    L0 = int(req("L0"))
+    L0 = int(opt("L0")) if opt("L0") is not None else 1   # optional; default = 1
     L_max = opt("L_max")
-    L_max = int(L_max) if L_max is not None else None
+    L_max = int(L_max) if L_max is not None else None      # optional; default = full length
     outdir = opt("outdir") or "synth_out"
     mrna = opt("mrna")
     trans_times = opt("trans_times")
-    domain_def = opt("domain_def")
+    domain_def = req("domain_def")   # required: defines the protein's contact strengths
     stride_output_file = opt("stride_output_file")
 
     # --- MD / ribosome knobs (reused ElongationParams) ----------------------
@@ -415,18 +588,18 @@ def read_csp_config(config_file: str, verbose: bool = True) -> CSPConfig:
         ep.buffer_nm = float(opt("buffer"))
     if opt("minimize") is not None:
         ep.minimize = bool(strtobool(opt("minimize")))
-    if opt("rigid_ribosome") is not None:
-        ep.rigid_ribosome = bool(strtobool(opt("rigid_ribosome")))
+    # rigid_ribosome is intentionally NOT read: a ribosome PDB is required, and supplying
+    # it *is* the signal to treat it as rigid scenery -- there is no separate flag.
     if opt("tunnel_wall") is not None:
         ep.tunnel_wall = bool(strtobool(opt("tunnel_wall")))
-    if opt("tunnel_wall_x0") is not None:
-        ep.tunnel_wall_x0_nm = float(opt("tunnel_wall_x0"))
-    if opt("tunnel_wall_k") is not None:
-        ep.tunnel_wall_k = float(opt("tunnel_wall_k"))
+    # Neither tunnel_wall_x0 nor tunnel_wall_k is read from the INI: the wall plane is
+    # auto-derived from the ribosome structure (see run_continuous_synthesis), and the
+    # stiffness is a fixed model constant (O'Brien's 20 kcal/mol/A^2 = 8368 kJ/mol/nm^2,
+    # ElongationParams.tunnel_wall_k). Only the `tunnel_wall` on/off toggle is exposed.
     if opt("ptc_offset") is not None:
         ep.ptc_offset_nm = float(opt("ptc_offset"))
-    if opt("nascent_only_output") is not None:
-        ep.nascent_only_output = bool(strtobool(opt("nascent_only_output")))
+    # nascent_only_output is not a key: with a ribosome present (always, for CSP) the
+    # output is always nascent-only -- it is the default CSP behavior, not a toggle.
 
     # --- O'Brien kinetic knobs ---------------------------------------------
     p = CSPParams(elong=ep)
@@ -455,24 +628,26 @@ def read_csp_config(config_file: str, verbose: bool = True) -> CSPConfig:
     if opt("dissociation_steps") is not None:
         p.dissociation_steps = as_int(opt("dissociation_steps"))
 
-    # Validation mirroring v6.
-    if not p.uniform_ta and (mrna is None or trans_times is None):
-        raise ValueError(f"{config_file}: non-uniform timing needs both 'mrna' and "
-                         f"'trans_times' (or set uniform_ta = yes).")
+    # Validation: per-codon timing needs the (protein-specific) mRNA. The codon-time
+    # table is organism-universal, so `trans_times` is optional -- it defaults to the
+    # bundled E. coli 310 K table (topo.csp.kinetics.default_trans_times_path).
+    if not p.uniform_ta and mrna is None:
+        raise ValueError(f"{config_file}: per-codon timing needs an 'mrna' file "
+                         f"(or set uniform_ta = yes). 'trans_times' is optional "
+                         f"(defaults to the bundled E. coli 310 K table).")
 
     log(f"  inputs: pdb_file={pdb_file}, ribosome={ribosome}")
     log(f"  schedule: L0={L0}, L_max={L_max if L_max is not None else 'full'}")
-    log(f"  timing: {'uniform (mfpt=%g s)' % p.uniform_mfpt if p.uniform_ta else f'per-codon (mrna={mrna}, trans_times={trans_times})'}")
+    log(f"  timing: {'uniform (mfpt=%g s)' % p.uniform_mfpt if p.uniform_ta else f'per-codon (mrna={mrna}, trans_times={trans_times or 'bundled E. coli 310 K'})'}")
     log(f"          scale_factor={p.scale_factor:g}, time_stage_1={p.time_stage_1:g} s, "
         f"time_stage_2={p.time_stage_2:g} s")
-    log(f"          ribosome_traffic={'on' if p.ribosome_traffic else 'off'}"
-        + (f" (initiation_rate={p.initiation_rate:g}/s)" if p.ribosome_traffic else ""))
+    if p.ribosome_traffic:   # hidden/deferred feature; only mention it when enabled
+        log(f"          ribosome_traffic=on (initiation_rate={p.initiation_rate:g}/s)")
     if p.max_steps_per_stage is not None:
         log(f"          TEST CLAMP max_steps_per_stage={p.max_steps_per_stage} "
             f"(~{3 * p.max_steps_per_stage} steps/residue)")
-    log(f"  ribosome forces: {'on (rigid v2)' if ep.rigid_ribosome else 'off (v1)'}"
-        + (f"; tunnel wall: {('x>=%.2f nm' % ep.tunnel_wall_x0_nm) if ep.tunnel_wall else 'off'}"
-           if ep.rigid_ribosome else ""))
+    log(f"  ribosome: rigid scenery (always, from the supplied PDB)"
+        f"; tunnel wall: {'on (plane auto-derived from structure)' if ep.tunnel_wall else 'off'}")
     log(f"  integrator: dt={ep.dt_ps} ps, ref_t={ep.ref_t} K, tau_t={ep.tau_t} /ps, nstout={ep.nstout}")
     if p.ejection_steps or p.dissociation_steps:
         log(f"  post-synthesis: ejection={p.ejection_steps} steps, "
@@ -494,6 +669,18 @@ def csp(argv: Optional[List[str]] = None) -> None:
     The O'Brien continuous synthesis protocol (per-codon, 3-stage elongation),
     driven by an INI control file (see :func:`read_csp_config`). ``-o`` / ``--device``
     override the output directory / compute device for sweeps.
+
+    Parameters
+    ----------
+    argv : list of str or None, optional
+        Command-line arguments to parse (default ``None`` -> use ``sys.argv``). A
+        bare invocation (no args) prints help and exits.
+
+    Returns
+    -------
+    None
+        Runs the synthesis for its side effects (see
+        :func:`run_continuous_synthesis`).
     """
     parser = argparse.ArgumentParser(
         prog="topo-csp",

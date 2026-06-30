@@ -24,7 +24,7 @@ of its beads qualifies, so P/R/BR units stay intact):
 
 Usage
 -----
-    python -m topo.translation.truncate_ribosome \
+    python -m topo.csp.truncate_ribosome \
         -i structures/4v9d_50S_PtR_5jte_AtR_model_cg.pdb \
         -o structures/4v9d_50S_PtR_5jte_AtR_model_cg_trunc.pdb \
         [--r-cyl 30] [--x-lo -8] [--x-exit 58] [--keep-segids PtR,AtR]
@@ -58,7 +58,33 @@ def _read_residues(path):
 
 
 def _keep_residue(res, r_cyl, x_lo, x_exit, keep_segids):
-    """True if any bead satisfies the cylinder/exit rule (or segID is force-kept)."""
+    """Decide whether a residue should be kept during truncation.
+
+    A residue is kept if its segID is force-kept, or if *any* of its beads
+    lies inside the tunnel cylinder (radial distance ``d <= r_cyl`` and
+    ``x_lo <= x <= x_exit``) or in the exit half-space (``x >= x_exit``).
+    The decision is made per residue so P/R/BR units stay intact.
+
+    Parameters
+    ----------
+    res : dict
+        Residue record as produced by :func:`_read_residues`, with keys
+        ``"segid"`` and ``"coords"`` (a list of ``(x, y, z)`` tuples).
+    r_cyl : float
+        Radial cutoff from the tunnel axis (the X-axis), in angstroms.
+    x_lo : float
+        Low-x bound of the tunnel cylinder (PTC side), in angstroms.
+    x_exit : float
+        Exit plane; beyond this x all beads are kept, in angstroms.
+    keep_segids : set
+        SegIDs to always keep regardless of geometry.
+
+    Returns
+    -------
+    bool
+        ``True`` if the residue qualifies and should be kept,
+        ``False`` otherwise.
+    """
     if res["segid"] in keep_segids:
         return True
     for x, y, z in res["coords"]:
@@ -126,8 +152,24 @@ def truncate(input_pdb, output_pdb, r_cyl=30.0, x_lo=-8.0, x_exit=58.0,
 
 
 def main(argv=None):
+    """Command-line entry point for truncating a CG ribosome.
+
+    Parses command-line arguments and invokes :func:`truncate`. Required
+    arguments are the input CG ribosome PDB (``-i``/``--input``) and the
+    output truncated PDB (``-o``/``--output``). Optional arguments tune the
+    keep rule: ``--r-cyl`` (radial cutoff, default 30.0 angstroms),
+    ``--x-lo`` (low-x cylinder bound, default -8.0 angstroms), ``--x-exit``
+    (exit plane, default 58.0 angstroms following O'Brien et al.), and
+    ``--keep-segids`` (comma-separated segIDs to always keep, e.g. tRNAs).
+
+    Parameters
+    ----------
+    argv : list of str, optional
+        Argument vector to parse. If ``None`` (default), arguments are read
+        from ``sys.argv``.
+    """
     p = argparse.ArgumentParser(
-        prog="python -m topo.translation.truncate_ribosome",
+        prog="python -m topo.csp.truncate_ribosome",
         description="Truncate a CG ribosome around the exit tunnel "
                     "(tunnel = X-axis; PTC near x=0; exit toward +x).")
     p.add_argument("-i", "--input", required=True, help="CG ribosome PDB")

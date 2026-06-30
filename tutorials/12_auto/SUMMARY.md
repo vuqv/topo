@@ -30,7 +30,7 @@ explain why the earlier `tutorials/10_csp_obrien` does not work.
      avoids this with rigid `AllBonds` constraints; topo needs flexible bonds to seed
      the far-placed A-site residue.
 
-4. **Fixed it at the source** (`topo/translation/elongate.py`, `run_length`): a
+4. **Fixed it at the source** (`topo/csp/elongate.py`, `run_length`): a
    **per-stage stability guard** that runs each stage in chunks tracking the *maximum*
    |PotE|, and if a stage diverges (> 10⁹ kJ/mol) re-runs it with a **halved timestep
    and double the steps** — which keeps the physical dwell time `n_steps·dt` identical
@@ -39,7 +39,7 @@ explain why the earlier `tutorials/10_csp_obrien` does not work.
    a diverged stage can cool back under threshold by its last frame yet still have
    corrupted frames — which is exactly how Tutorial 10's blow-ups "self-recover".
 
-5. **Added the missing per-residue dwell-time log** (`topo/csp/csp.py`):
+5. **Added the missing per-residue dwell-time log** (`topo/csp/protocol.py`):
    `synth_out/dwell_times.dat` (codon, sampled stage dwell times in s, in-silico ns,
    step counts) — the topo analog of the reference `output/1.out` (D4).
 
@@ -63,8 +63,8 @@ explain why the earlier `tutorials/10_csp_obrien` does not work.
 ## Files changed / added
 
 - **Package code** (the substantive fixes):
-  `topo/translation/elongate.py` — per-stage stability guard (dt-halving on
-  divergence) + constants. `topo/csp/csp.py` — write `dwell_times.dat`.
+  `topo/csp/elongate.py` — per-stage stability guard (dt-halving on
+  divergence) + constants. `topo/csp/protocol.py` — write `dwell_times.dat`.
 - **Tutorial** (`tutorials/12_auto/`): `README.md`, `NOTES.md`, `WHY_10_FAILS.md`,
   `PLAN.md`, `STAGES.md`, `SUMMARY.md`; `analyze_validation.py`, `eject_demo.py`;
   outputs `synth_out/` (+ `ejection_long/`), `synth_out_debug/`, run logs.

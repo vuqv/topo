@@ -26,19 +26,17 @@ dependencies = [
 topo-mdrun = "topo.mdrun:mdrun"
 # Console command for the strength (n_scale) optimizer: `topo-optimize -f optimize.ini`
 topo-optimize = "topo.optimize:optimize"
-# Console command for the co-translational synthesis elongation runner:
-# `topo-elongate -f elongate.ini`
-topo-elongate = "topo.translation.elongate:elongate"
-# Console command to stitch the per-length trajectories into one VMD movie:
-# `topo-elongate-movie -o synth_out`
-topo-elongate-movie = "topo.translation.make_movie:main"
 # Console command for the O'Brien continuous synthesis protocol (per-codon, 3-stage
-# elongation): `topo-csp -f csp.ini`
-topo-csp = "topo.csp.csp:csp"
+# co-translational synthesis): `topo-csp -f csp.ini`
+topo-csp = "topo.csp.protocol:csp"
 # Console command to stitch the CSP per-residue/-stage trajectories into one VMD
 # movie: `topo-csp-movie -o synth_out`
-topo-csp-movie = "topo.csp.make_movie:main"
+topo-csp-movie = "topo.csp.movie:main"
 
 [tool.setuptools.packages.find]
 # Only ship the importable package (not tutorials/docs/etc. at the repo root).
 include = ["topo*"]
+
+[tool.setuptools.package-data]
+# Bundle non-Python data files (e.g. the default E. coli codon-time table).
+"topo.csp" = ["data/*.txt"]

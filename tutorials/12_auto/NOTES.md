@@ -101,7 +101,7 @@ at **half the timestep** (`dt = 0.0075 ps`) was stable on all seeds (257 / 264 /
 A new native (Go) contact at L=10 forms a stiff well whose vibrational period is too
 short for 15 fs. The reference avoids this with rigid `AllBonds` constraints.
 
-**Fix** (`topo/translation/elongate.py`, `run_length`): a per-stage stability guard.
+**Fix** (`topo/csp/elongate.py`, `run_length`): a per-stage stability guard.
 The stage is run in chunks while tracking the **maximum** |PotE| (a mid-run blow-up
 can cool back under the limit by the final frame yet still corrupt those frames, so
 the final-state energy alone is *not* a sufficient test). If a stage's max |PotE|

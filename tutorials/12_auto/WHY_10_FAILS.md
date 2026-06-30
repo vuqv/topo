@@ -91,7 +91,7 @@ a specific O'Brien run, and its `csp.ini` was never compared to the reference ou
 
 ## 3. What `12_auto` did to succeed
 
-1. **Fixed the blow-up at the source** (`topo/translation/elongate.py`, `run_length`):
+1. **Fixed the blow-up at the source** (`topo/csp/elongate.py`, `run_length`):
    a per-stage **stability guard** that detects a diverging stage (max |PotE| > 10⁹)
    and re-runs it with a **halved timestep and double the steps** — keeping the
    physical dwell time `n_steps · dt` identical. In the validation run exactly the two
@@ -111,7 +111,7 @@ a specific O'Brien run, and its `csp.ini` was never compared to the reference ou
 ## 4. The minimal fix for Tutorial 10
 
 **Tutorial 10 shares the exact code path that was patched** — `topo.csp` calls
-`topo.translation.elongate.run_length`, which now carries the stability guard. So:
+`topo.csp.core.run_length`, which now carries the stability guard. So:
 
 - **Minimal fix (already in place):** simply **re-run Tutorial 10 against the patched
   `topo`**. The guard will catch its 5/306 diverging stages and re-integrate them at a

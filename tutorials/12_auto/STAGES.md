@@ -70,5 +70,5 @@ toggled on mid-residue. Explicit A/P tRNA bonded geometry is not modeled. See
 
 - Timing core: [`topo/csp/kinetics.py`](../../topo/csp/kinetics.py) —
   `stage_dwell_times`, `stage_steps`, `seconds_to_steps`.
-- 3-stage loop: [`topo/csp/csp.py`](../../topo/csp/csp.py) →
+- 3-stage loop: [`topo/csp/protocol.py`](../../topo/csp/protocol.py) →
   `run_continuous_synthesis` (three `run_length` calls per residue, A→A→P restraint).

@@ -3,11 +3,15 @@
 This tutorial is an **independent, full-length stress test** of the per-stage
 **stability guard** introduced for [Tutorial 12](../12_auto/) (`12_auto`). Tutorial 12
 reproduced O'Brien's continuous-synthesis protocol on **4c5c** at the reference length
-(L = 1 → 10) and fixed the energy blow-up that broke `tutorials/10_csp_obrien` (see
-[`12_auto/WHY_10_FAILS.md`](../12_auto/WHY_10_FAILS.md)). The open question was whether
-that fix holds **at scale** — for the **entire 306-residue chain**, which is exactly
-the regime where the original Tutorial 10 blew up (≈5 of 306 stages reaching
-PotE ≈ 10¹³ kJ/mol).
+(L = 1 → 10) and fixed the energy blow-up that broke the earlier unguarded
+continuous-synthesis runs (see [`12_auto/WHY_10_FAILS.md`](../12_auto/WHY_10_FAILS.md)).
+The open question was whether that fix holds **at scale** — for the **entire
+306-residue chain**, which is exactly the regime where the unguarded full-length run
+blew up (≈5 of 306 stages reaching PotE ≈ 10¹³ kJ/mol).
+
+> **New to the protocol?** Read [`THEORY.md`](THEORY.md) first — it explains in detail
+> how the synthesis works and how the three simulation sub-stages map onto the real
+> biological elongation cycle (peptidyl transfer → translocation → tRNA decoding).
 
 **It works as expected.** Synthesizing all 306 residues with `topo-csp`:
 
@@ -20,7 +24,7 @@ PotE ≈ 10¹³ kJ/mol).
 | per-residue dwell-time log | `synth_out/dwell_times.dat`, **306 rows** |
 | ejection | completed; chain leaves the tunnel |
 
-So the dt-halving stability guard in `topo.translation.elongate.run_length`
+So the dt-halving stability guard in `topo.csp.core.run_length`
 (re-running any diverging stage at a halved timestep + proportionally more steps, which
 preserves the physical dwell time) eliminates the Tutorial-10 blow-up across the
 **full** chain, not just the short L=10 demo.

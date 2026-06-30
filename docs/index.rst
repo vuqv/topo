@@ -51,7 +51,7 @@ unfolding, thermal/mechanical stability, and multidomain motions.
    :caption: Python & advanced features
 
    usage/python_api
-   usage/protein_synthesis
+   usage/continuous_synthesis
 
 .. toctree::
    :maxdepth: 1

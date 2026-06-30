@@ -1,4 +1,4 @@
-# File structure & procedure notes — `topo/translation/`
+# File structure & procedure notes — `topo/csp/`
 
 A map of what lives in this folder and the procedures we implement ourselves.
 See [`DESIGN.md`](DESIGN.md) for the model. We **adopt the O'Brien-lab procedure**
@@ -6,7 +6,7 @@ See [`DESIGN.md`](DESIGN.md) for the model. We **adopt the O'Brien-lab procedure
 code.
 
 
-## This folder (`topo/translation/`)
+## This folder (`topo/csp/`)
 
 | Path | What it is |
 |------|------------|
@@ -15,12 +15,15 @@ code.
 | `theory/ja302305u_si_001.pdf` | SI of O'Brien et al., *JACS* 2012 — the RNC force-field theory we adapt. |
 | `cg_ribosome.py` | Coarse-grains an all-atom protein+RNA structure to the TOPO convention (protein → Cα; RNA → P/R/BR beads). Writes a CG PDB. |
 | `truncate_ribosome.py` | Truncates a CG ribosome around the exit tunnel (cylinder + exit half-space; per-residue keep). Writes a truncated CG PDB. |
-| `elongate.py` | **Elongation runner (build steps v1 + v2).** The nascent-chain synthesis driver (sibling of `topo.mdrun` / `topo.optimize`): build-once-subset contacts, per-length rebuild-and-continue loop, new-residue placement at the A-anchor, harmonic C-terminus restraint to the P-anchor; optional rigid ribosome (v2). CLI: `topo-elongate` / `python -m topo.translation`. See the build-step notes below. |
+| `core.py` | **Core nascent-chain MD engine (a library, not a runner).** Build-once-subset contacts, per-length build/seed/restrain/run (`run_length`, with the per-stage stability guard), new-residue placement at the A-anchor, harmonic C-terminus restraint, optional rigid ribosome (build step v2), `ElongationParams`. Reused by `protocol.py` (CSP) and the Tutorial-9 cylinder runner. See the build-step notes below. |
+| `protocol.py` | **The CSP runner.** O'Brien's per-codon, 3-stage continuous-synthesis loop + INI: `CSPParams` / `CSPConfig`, `read_csp_config`, `run_continuous_synthesis`, `csp()` CLI (`topo-csp` / `python -m topo.csp`). Calls `core.run_length` three times per residue. |
+| `kinetics.py` | Pure timing core (no OpenMM): codon tables, FPT sampling, `scale_factor`→steps, the 3-stage split. |
 | `ribosome.py` | **Rigid ribosome scenery (build step v2).** Loads the truncated CG ribosome as fixed (mass-0) beads and wires the ribosome↔nascent excluded-volume + electrostatics onto a built nascent model (`load_ribosome`, `append_ribosome`). |
-| `make_movie.py` | Stitches the per-length trajectories into one VMD-playable "growing chain" movie + a `movie.tcl` (CLI `topo-elongate-movie`). v1 output for now. |
-| `elongate.ini` | Example control file for `topo-elongate -f`. |
-| `__init__.py` | Marks `topo.translation` as a package; re-exports `run_elongation` / `ElongationParams` / `read_elongate_config` / `ElongateConfig`. |
-| `__main__.py` | `python -m topo.translation` → the `elongate` CLI. |
+| `movie.py` | **Movie stitcher** (CLI `topo-csp-movie`). Shared padding/stitching core (`stitch_segments` + the VMD `.tcl`) plus two layout adapters: `stitch_movie` for the CSP per-stage layout (`L_<L>/stage_<s>/`) and `stitch_length_movie` for the flat per-length layout (`L_<L>/`, used by the Tutorial-9 cylinder runner). The CLI auto-detects the layout. |
+| *(tutorial)* | The ready-to-run CSP example (`csp.ini` + inputs) lives in `tutorials/12_auto/` and `tutorials/13_validate_claude_fix12/` (Sphinx pages: `docs/usage/continuous_synthesis.md`, `docs/topo.rst` autodoc). |
+| `__init__.py` | Marks `topo.csp` as a package; re-exports the CSP public API (`run_continuous_synthesis` / `CSPParams` / `CSPConfig` / `read_csp_config` / `csp` / `kinetics`). |
+| `__main__.py` | `python -m topo.csp` → the `csp` (CSP protocol) CLI. |
+| `data/` | Bundled package data. `ecoli_trans_times_310K.txt` — the default Fluitt *E. coli* (310 K) codon-time table (organism-universal; used when an INI gives no `trans_times`). |
 | `structures/` | Input ribosome structures + their CG outputs (see below). |
 
 ### `structures/`
@@ -182,7 +185,7 @@ already retains the functional attachment/placement points. If you want the
      RNA beads) and hold it **rigid**.
   2. **Truncate** it around the exit tunnel (procedure above), using the X-axis as
      the tunnel center line.
-  3. **Elongation driver** (the `topo.translation` runner) that grows the nascent
+  3. **Elongation driver** (the `topo.csp` runner) that grows the nascent
      chain N→C, reusing `topo.engine` (see `DESIGN.md` §4).
 - **Do not use:** any external (O'Brien-lab) code — procedure only.
 
@@ -218,10 +221,11 @@ lands each new C-terminus on the P-anchor to within ~0.005 nm):
   relative to the 0.381 nm bond, so the chain is still "extended along the axis".
 
 
-## Build step v2 — rigid ribosome forces (`ribosome.py` + `elongate.py`)
+## Rigid ribosome forces (`ribosome.py` + `core.py`)
 
-Enabled with `rigid_ribosome = yes`. After the nascent model is built, the
-truncated ribosome is appended to the System (`ribosome.append_ribosome`):
+The supplied ribosome PDB is **always** loaded as rigid scenery (there is no
+on/off flag). After the nascent model is built, the truncated ribosome is appended
+to the System (`ribosome.append_ribosome`):
 
 - **Rigid scenery.** ~4,576 ribosome beads added with **mass = 0** at indices
   `L..N-1`, coordinates as-is. OpenMM does not integrate mass-0 particles, so they
@@ -248,16 +252,24 @@ stays around the tunnel and extrudes +x):
   force — its 91.7°/130° basins are exactly O'Brien's tether-angle parameters,
   `Continuous_synthesis_protocol/continuous_synthesis_v6.py`). The frozen tRNA bead
   + bond hold the C-terminus at the PTC; the angle is intended to **aim the chain
-  down the tunnel** (constrains the terminal CA–CA vector's bend, not its azimuth).
-  `trna_tether_full` additionally adds the tRNA-frame terms (`CA–R–P`, `CA–R–BR2`
-  angles + `CA–R–P–BR2` improper) — **off by default**: O'Brien's reference angles
-  encode their tRNA frame and can mis-aim the C-terminus for a tRNA in a different
-  orientation. (`trna_tether = no` falls back to the `ptc_offset` position restraint,
-  whose auto-offset clears the P-anchor bead.)
+  down the tunnel** (constrains the terminal CA–CA vector's bend). (`trna_tether = no`
+  falls back to the `ptc_offset` position restraint, whose auto-offset clears the
+  P-anchor bead.)
   > **Not yet validated.** Quick single-trajectory diagnostics at the short test
   > dwell (1000 steps/residue) are too noisy and in the wrong regime (the PTC
   > collapse appears at long dwells) to show whether the tether improves extrusion.
   > Needs independent replicas at production-length dwell with a robust metric —
   > see `TODO.md`.
+- **Tunnel wall (`tunnel_wall`, default on; `add_tunnel_wall`).** O'Brien's one-sided
+  planar restraint `U = k·min(x − x0, 0)²` (`k = 8368 kJ/mol/nm²` = 20 kcal/mol/Å²)
+  on every nascent bead, keeping the chain at `x ≥ x0` so it can only **extrude
+  forward** (+x, toward the exit) and cannot fold back past the synthesis point into
+  the void where the 50S was truncated. **`x0` is auto-derived from the ribosome
+  structure** (not a config knob) by the CSP runner: the lower / P-site C-terminus
+  hold plane, `x0 = min(P-anchor.x, A-anchor.x) + ptc_offset` (≈ `1.05 nm` for the
+  tutorial `ribosome_trunc.pdb`). Recomputed per structure, so it never goes stale.
+  (O'Brien quote 58 Å, but that is their coordinate frame.) Applied throughout
+  synthesis + post-elongation. **Units:** OpenMM defaults
+  throughout — nm, ps, kJ/mol, K, and force constants in kJ/mol/nm².
 - **PSF for the combined system** is written via parmed (`_dump_topology_psf`)
   rather than the model's nascent-only `dumpTopology`.

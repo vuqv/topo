@@ -10,9 +10,9 @@ built with topo's structure-based Gō contacts (so it can fold co-translationall
 once it clears the tunnel).
 
 Why a separate script: the analytic ("cylinder") ribosome is a different *physics
-of confinement* than the explicit-bead ribosome in :mod:`topo.translation` (build
+of confinement* than the explicit-bead ribosome in :mod:`topo.csp` (build
 steps v1/v2), so it lives here as a tutorial variant and does **not** modify the
-shipped ``topo.translation`` package. It **reuses** that package's tested,
+shipped ``topo.csp`` package. It **reuses** that package's tested,
 unchanged building blocks (the one-time contact precompute, the build-once-subset
 length model, the seed/restrain/output machinery) and only adds the one new force
 -- :func:`add_tunnel_cylinder` -- plus a nascent-only elongation loop around it.
@@ -47,10 +47,10 @@ from openmm import unit
 
 from topo import engine
 
-# Reuse the *unchanged* topo.translation building blocks. Importing them keeps
+# Reuse the *unchanged* topo.csp building blocks. Importing them keeps
 # this tutorial structurally identical to the shipped runner without copying code
 # or touching the package.
-from topo.translation.elongate import (
+from topo.csp.core import (
     CG_BOND_LENGTH_NM,
     TUNNEL_AXIS,
     ElongationParams,
@@ -131,7 +131,7 @@ def add_tunnel_cylinder(system, nascent_indices, r_nm: float,
 class CylinderParams(ElongationParams):
     """Elongation params + the analytic tunnel geometry.
 
-    Subclasses :class:`topo.translation.elongate.ElongationParams` so the shared
+    Subclasses :class:`topo.csp.core.ElongationParams` so the shared
     per-length config helper (``_make_cfg``) and the post-elongation fields
     (``post_elongation`` / ``post_elongation_steps``) are inherited unchanged; only
     the tunnel-geometry fields are new.
@@ -159,7 +159,7 @@ def run_length(L: int, *, full_pdb: str, R_full: np.ndarray, eps_full: np.ndarra
 
     The System is the nascent chain only (no ribosome beads); the analytic tunnel
     (:func:`add_tunnel_cylinder`) supplies all ribosome confinement. Mirrors the
-    nascent-only (v1) branch of :func:`topo.translation.elongate.run_length`,
+    nascent-only (v1) branch of :func:`topo.csp.core.run_length`,
     substituting the cylinder for the planar tunnel wall, and injecting the
     ``L x L`` build-once-subset contact block exactly as the shipped runner does.
 
@@ -437,7 +437,7 @@ def read_elongate_config(config_file: str, verbose: bool = True) -> CylinderConf
         raise ValueError(
             f"{config_file}: ribosome_model = {ribosome_model!r}; this script only "
             f"runs the analytic 'cylinder' tunnel. For the explicit-bead ribosome "
-            f"('beads'), use topo-elongate (tutorial 07).")
+            f"('beads'), use CSP (topo-csp; tutorials 12/13).")
 
     p = CylinderParams()
     if opt("n_steps") is not None:

@@ -1,25 +1,26 @@
 # Co-translational synthesis through an analytic exit tunnel (topo)
 
-This is the **structure-based (topo) twin** of cosmo's tutorial 09. Tutorial
-[`07`](../07_protein_synthesis/) builds the ribosome from **explicit beads** and
-threads the nascent chain through the coarse-grained exit tunnel. Here the tunnel
-is modelled **analytically** instead: a cylindrical **bore** of radius `r` along
-the X-axis drilled through an **infinite wall** at `x_exit` (a "hole in an infinite
-wall"). There are **no ribosome beads** — the System is the nascent chain only, so
-it is fast and never jams.
+This is the **structure-based (topo) twin** of cosmo's tutorial 09. The full CSP
+runner (Tutorials 12/13) builds the ribosome from **explicit beads** and threads the
+nascent chain through the coarse-grained exit tunnel. Here the tunnel is modelled
+**analytically** instead: a cylindrical **bore** of radius `r` along the X-axis
+drilled through an **infinite wall** at `x_exit` (a "hole in an infinite wall").
+There are **no ribosome beads** — the System is the nascent chain only, so it is
+fast and never jams.
 
-The only difference from the cosmo twin is the nascent-chain physics: here the
-chain is a **folded protein** built with topo's structure-based Gō contacts, so it
-can **fold co-translationally** as it extrudes and once it clears the bore.
+The chain is a **folded protein** built with topo's structure-based Gō contacts, so
+it can **fold co-translationally** as it extrudes and once it clears the bore.
 
-## Why a separate script (`cylinder.py`, not `topo-elongate`)
+## Why a separate script (`cylinder.py`)
 
 The analytic tunnel is a different *physics of confinement* than the explicit-bead
-ribosome, so it lives here as a tutorial variant and does **not** modify the
-shipped `topo.translation` package. It **reuses** that package's tested, unchanged
-machinery (the one-time contact precompute, the build-once-subset length model, the
-seed / restrain / output path) and adds only the one new force,
-`add_tunnel_cylinder`, plus a nascent-only elongation loop.
+ribosome, so it lives here as a self-contained tutorial and does **not** modify the
+shipped `topo.csp` package. It **reuses** that package's tested, unchanged low-level
+machinery from `topo.csp.core` (the one-time contact precompute, the
+build-once-subset length model, the seed / restrain / output path) and adds only the
+one new force, `add_tunnel_cylinder`, plus its own minimal nascent-only elongation
+loop. (Like the explicit-bead path it grows the chain at a fixed step count — fine
+for this confinement demo; for codon-resolved kinetics use CSP, `topo-csp`.)
 
 ## The model (forbidden region `S`)
 
@@ -73,10 +74,10 @@ post_elongation_steps = 300_000   # use a LONG run so the protein can clear the 
 
 ## Visualize / validate
 
-Use the tutorial's movie tool — it stitches the per-length trajectories like
-`topo-elongate-movie` **and** draws the analytic tunnel (bore tube, closed PTC cap,
-and the infinite exit-face wall as an annulus whose hole is the bore), reading the
-geometry from the same `elongate.ini`:
+Use the tutorial's movie tool — it stitches the per-length trajectories (reusing the
+shared stitcher in `topo.csp.movie`) **and** draws the analytic tunnel (bore
+tube, closed PTC cap, and the infinite exit-face wall as an annulus whose hole is the
+bore), reading the geometry from the same `elongate.ini`:
 
 ```bash
 python make_movie_cylinder.py -o synth_out -f elongate.ini
@@ -85,5 +86,5 @@ vmd -e synth_out/movie.tcl
 
 You then see the chain thread the (blue, transparent) bore, the red PTC end cap it
 grows away from, and the grey exit wall it emerges through — then fold once it
-clears the tunnel. (The plain `topo-elongate-movie -o synth_out` still works — it
-just omits the tunnel.)
+clears the tunnel. (Plain `topo-csp-movie -o synth_out` also works
+— it just omits the tunnel.)

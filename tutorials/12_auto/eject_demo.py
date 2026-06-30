@@ -21,9 +21,9 @@ from openmm import unit
 
 warnings.filterwarnings("ignore")
 
-from topo.translation.elongate import (read_anchor, TUNNEL_AXIS, TRNA_TETHER_BOND_NM,
+from topo.csp.core import (read_anchor, TUNNEL_AXIS, TRNA_TETHER_BOND_NM,
                                        precompute_contacts, run_length, ElongationParams)
-from topo.translation.ribosome import load_ribosome
+from topo.csp.ribosome import load_ribosome
 
 HERE = Path(__file__).resolve().parent
 N_STEPS = int(sys.argv[1]) if len(sys.argv) > 1 else 2_000_000
@@ -42,17 +42,14 @@ ep.device = "GPU"
 ep.constraints = None
 ep.buffer_nm = 0.4
 ep.minimize = True
-ep.rigid_ribosome = True
 ep.trna_tether = False          # CSP uses the position-restraint path
 ep.tunnel_wall = True
-ep.tunnel_wall_x0_nm = 1.05
-ep.tunnel_wall_k = 8368.0
-ep.nascent_only_output = True
 
 p_anchor = read_anchor(ribo_pdb, "PtR", 76, "R")
 a_anchor = read_anchor(ribo_pdb, "AtR", 76, "R")
 offset = TRNA_TETHER_BOND_NM
 p_target = p_anchor + offset * TUNNEL_AXIS
+ep.tunnel_wall_x0_nm = float(min(p_anchor[0], a_anchor[0]) + offset)  # auto: lower P/A-site C-term hold plane
 ribo = load_ribosome(ribo_pdb, model="topo")
 R_full, eps_full = precompute_contacts(full, str(HERE / "domain.yaml"),
                                        str(HERE / "4c5c_model_clean_stride.dat"))

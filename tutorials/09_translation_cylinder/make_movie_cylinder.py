@@ -1,7 +1,7 @@
 """Stitch the topo tutorial-09 elongation into a VMD movie + draw the tunnel.
 
-Like ``topo-elongate-movie`` (it reuses that tool's stitcher for the growing
-chain), but the generated ``movie.tcl`` **also draws the analytic exit tunnel as
+Reuses the shared stitcher in ``topo.csp.movie`` for the growing
+chain, but the generated ``movie.tcl`` **also draws the analytic exit tunnel as
 designed** -- the cylindrical bore, the closed PTC end, and the infinite exit-face
 wall (a flat annulus whose hole is the bore). The tunnel geometry is read from the
 **same** ``elongate.ini`` used for the run, so the drawn tunnel always matches the
@@ -24,7 +24,7 @@ from typing import Optional, Tuple
 
 # Reuse the shipped, unchanged stitcher for the growing-chain DCD/PSF; we only
 # replace the generated .tcl with a tunnel-aware one.
-from topo.translation.make_movie import stitch_movie
+from topo.csp.movie import stitch_length_movie
 
 # The tutorial's own config reader (tunnel geometry lives in elongate.ini).
 from cylinder import read_elongate_config
@@ -47,7 +47,7 @@ def make_cylinder_movie(out_root: str, ini: str, out_prefix: str = "movie",
         The ``elongate.ini`` used for the run (source of the tunnel geometry).
     out_prefix, park, outname
         Passed straight through to
-        :func:`topo.translation.make_movie.stitch_movie`.
+        :func:`topo.csp.movie.stitch_length_movie`.
     wall_outer_nm : float, optional
         Outer radius (nm) of the drawn exit-face annulus. None -> ``r + 3 nm``.
 
@@ -55,7 +55,7 @@ def make_cylinder_movie(out_root: str, ini: str, out_prefix: str = "movie",
     -------
     (psf_path, dcd_path, tcl_path)
     """
-    # 1. Stitch the per-length DCDs exactly like topo-elongate-movie (no ribosome
+    # 1. Stitch the per-length DCDs exactly like the shared stitcher (no ribosome
     #    beads in cylinder mode). This writes movie.{psf,dcd} and a default .tcl.
     psf, dcd, tcl = stitch_movie(out_root, out_prefix=out_prefix, park=park,
                                  outname=outname, ribosome_pdb=None,
@@ -87,7 +87,7 @@ def _write_tcl_cylinder(path: str, psf_name: str, dcd_name: str, park: str,
                         y0_nm: float, z0_nm: float, rho_nm: float,
                         wall_outer_nm: float) -> None:
     """Write a VMD script: growing chain (as make_movie) + the analytic tunnel."""
-    # Chain reps mirror topo.translation.make_movie's sentinel/cterm scheme.
+    # Chain reps mirror topo.csp.movie's sentinel/cterm scheme.
     if park == "sentinel":
         sel = "not (x > 9000)"
         hide_note = ("# Not-yet-synthesized beads are parked far away and hidden "
@@ -206,7 +206,7 @@ def main(argv: Optional[list] = None) -> None:
     ap = argparse.ArgumentParser(
         prog="make_movie_cylinder.py",
         description="Stitch the topo tutorial-09 per-length elongation trajectories "
-                    "into one VMD movie (like topo-elongate-movie) AND draw the "
+                    "into one VMD movie (reusing topo.csp.movie) AND draw the "
                     "analytic exit tunnel (bore + PTC cap + exit-face wall) read "
                     "from elongate.ini, so the chain is seen threading the tunnel.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)

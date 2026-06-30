@@ -1,6 +1,6 @@
 """Rigid ribosome scenery + cross-interactions for elongation build step v2.
 
-Build step v1 (:mod:`topo.translation.elongate`) simulates the **nascent chain
+Build step v1 (:mod:`topo.csp.core`) simulates the **nascent chain
 only** and uses the truncated ribosome merely as two fixed anchor *coordinates*.
 **Build step v2** adds the truncated ribosome to the System as **rigid (mass-0)
 scenery** and wires the two ribosome <-> nascent-chain interactions, following
@@ -73,6 +73,13 @@ class Ribosome:
 
     @property
     def n(self) -> int:
+        """Number of ribosome beads.
+
+        Returns
+        -------
+        int
+            The bead count, taken as the length of ``radii_nm``.
+        """
         return len(self.radii_nm)
 
 
@@ -81,6 +88,19 @@ def _bead_type(name: str, resname: str) -> str:
 
     Protein Cα beads (atom name ``CA``) look up by residue name; RNA beads look up
     by atom name with trailing digits stripped (``P``, ``R``, ``BR1``/``BR2`` → ``BR``).
+
+    Parameters
+    ----------
+    name : str
+        The PDB atom name of the bead (e.g. ``"CA"``, ``"P"``, ``"BR1"``).
+    resname : str
+        The PDB residue name of the bead (used for protein Cα beads).
+
+    Returns
+    -------
+    str
+        The key into ``model_parameters`` for this bead: ``resname`` for Cα
+        beads, otherwise ``name`` with trailing digits stripped.
     """
     if name == "CA":
         return resname
@@ -93,6 +113,26 @@ def load_ribosome(pdb_file: str, model: str = "topo") -> Ribosome:
     Reads each ATOM/HETATM record, derives its bead type (:func:`_bead_type`), and
     looks up the excluded-volume radius (σ) and charge from
     ``model_parameters[model]``. Coordinates are converted from angstrom to nm.
+
+    Parameters
+    ----------
+    pdb_file : str
+        Path to the (truncated) coarse-grained ribosome PDB file.
+    model : str, optional
+        Key selecting the parameter set in ``model_parameters`` used for radii
+        and charge lookups. Default is ``"topo"``.
+
+    Returns
+    -------
+    Ribosome
+        The parsed ribosome with per-bead coordinates (nm), radii, charges,
+        atom names, residue names, residue ids, and segment ids.
+
+    Raises
+    ------
+    ValueError
+        If a parsed bead type is missing from ``model_parameters[model]``, or if
+        no ATOM/HETATM records are found in the file.
     """
     params = MODEL_PARAMS[model]
     coords, radii, charges = [], [], []
@@ -130,7 +170,7 @@ def append_ribosome(nascent_model, ribo: Ribosome) -> Tuple[List[int], List[int]
     ribosome entries and the appropriate interaction groups; adds the ribosome-NC
     ``(σ/r)¹²`` force; and extends the topology with a ribosome chain per segID.
 
-    Must be called **after** :func:`topo.translation.elongate.build_length_model`
+    Must be called **after** :func:`topo.csp.core.build_length_model`
     (the nascent forces must already exist). Returns ``(nascent_indices,
     ribosome_indices)``.
     """
@@ -192,7 +232,24 @@ def append_ribosome(nascent_model, ribo: Ribosome) -> Tuple[List[int], List[int]
 
 
 def _append_topology(topology, ribo: Ribosome) -> None:
-    """Append the ribosome beads to an OpenMM topology (one chain per segID)."""
+    """Append the ribosome beads to an OpenMM topology (one chain per segID).
+
+    Beads are grouped into one chain per segment id and one residue per
+    ``(segID, resid)`` pair, then each bead is added as a carbon atom under its
+    residue. Mutates ``topology`` in place.
+
+    Parameters
+    ----------
+    topology : openmm.app.Topology
+        The topology to extend with the ribosome chains, residues, and atoms.
+    ribo : Ribosome
+        The parsed ribosome supplying segment ids, residue ids/names, and atom
+        names for each bead.
+
+    Returns
+    -------
+    None
+    """
     chains: dict = {}
     residues: dict = {}
     for i in range(ribo.n):
@@ -239,6 +296,40 @@ def add_trna_tether(nascent_model, cterm_index: int, prev_index,
 
     ``prev_index`` is the CA(L-1) particle index, or None for L == 1 (the CA--CA--R
     angle is then skipped).
+
+    Parameters
+    ----------
+    nascent_model : object
+        The built nascent model whose ``.system`` receives the tether bond and
+        whose ``.gaussianAngleForce`` receives the orienting angle.
+    cterm_index : int
+        System index of the nascent C-terminal CA(L) bead.
+    prev_index : int or None
+        System index of the CA(L-1) bead, or None for L == 1 (skips the angle).
+    ribo : Ribosome
+        The parsed ribosome containing the P-site tRNA bead.
+    L_nascent : int
+        Number of nascent particles preceding the ribosome beads (offset used to
+        resolve the tRNA R bead's system index).
+    segid : str, optional
+        Segment id of the peptidyl-tRNA. Default is ``"PtR"``.
+    resid : int, optional
+        Residue id of the tRNA acceptor bead. Default is ``76``.
+    bond_length_nm : float, optional
+        Equilibrium length (nm) of the CA(L)--R tether bond. Default is
+        :data:`TRNA_TETHER_BOND_NM`.
+    bond_k : float, optional
+        Force constant (kJ/mol/nm^2) of the tether bond. Default is
+        :data:`TRNA_TETHER_BOND_K`.
+
+    Returns
+    -------
+    None
+
+    Raises
+    ------
+    ValueError
+        If the ``R`` bead for the given ``segid``/``resid`` is not found.
     """
     system = nascent_model.system
     R_idx = bead_system_index(ribo, L_nascent, segid, resid, "R")
@@ -263,6 +354,24 @@ def add_tunnel_wall(system, nascent_indices, x0_nm: float = TUNNEL_WALL_X0_NM,
     chain is kept at ``x >= x0`` and can only extrude forward (+x). ``x0_nm`` is the
     plane position (nm; the C-terminal-AA addition plane / PTC) and ``k`` is the force
     constant in OpenMM units (kJ/mol/nm^2).
+
+    Parameters
+    ----------
+    system : openmm.System
+        The system to which the planar-wall force is added.
+    nascent_indices : iterable of int
+        System indices of the nascent-chain beads subjected to the wall.
+    x0_nm : float, optional
+        Plane position (nm); beads are penalized only for ``x < x0``. Default is
+        :data:`TUNNEL_WALL_X0_NM`.
+    k : float, optional
+        Force constant (kJ/mol/nm^2) of the one-sided restraint. Default is
+        :data:`TUNNEL_WALL_K`.
+
+    Returns
+    -------
+    openmm.Force
+        The created ``CustomExternalForce`` (already added to ``system``).
     """
     force = mm.CustomExternalForce("k*r^2; r=min(x-x0, 0)")
     force.addGlobalParameter("k", k)

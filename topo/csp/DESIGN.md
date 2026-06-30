@@ -4,7 +4,7 @@
 > *design space* before any code is written. Sections marked **(FILL IN)** are for
 > you to draft. The goal is a shared, reviewable spec; implementation comes later.
 
-Branch: `translation`. Future module: `topo.translation` (a sibling of
+Branch: `translation`. Future module: `topo.csp` (a sibling of
 `topo.mdrun` / `topo.optimize`), reusing `topo.engine`'s build → setup → finalize
 helpers and supplying its own driver loop (see the note in `topo/engine.py`).
 
@@ -421,7 +421,7 @@ up to it:
 
 - O'Brien, E. P.; Christodoulou, J.; Vendruscolo, M.; Dobson, C. M. **J. Am.
   Chem. Soc.** 2012, 134, ja302305u. — the ribosome–nascent-chain force field this
-  design adapts (SI PDF kept under `topo/translation/theory/`).
+  design adapts (SI PDF kept under `topo/csp/theory/`).
 - Karanicolas, J.; Brooks, C. L. **Protein Sci.** 2002, 11, 2351. — the base Cα
   Gō model.
 - Best, R. B.; Chen, Y. G.; Hummer, G. **Structure** 2005, 13, 1755. — the

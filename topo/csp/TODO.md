@@ -1,10 +1,10 @@
-# topo.translation — TODO
+# topo.csp — TODO
 
 **Status (implemented & working end-to-end):** v1 + v2 elongation runner
 (`elongate.py`); build-once-subset contacts; rigid mass-0 ribosome with
 ribosome↔chain excluded volume + Yukawa (`ribosome.py`); tRNA tether (bond +
 `CA(L-1)-CA(L)-tRNA` orienting angle); planar tunnel wall; nascent-only output;
-ejection/stallation post-phase; movie tool (`make_movie.py`); INI control file;
+ejection/stallation post-phase; movie tool (`movie.py`); INI control file;
 Tutorial 7 + Sphinx docs. Implementation details are in `DESIGN.md` / `FILES.md` /
 `README.md` — this file tracks only what is **still open**.
 
@@ -67,11 +67,57 @@ Skip lengths already completed (their `L_<L>/traj_final.pdb` exists) and resume 
 interrupted length from its checkpoint. Each length is a fixed-size system (no live
 resizing) — mostly bookkeeping in `run_elongation`.
 
+### 7. `ejection_steps = auto` — stop ejection once the chain clears the ribosome
+Let `ejection_steps` accept an **int** (current: fixed step count) **or the string
+`'auto'`**. With `auto`, run the ejection phase and **periodically check** whether the
+nascent chain has fully cleared the ribosome, stopping as soon as it has (instead of a
+guessed fixed length):
+- Every `check_interval` steps (e.g. a new `ejection_check_every`, default ~10k–50k),
+  read the C-terminus x and `max(x)` over the ribosome beads.
+- **Stop** when `x(C-terminal AA) − max(x_ribosome) > cutoff` (default **2.0 nm**) — the
+  C-terminus has emerged past the far (+x) edge of the ribosome, so the chain is out of
+  the tunnel.
+- Implementation: chunked stepping loop in the ejection branch of
+  `run_continuous_synthesis` (mirror the chunked loop already used by the stability
+  guard in `core.run_length`); the ribosome beads are fixed (mass-0), so `max(x_ribosome)`
+  is computed once. Add a sane safety cap (max steps) so `auto` can't run forever.
+- Config: parse `ejection_steps` as int-or-`auto`; add `ejection_cutoff_nm` (2.0) and
+  `ejection_check_every`. (Consider the same for `dissociation_steps`.)
+
 
 
 ---
 
 ## Revision list
+
+### Remove the per-stage step clamps for production
+`max_steps_per_stage` / `min_steps_per_stage` (`CSPParams`, parsed by `read_csp_config`)
+are **testing-only** — they cap/floor each stage's MD step count so the tutorials run fast,
+but they **break the physical timescale mapping** (the integrated MD per stage no longer
+matches the sampled dwell time). For production the step count must come entirely from the
+kinetics (`scale_factor` × codon time ÷ `dt`).
+- **Decide:** drop both knobs entirely (remove the `CSPParams` fields + `read_csp_config`
+  parsing + the `stage_steps` clamp args), or keep them but guard/loudly warn when set so
+  a production run can't silently use them. Currently documented as testing-only in
+  `docs/usage/continuous_synthesis.md` and the example INIs set them for speed.
+
+### Ribosome-traffic correction — hidden, revisit later
+The per-codon **ribosome-traffic** correction (`ribosome_traffic` / `initiation_rate`
+in `CSPParams`; `topo.csp.kinetics.ribosome_traffic_times` + the intrinsic-vs-real
+split in `build_mfpt_lists`; stage-2 stretch in `stage_dwell_times`) is **off by
+default and now HIDDEN** from the user-facing docs and the example `csp.ini` files
+(2026-06-30, user request) — the code remains and is still parsed if a key is present,
+but it is not advertised because it is not validated and depends on an external
+`ribosome_traffic` binary that is not bundled.
+- **Decide:** either (a) finish it properly — vendor/locate the `ribosome_traffic`
+  binary (or reimplement the upstream-queue correction natively), validate the
+  intrinsic→real stretch against a reference run, then re-expose it in the docs +
+  config; or (b) drop the feature entirely (remove the `CSPParams` fields, the
+  `read_csp_config` parsing, and `kinetics.ribosome_traffic_times`).
+- While hidden, `real == intrinsic` everywhere and stage-2's mean is exactly
+  `time_stage_2` (no traffic stretch), so results are unaffected.
+- Also unhide the runtime banner line in `protocol.py` (it still prints
+  `ribosome_traffic=off`) when the feature is re-exposed or removed.
 
 ### Restore rigid `AllBonds` for the elongation runner
 v1/v2 currently use flexible harmonic bonds (`constraints = None`) instead of the

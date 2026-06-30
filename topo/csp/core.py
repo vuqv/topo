@@ -1,56 +1,46 @@
-"""Protein synthesis: the elongation loop (``topo.translation``).
+"""Core nascent-chain MD machinery (``topo.csp.core``).
 
-This is the nascent-chain elongation driver described in ``DESIGN.md`` (the
-consecutive rebuild-and-continue protocol, §2.1/§2.5) and ``PROMPT.md``.
+This module holds the **per-length / per-stage molecular-dynamics building blocks**
+for co-translational synthesis — the foundation that the higher-level runners build
+on. It is a *library*, not a runner: it exposes no CLI and no outer loop.
 
-**Build step v1 — mechanics only, no ribosome forces.** The simulated System is
-the *nascent chain only*. The truncated ribosome is used purely as a source of
-two fixed points — the **P-anchor** (P-site tRNA residue-76 ``R`` bead) and the
-**A-anchor** (A-site tRNA residue-76 ``R`` bead) — for new-residue placement and
-the C-terminus restraint target.
+Its consumers are:
 
-**Build step v2 — add the rigid ribosome forces** (enable with
-``rigid_ribosome = yes``). The truncated ribosome is appended to the System as
-fixed (mass-0) scenery and the ribosome<->nascent excluded-volume +
-electrostatics are wired up (:mod:`topo.translation.ribosome`). Because the
-P-anchor is itself a ribosome bead, the C-terminus is held a short distance into
-the tunnel from it (``ptc_offset_nm``) so it does not clash with that bead.
+* :mod:`topo.csp.protocol` — the O'Brien Continuous Synthesis Protocol (CSP), which
+  calls :func:`run_length` three times per residue (one per kinetic sub-stage), and
+* the Tutorial-9 cylinder runner (`tutorials/09_translation_cylinder/cylinder.py`),
+  which reuses these blocks with the ribosome modelled as an analytic cylinder.
 
-What the loop does, for ``L = L0 .. N_full`` (``L`` = current nascent length):
+(The standalone fixed-rate elongation runner — ``run_elongation`` / the
+``topo-elongate`` CLI — and its Tutorial 7 were removed: a fixed per-residue step
+count is not a physically meaningful synthesis model. Use CSP (``topo-csp``) for
+codon-resolved kinetics.)
 
-1. **Precompute once** (before the loop): run TOPO's contact builder on the
-   *full* native PDB -> ``R_full``, ``eps_full`` (``N_full x N_full``). STRIDE is
-   run at most once and cached. Each length uses the top-left ``L x L`` block;
-   STRIDE / heavy-atom analysis are never re-run per length (DESIGN §3.5).
-2. **Build** the length-``L`` TOPO model on native residues ``1..L`` (bonds,
-   angles, torsions, Yukawa, contacts), injecting the ``L x L`` contact subset
-   instead of recomputing (``buildCoarseGrainModel(precomputed_contacts=...)``).
-3. **Seed coordinates.** ``L == L0``: lay residues ``1..L0`` extended along the
-   tunnel axis (+x) from the P-anchor (C-terminus at the P-anchor, N-terminus
-   toward +x), one CG bond length apart. ``L > L0``: residues ``1..L-1`` from the
-   previous step's final structure; the new residue ``L`` at the A-anchor + buffer.
-4. **Restrain only residue ``L``** (the current C-terminus) to the P-anchor with
-   a harmonic ``CustomExternalForce`` (``k = 83680 kJ/mol/nm^2`` = 200 kcal/mol/A^2).
-   The hand-off is automatic: each rebuilt step restrains only its own C-terminus.
-5. **Minimize** (relax the placement / the stretched new bond), draw Boltzmann
-   velocities at ``ref_t``, **run ``n_steps_per_residue`` steps**, write the
-   per-length outputs, and seed ``L+1`` from this step's final structure.
+The central primitive is :func:`run_length`, which builds, seeds, restrains, runs
+and finalizes **one length-``L`` segment** of nascent-chain MD:
 
-Use it as a CLI, driven by an INI control file (see :func:`read_elongate_config`
-and ``topo/translation/README.md``)::
+1. **Build** the length-``L`` TOPO model on native residues ``1..L`` (bonds,
+   angles, torsions, Yukawa, contacts), injecting the precomputed ``L x L`` contact
+   subset instead of recomputing (``buildCoarseGrainModel(precomputed_contacts=...)``).
+2. **Seed coordinates.** ``L == L0``: lay residues ``1..L0`` extended along the
+   tunnel axis (+x) from the P-anchor, one CG bond length apart. ``L > L0``:
+   residues ``1..L-1`` from the previous segment's final structure; the new residue
+   ``L`` at the A-anchor + buffer.
+3. **Restrain only residue ``L``** (the current C-terminus) to a chosen anchor with
+   a harmonic ``CustomExternalForce`` (``k = restraint_k``).
+4. **Minimize**, draw Boltzmann velocities at ``ref_t``, **run the requested step
+   count** under the per-stage *stability guard* (see :data:`STABILITY_POTE_LIMIT_KJ`),
+   write the per-segment outputs, and return the final NASCENT coordinates to seed
+   the next segment.
 
-    topo-elongate -f elongate.ini
-    python -m topo.translation -f elongate.ini
-
-or call :func:`run_elongation` from your own script. Build / setup / finalize are
-reused from :mod:`topo.engine`; this module is the outer loop over length ``L``.
+Contacts are precomputed **once** on the full native PDB (:func:`precompute_contacts`);
+STRIDE / heavy-atom analysis are never re-run per length. The optional rigid ribosome
+scenery and tunnel wall are wired up via :mod:`topo.csp.ribosome`. Build / setup /
+finalize are reused from :mod:`topo.engine`.
 """
 from __future__ import annotations
 
-import argparse
-import configparser
 import math
-import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -63,11 +53,10 @@ from openmm import unit
 import topo
 from topo import engine
 from topo.core.system import system as TopoSystem
-from topo.translation.ribosome import (Ribosome, load_ribosome, append_ribosome,
+from topo.csp.ribosome import (Ribosome, load_ribosome, append_ribosome,
                                        add_trna_tether, add_tunnel_wall,
                                        TRNA_TETHER_BOND_NM, TUNNEL_WALL_X0_NM,
                                        TUNNEL_WALL_K)
-from topo.utils.config import strtobool
 from topo.utils.nonbonded import build_nonbonded_interaction
 
 # --- physical constants / conversions -------------------------------------
@@ -86,7 +75,7 @@ RESTRAINT_K_KJ = 83680.0
 # constrained) bonds. For a few configurations -- when a newly formed native
 # contact introduces a stiff Go well -- 15 fs is too large and the dynamics diverge
 # (potential energy -> ~1e13 kJ/mol), corrupting that stage's trajectory frames
-# (see tutorials/10_csp_obrien/OBSERVATIONS.md #1). O'Brien's reference v6 avoids
+# (see tutorials/12_auto/WHY_10_FAILS.md). O'Brien's reference v6 avoids
 # this with rigid AllBonds constraints; topo keeps flexible bonds (needed to seed
 # the far-placed new residue at the A-site) and instead detects a diverging stage
 # and re-runs it with a halved timestep and proportionally more steps -- which
@@ -171,6 +160,24 @@ def write_subset_structure(full_pdb: str, L: int, out_pdb: str) -> None:
     from the seeding scheme, not from here). Residues are taken in file order so
     particle ``i`` (``0..L-1``) corresponds to native residue ``i+1``, matching
     the ``L x L`` contact subset.
+
+    Parameters
+    ----------
+    full_pdb : str
+        Full native PDB of the target protein.
+    L : int
+        Number of N-terminal residues to keep (the current nascent length).
+    out_pdb : str
+        Path of the CA-only length-``L`` PDB to write.
+
+    Returns
+    -------
+    None
+
+    Raises
+    ------
+    ValueError
+        If ``full_pdb`` has fewer than ``L`` CA atoms.
     """
     import MDAnalysis as mda  # local import: heavy, only needed for slicing
 
@@ -341,10 +348,26 @@ def add_cterm_restraint(system: mm.System, particle_index: int,
 
     ``k`` is a **per-particle** parameter (not a global) so this force can coexist
     with other ``CustomExternalForce``\\s that also call their global constant ``k``
-    -- e.g. the tunnel wall (:func:`topo.translation.ribosome.add_tunnel_wall`). Two
+    -- e.g. the tunnel wall (:func:`topo.csp.ribosome.add_tunnel_wall`). Two
     forces sharing a global parameter name with different default values is an
     OpenMM error; per-particle ``k`` avoids the clash (this combination -- position
     restraint + tunnel wall in v2 -- is what :mod:`topo.csp` uses).
+
+    Parameters
+    ----------
+    system : openmm.System
+        The System to add the restraint force to (modified in place).
+    particle_index : int
+        Index of the restrained particle (the current C-terminus, ``L-1``).
+    anchor_nm : numpy.ndarray
+        The fixed anchor position ``(x0, y0, z0)`` in nm (the P-anchor target).
+    k : float
+        Harmonic force constant in OpenMM units (kJ/mol/nm^2).
+
+    Returns
+    -------
+    openmm.Force
+        The added ``CustomExternalForce`` restraint.
     """
     restraint = mm.CustomExternalForce("k*((x-x0)^2+(y-y0)^2+(z-z0)^2)")
     for p in ("k", "x0", "y0", "z0"):
@@ -360,7 +383,21 @@ def add_cterm_restraint(system: mm.System, particle_index: int,
 # PDB writing helper
 # --------------------------------------------------------------------------
 def _write_pdb(topology, positions_nm: np.ndarray, path: str) -> None:
-    """Write a PDB from a topology and an ``(N, 3)`` nm coordinate array."""
+    """Write a PDB from a topology and an ``(N, 3)`` nm coordinate array.
+
+    Parameters
+    ----------
+    topology : openmm.app.Topology
+        The topology describing the atoms to write.
+    positions_nm : numpy.ndarray
+        An ``(N, 3)`` array of coordinates in nm.
+    path : str
+        Output PDB path.
+
+    Returns
+    -------
+    None
+    """
     coords = [mm.Vec3(float(x), float(y), float(z)) for x, y, z in positions_nm] * unit.nanometer
     with open(path, "w") as fh:
         mm.app.PDBFile.writeFile(topology, coords, fh)
@@ -377,6 +414,21 @@ class NascentDCDReporter:
     """
 
     def __init__(self, file, reportInterval, nascent_topology, n_keep, append=False):
+        """Open the output DCD and store the reporting settings.
+
+        Parameters
+        ----------
+        file : str
+            Path of the DCD trajectory to write.
+        reportInterval : int
+            Number of integration steps between written frames.
+        nascent_topology : openmm.app.Topology
+            The ``n_keep``-atom (nascent-only) topology; sets the DCD atom count.
+        n_keep : int
+            Number of leading atoms (the nascent chain) to write each frame.
+        append : bool, optional
+            If True, open the file for appending instead of truncating.
+        """
         self._reportInterval = reportInterval
         self._topology = nascent_topology
         self._n = n_keep
@@ -385,11 +437,40 @@ class NascentDCDReporter:
         self._dcd = None
 
     def describeNextReport(self, simulation):
+        """Tell the simulation when and what this reporter needs next.
+
+        Parameters
+        ----------
+        simulation : openmm.app.Simulation
+            The running simulation (queried for the current step).
+
+        Returns
+        -------
+        dict
+            ``{'steps', 'periodic', 'include'}`` -- steps until the next report,
+            no PBC, positions only.
+        """
         steps = self._reportInterval - simulation.currentStep % self._reportInterval
         # No PBC in these runs; positions only.
         return {"steps": steps, "periodic": False, "include": ["positions"]}
 
     def report(self, simulation, state):
+        """Write one frame of the first ``n_keep`` atoms to the DCD.
+
+        Lazily creates the underlying :class:`openmm.app.DCDFile` on the first
+        call, then writes the sliced (nascent-only) positions.
+
+        Parameters
+        ----------
+        simulation : openmm.app.Simulation
+            The running simulation (supplies the integrator / step info).
+        state : openmm.State
+            The current state (source of the positions).
+
+        Returns
+        -------
+        None
+        """
         if self._dcd is None:
             self._dcd = mm.app.DCDFile(
                 self._out, self._topology, simulation.integrator.getStepSize(),
@@ -398,6 +479,7 @@ class NascentDCDReporter:
         self._dcd.writeModel(positions)
 
     def __del__(self):
+        """Close the output file handle when the reporter is garbage-collected."""
         try:
             self._out.close()
         except Exception:
@@ -411,6 +493,18 @@ def _dump_topology_psf(cgModel, path: str) -> None:
     lists, so it cannot describe the v2 system. parmed reads masses/bonds straight
     from the OpenMM topology + System instead (charges default to 0 in the PSF --
     cosmetic; the real electrostatics live in the Yukawa force).
+
+    Parameters
+    ----------
+    cgModel : topo.core.system.system
+        The built (nascent + ribosome) model providing ``.topology`` and
+        ``.system``.
+    path : str
+        Output PSF path.
+
+    Returns
+    -------
+    None
     """
     import parmed as pmd
     pmd.openmm.load_topology(cgModel.topology, system=cgModel.system).save(
@@ -424,6 +518,23 @@ def _finalize_nascent(cfg, ctx, nascent_topology, n_keep: int,
     Like :func:`topo.engine.finalize_simulation` but the written ``_final.pdb`` is
     only the first ``n_keep`` (nascent) atoms -- the rigid ribosome is dropped. The
     saved checkpoint still holds the **full** system (needed for a correct restart).
+
+    Parameters
+    ----------
+    cfg : topo.SimulationConfig
+        The per-length config (supplies output paths and the runinfo path).
+    ctx : topo.engine.SimulationContext
+        The active simulation context (simulation, checkpoint, runinfo paths).
+    nascent_topology : openmm.app.Topology
+        The ``n_keep``-atom nascent-only topology for the written ``_final.pdb``.
+    n_keep : int
+        Number of leading (nascent) atoms to keep in the final structure.
+    start_epoch : float
+        Wall-clock start time (``time.time()``) for the elapsed-time report.
+
+    Returns
+    -------
+    None
     """
     sim = ctx.simulation
     sim.saveCheckpoint(ctx.checkpoint)
@@ -461,10 +572,10 @@ class ElongationParams:
     restraint_k: float = RESTRAINT_K_KJ   # kJ/mol/nm^2 (= 200 kcal/mol/A^2)
     buffer_nm: float = 0.4
     minimize: bool = True
-    # Build step v2: append the truncated ribosome as rigid (mass-0) scenery and
-    # wire the ribosome<->nascent excluded-volume + electrostatics. Default off
-    # (v1 = nascent chain only); enable with `rigid_ribosome = yes` in the INI.
-    rigid_ribosome: bool = False
+    # NOTE: whether to append the truncated ribosome as rigid (mass-0) scenery is no
+    # longer a flag here -- the CSP runner always loads the supplied ribosome PDB as
+    # rigid scenery (passed to run_length via its `ribo` argument). run_length itself
+    # keys off that `ribo` argument, not a field.
     # How far into the tunnel (+x) from the P-anchor *bead* to hold the
     # C-terminus (nm). The P-anchor is the PtR residue-76 R bead, so in v2 a
     # zero offset would restrain the C-terminus on top of that ribosome bead --
@@ -481,18 +592,22 @@ class ElongationParams:
     trna_tether: bool = True
     # v2: O'Brien's one-sided planar tunnel wall on the nascent chain -- keeps beads
     # at x >= tunnel_wall_x0, so the chain can only extrude forward (+x, toward the
-    # exit) and cannot fold back past the synthesis point into the ribosome interior.
-    # x0_nm (nm) is the C-terminal-AA addition plane (the PTC / P-site where each new
-    # residue is placed and tethered) ~ P-anchor x + tether bond length ~ 1.05 nm;
-    # k in kJ/mol/nm^2. Applied throughout synthesis and the post-elongation phase.
+    # exit) and cannot fold back past the synthesis point into the truncated-ribosome
+    # void below the PTC. Applied throughout synthesis + post-phase. Neither the plane
+    # nor the stiffness is a user/INI knob: x0_nm is **auto-derived from the ribosome
+    # structure** by the CSP runner (the lower / P-site C-terminus hold plane =
+    # min(P,A anchor x) + ptc_offset) so it can never go stale when the structure
+    # changes (left None here; the runner fills it in before run_length), and
+    # tunnel_wall_k is a **fixed model constant** (O'Brien's 20 kcal/mol/A^2). Only the
+    # `tunnel_wall` on/off toggle is exposed.
     tunnel_wall: bool = True
-    tunnel_wall_x0_nm: float = TUNNEL_WALL_X0_NM
+    tunnel_wall_x0_nm: Optional[float] = None
     tunnel_wall_k: float = TUNNEL_WALL_K
-    # v2 output: write only the nascent chain to the trajectory / PSF / final
-    # structure (the rigid ribosome is static, so writing it every frame wastes
-    # storage). The checkpoint still holds the full system. No effect in v1 (which
-    # is already nascent-only). Set False to write the full system in v2.
-    nascent_only_output: bool = True
+    # Note: when a ribosome is present the output is **always nascent-only** -- only the
+    # nascent chain is written to the trajectory / PSF / final structure (the rigid
+    # ribosome is static, so writing it every frame would waste storage; the checkpoint
+    # still holds the full system, and the movie overlays the ribosome separately). This
+    # is the default CSP behavior and is no longer a flag (keyed off `ribo is not None`).
     # Post-elongation phase (runs after the chain reaches its final length, for
     # post_elongation_steps steps; 0 = skip). 'ejection' releases the C-terminus
     # tether and lets the protein move (-> 'ejection/'); 'stallation' keeps the
@@ -509,6 +624,23 @@ def _make_cfg(out_dir: Path, sub_pdb: str, seed_pdb: str,
     this mirrors a single ``topo-mdrun`` invocation: a constant-temperature
     production run of ``n_steps`` at ``ref_t``. The contact matrices are injected
     at build time (not via this config), so ``domain_def`` is left unset here.
+
+    Parameters
+    ----------
+    out_dir : pathlib.Path
+        Output directory for this length's run.
+    sub_pdb : str
+        Length-``L`` native CA PDB (the model's ``pdb_file``).
+    seed_pdb : str or None
+        Seed-coordinate PDB fed via ``init_position`` (v1); ``None`` in v2 where
+        seed coordinates are set directly on ``built.positions``.
+    params : ElongationParams
+        Shared per-length run parameters (steps, dt, temperature, device, ...).
+
+    Returns
+    -------
+    topo.SimulationConfig
+        The configured per-length simulation config.
     """
     cfg = topo.SimulationConfig()
     cfg.md_steps = params.n_steps
@@ -551,7 +683,7 @@ def run_length(L: int, *, full_pdb: str, R_full: np.ndarray, eps_full: np.ndarra
     Used both for an elongation step and for the post-synthesis phase (§post-
     synthesis below). When ``ribo`` is given (build step v2), the rigid ribosome is
     appended as fixed (mass-0) scenery with the ribosome<->nascent cross-interactions
-    (:func:`topo.translation.ribosome.append_ribosome`).
+    (:func:`topo.csp.ribosome.append_ribosome`).
 
     Parameters that tailor the standard elongation step into the post-synthesis
     phase:
@@ -600,13 +732,13 @@ def run_length(L: int, *, full_pdb: str, R_full: np.ndarray, eps_full: np.ndarra
                 f"prev_final has {prev_final.shape[0]} residues but L-1 = {L - 1}.")
         nascent_pos = seed_positions(prev_final, a_anchor, params.buffer_nm)
 
-    # v2 nascent-only output writes only the nascent chain to the trajectory /
-    # PSF / final structure. Capture a nascent (L-atom) topology BEFORE appending
-    # the ribosome (append mutates cgModel.topology), and write the nascent PSF now
-    # (the model's dumpTopology keys off its nascent-only per-atom lists).
-    nascent_only_v2 = ribo is not None and params.nascent_only_output
+    # With a ribosome present, output is always nascent-only: write only the nascent
+    # chain to the trajectory / PSF / final structure. Capture a nascent (L-atom)
+    # topology BEFORE appending the ribosome (append mutates cgModel.topology), and
+    # write the nascent PSF now (dumpTopology keys off its nascent-only per-atom lists).
+    nascent_only = ribo is not None
     nascent_topology = None
-    if nascent_only_v2:
+    if nascent_only:
         nascent_topology = mm.app.PDBFile(sub_pdb).topology
         cgModel.dumpTopology(str(out_dir / "traj.psf"))
 
@@ -632,6 +764,11 @@ def run_length(L: int, *, full_pdb: str, R_full: np.ndarray, eps_full: np.ndarra
     # 4b. v2 tunnel wall: keep nascent beads at x >= x0 (no leaking through the
     # truncated-ribosome cutout). Applied in elongation and post-elongation alike.
     if ribo is not None and params.tunnel_wall:
+        if params.tunnel_wall_x0_nm is None:
+            raise ValueError(
+                "tunnel_wall is on but tunnel_wall_x0_nm is unset -- it is auto-derived "
+                "from the ribosome structure by the CSP runner (run_continuous_synthesis); "
+                "set params.tunnel_wall_x0_nm before calling run_length directly.")
         add_tunnel_wall(cgModel.system, range(L),
                         x0_nm=params.tunnel_wall_x0_nm, k=params.tunnel_wall_k)
 
@@ -647,7 +784,7 @@ def run_length(L: int, *, full_pdb: str, R_full: np.ndarray, eps_full: np.ndarra
         built_positions = cgModel.positions
     else:
         cfg = _make_cfg(out_dir, sub_pdb, None, params)
-        if not nascent_only_v2:
+        if not nascent_only:
             # Full-system PSF (nascent-only PSF was already written above).
             _dump_topology_psf(cgModel, cfg.output_path(".psf"))
         built_positions = ([mm.Vec3(*r) for r in positions]) * unit.nanometer
@@ -696,7 +833,7 @@ def run_length(L: int, *, full_pdb: str, R_full: np.ndarray, eps_full: np.ndarra
             ctx.simulation.context.setVelocitiesToTemperature(cfg.ref_t)
 
         engine.attach_reporters(cfg, ctx.simulation, suffix="", total_steps=cfg.md_steps)
-        if nascent_only_v2:
+        if nascent_only:
             # Swap the full-system DCD reporter for a nascent-only one (the rigid
             # ribosome is static -- no need to write its ~thousands of beads/frame).
             ctx.simulation.reporters[1] = NascentDCDReporter(
@@ -727,7 +864,7 @@ def run_length(L: int, *, full_pdb: str, R_full: np.ndarray, eps_full: np.ndarra
     cfg.dt = base_dt
     cfg.md_steps = base_steps
 
-    if nascent_only_v2:
+    if nascent_only:
         _finalize_nascent(cfg, ctx, nascent_topology, L, start)
     else:
         engine.finalize_simulation(cfg, ctx, built.topology, start)
@@ -737,337 +874,3 @@ def run_length(L: int, *, full_pdb: str, R_full: np.ndarray, eps_full: np.ndarra
     final = mm.app.PDBFile(final_pdb).getPositions(asNumpy=True).value_in_unit(unit.nanometer)
     return np.asarray(final)[:L]
 
-
-# --------------------------------------------------------------------------
-# Elongation loop
-# --------------------------------------------------------------------------
-def run_elongation(full_pdb: str, ribosome_pdb: str, *,
-                   L0: int, L_max: Optional[int] = None,
-                   out_root: str = "synth_out",
-                   domain_def: Optional[str] = None,
-                   stride_output_file: Optional[str] = None,
-                   params: Optional[ElongationParams] = None) -> None:
-    """Run the full nascent-chain elongation loop ``L = L0 .. L_max`` (v1).
-
-    Parameters
-    ----------
-    full_pdb : str
-        Full native PDB of the target protein (the nascent chain at full length).
-    ribosome_pdb : str
-        Truncated CG ribosome PDB. Always the source of the P-/A-anchor
-        coordinates; in v2 (``params.rigid_ribosome``) it is also appended as the
-        rigid (mass-0) ribosome scenery.
-    L0 : int
-        Starting nascent-chain length (cold-start layout).
-    L_max : int, optional
-        Final length; defaults to the full residue count ``N_full``.
-    out_root : str
-        Root output directory; each length writes to ``<out_root>/L_<L>/``.
-    domain_def, stride_output_file : str, optional
-        Passed to the one-time contact precompute (n_scale / STRIDE).
-    params : ElongationParams, optional
-        Per-length run parameters (defaults to the test settings).
-    """
-    if params is None:
-        params = ElongationParams()
-    out_path = Path(out_root)
-    out_path.mkdir(parents=True, exist_ok=True)
-
-    # Anchors (fixed points from the rigid truncated ribosome).
-    p_anchor = read_anchor(ribosome_pdb, "PtR", resid=76, bead="R")
-    a_anchor = read_anchor(ribosome_pdb, "AtR", resid=76, bead="R")
-    print(f"P-anchor (PtR 76 R): {p_anchor} nm")
-    print(f"A-anchor (AtR 76 R): {a_anchor} nm")
-
-    # Where the C-terminus is held / seeded, measured into the tunnel (+x) from the
-    # P-anchor bead. The P-anchor is the PtR-76 R bead, so it must not sit on top of
-    # it (clash). Auto: 0 in v1; in v2, the tether bond length when the tRNA tether
-    # is on (the bond sets the distance), else 0.4 nm for the position restraint.
-    tether_on = params.rigid_ribosome and params.trna_tether
-    offset = params.ptc_offset_nm
-    if offset is None:
-        if tether_on:
-            offset = TRNA_TETHER_BOND_NM
-        elif params.rigid_ribosome:
-            offset = 0.4
-        else:
-            offset = 0.0
-    p_target = p_anchor + offset * TUNNEL_AXIS
-    if offset:
-        print(f"C-terminus restraint/cold-start target: P-anchor + {offset} nm "
-              f"into tunnel (+x) = {p_target} nm")
-
-    # Build step v2: load the rigid ribosome once (identical in every length).
-    ribo = None
-    if params.rigid_ribosome:
-        ribo = load_ribosome(ribosome_pdb, model="topo")
-        print(f"Rigid ribosome: {ribo.n} beads from {ribosome_pdb} "
-              f"(appended as mass-0 scenery; ribosome<->nascent forces on).")
-
-    # Build-once-subset contacts on the full native structure.
-    R_full, eps_full = precompute_contacts(full_pdb, domain_def, stride_output_file)
-    N_full = R_full.shape[0]
-    if L_max is None:
-        L_max = N_full
-    if not (1 <= L0 <= L_max <= N_full):
-        raise ValueError(f"require 1 <= L0 <= L_max <= N_full; got L0={L0}, "
-                         f"L_max={L_max}, N_full={N_full}.")
-
-    print()
-    print(f"Elongating {full_pdb}: L = {L0} .. {L_max} (N_full = {N_full}), "
-          f"{params.n_steps} steps/residue.")
-
-    prev_final: Optional[np.ndarray] = None
-    for L in range(L0, L_max + 1):
-        prev_final = run_length(
-            L, full_pdb=full_pdb, R_full=R_full, eps_full=eps_full,
-            p_anchor=p_target, a_anchor=a_anchor, prev_final=prev_final,
-            out_root=out_path, params=params, ribo=ribo)
-
-    print()
-    print(f"Done. Elongated {L0} -> {L_max}. Per-length outputs under {out_path}/")
-
-    # Post-elongation phase: once the chain reaches its final length, either release
-    # the C-terminus tether and let the protein move (ejection) or keep it tethered
-    # (stallation). Continues the same length-L_max system from the final structure.
-    if params.post_elongation_steps > 0:
-        phase = params.post_elongation.strip().lower()
-        if phase not in ("ejection", "stallation"):
-            raise ValueError(f"post_elongation must be 'ejection' or 'stallation', "
-                             f"got {params.post_elongation!r}.")
-        restrain = phase == "stallation"
-        print()
-        print(f"=== Post-elongation: {phase} (L = {L_max}, {params.post_elongation_steps} "
-              f"steps, C-terminus restraint {'ON' if restrain else 'OFF'}) "
-              f"-> {out_path / phase}/ ===")
-        run_length(
-            L_max, full_pdb=full_pdb, R_full=R_full, eps_full=eps_full,
-            p_anchor=p_target, a_anchor=a_anchor, prev_final=None,
-            out_root=out_path, params=params, ribo=ribo,
-            seed_override=prev_final, restrain=restrain, out_subdir=phase,
-            n_steps_override=params.post_elongation_steps,
-            label=f"Post-elongation: {phase} (L = {L_max})")
-        print(f"Done. {phase.capitalize()} written to {out_path / phase}/")
-
-
-# --------------------------------------------------------------------------
-# INI control file
-# --------------------------------------------------------------------------
-@dataclass
-class ElongateConfig:
-    """Parsed contents of an elongation control file (``elongate.ini``).
-
-    Bundles the run inputs (structures, the ``L0..L_max`` schedule, output
-    directory, one-time-precompute options) with the per-length
-    :class:`ElongationParams`.
-    """
-    pdb_file: str
-    ribosome: str
-    L0: int
-    L_max: Optional[int] = None
-    outdir: str = "synth_out"
-    domain_def: Optional[str] = None
-    stride_output_file: Optional[str] = None
-    params: ElongationParams = field(default_factory=ElongationParams)
-    config_file: Optional[str] = None
-
-
-def read_elongate_config(config_file: str, verbose: bool = True) -> ElongateConfig:
-    """Parse an elongation control file (INI) into an :class:`ElongateConfig`.
-
-    The file has a single ``[OPTIONS]`` section. Required keys: ``pdb_file``,
-    ``ribosome``, ``L0``. All other keys are optional and fall back to the
-    defaults in :class:`ElongationParams` / :class:`ElongateConfig`:
-
-    - ``pdb_file`` -- full native PDB of the target protein (the nascent chain).
-    - ``ribosome`` -- truncated CG ribosome PDB (source of the P-/A-anchors; rigid
-      scenery in v2).
-    - ``L0`` -- starting nascent-chain length (cold-start layout).
-    - ``L_max`` -- final length (blank -> full residue count).
-    - ``outdir`` -- root output directory (per-length subfolders ``L_<L>/``).
-    - ``domain_def`` -- domain YAML for contact ``n_scale`` (one-time precompute).
-    - ``stride_output_file`` -- precomputed STRIDE (else STRIDE runs once if on PATH).
-    - ``n_steps`` -- integration steps per residue (constant schedule).
-    - ``dt`` -- time step (ps); ``ref_t`` -- temperature (K); ``tau_t`` -- Langevin
-      friction (1/ps); ``nstout`` -- trajectory/log/checkpoint write frequency.
-    - ``device`` -- 'CPU' or 'GPU'; ``ppn`` -- CPU threads (device = CPU).
-    - ``constraints`` -- 'None' (flexible, default) or 'AllBonds' (rigid).
-    - ``restraint_k`` -- C-terminus position-restraint constant (kJ/mol/nm^2).
-    - ``buffer`` -- new-residue placement buffer beyond the A-anchor (nm).
-    - ``minimize`` -- yes/no, per-step energy minimization.
-    - ``rigid_ribosome`` -- yes/no, v2: append the rigid ribosome + its forces.
-    - ``trna_tether`` -- v2: tether the C-terminus to the P-site tRNA R bead (bond +
-      CA-CA-tRNA orienting angle, O'Brien-style) vs. a position restraint (default yes).
-    - ``tunnel_wall`` -- v2: one-sided planar wall keeping the chain at
-      ``x >= tunnel_wall_x0`` so it only extrudes forward (default yes).
-    - ``tunnel_wall_x0`` -- wall plane (nm; default ~1.05 = the C-terminal-AA
-      addition plane / PTC ~ P-anchor x + tether bond length).
-    - ``tunnel_wall_k`` -- wall force constant (kJ/mol/nm^2; default 8368 = 20 kcal/mol/A^2).
-    - ``ptc_offset`` -- hold/seed the C-terminus this far (+x) from the P-anchor bead
-      (nm); blank -> auto (0 in v1; tether bond length or 0.4 nm in v2).
-    - ``nascent_only_output`` -- v2: write only the nascent chain to the
-      trajectory/PSF/final (default yes; the rigid ribosome is static).
-    - ``post_elongation`` -- 'ejection' (release the tether) or 'stallation' (keep it);
-      runs only if ``post_elongation_steps > 0``.
-    - ``post_elongation_steps`` -- steps for the post-elongation phase (0 = skip).
-
-    Inline comments starting with ``#`` or ``;`` are ignored; underscores in
-    ``n_steps`` (e.g. ``1_000``) are allowed. Paths are resolved relative to the
-    current working directory (as for ``md.ini``).
-
-    **Units:** OpenMM defaults throughout -- length nm, time ps, energy kJ/mol,
-    temperature K, angle rad, force constants kJ/mol/nm^2.
-    """
-    def log(msg: str) -> None:
-        if verbose:
-            print(msg)
-
-    cp = configparser.ConfigParser(inline_comment_prefixes=("#", ";"))
-    if not cp.read(config_file):
-        raise FileNotFoundError(f"could not read elongation config file: {config_file!r}")
-    if "OPTIONS" not in cp:
-        raise ValueError(f"{config_file}: missing required [OPTIONS] section.")
-    o = cp["OPTIONS"]
-
-    def opt(key: str) -> Optional[str]:
-        """Return a stripped option value, or None if absent/blank."""
-        v = o.get(key, None)
-        if v is None:
-            return None
-        v = v.strip()
-        return v if v != "" else None
-
-    def req(key: str) -> str:
-        v = opt(key)
-        if v is None:
-            raise ValueError(f"{config_file}: required option '{key}' is missing or blank.")
-        return v
-
-    log(f"Reading elongation parameters from {config_file} ...")
-
-    pdb_file = req("pdb_file")
-    ribosome = req("ribosome")
-    L0 = int(req("L0"))
-    L_max = opt("L_max")
-    L_max = int(L_max) if L_max is not None else None
-    outdir = opt("outdir") or "synth_out"
-    domain_def = opt("domain_def")
-    stride_output_file = opt("stride_output_file")
-
-    # Per-length run parameters: start from defaults, override what is present.
-    p = ElongationParams()
-    if opt("n_steps") is not None:
-        p.n_steps = int(str(opt("n_steps")).replace("_", ""))
-    if opt("dt") is not None:
-        p.dt_ps = float(opt("dt"))
-    if opt("ref_t") is not None:
-        p.ref_t = float(opt("ref_t"))
-    if opt("tau_t") is not None:
-        p.tau_t = float(opt("tau_t"))
-    if opt("nstout") is not None:
-        p.nstout = int(opt("nstout"))
-    if opt("device") is not None:
-        p.device = opt("device")
-    if opt("ppn") is not None:
-        p.ppn = int(opt("ppn"))
-    # 'None' (case-insensitive) / blank -> flexible bonds (the runner default).
-    cons = opt("constraints")
-    p.constraints = None if (cons is None or cons.lower() == "none") else cons
-    if opt("restraint_k") is not None:
-        p.restraint_k = float(opt("restraint_k"))
-    if opt("buffer") is not None:
-        p.buffer_nm = float(opt("buffer"))
-    if opt("minimize") is not None:
-        p.minimize = bool(strtobool(opt("minimize")))
-    if opt("rigid_ribosome") is not None:
-        p.rigid_ribosome = bool(strtobool(opt("rigid_ribosome")))
-    if opt("trna_tether") is not None:
-        p.trna_tether = bool(strtobool(opt("trna_tether")))
-    if opt("tunnel_wall") is not None:
-        p.tunnel_wall = bool(strtobool(opt("tunnel_wall")))
-    if opt("tunnel_wall_x0") is not None:
-        p.tunnel_wall_x0_nm = float(opt("tunnel_wall_x0"))
-    if opt("tunnel_wall_k") is not None:
-        p.tunnel_wall_k = float(opt("tunnel_wall_k"))
-    if opt("ptc_offset") is not None:
-        p.ptc_offset_nm = float(opt("ptc_offset"))
-    if opt("nascent_only_output") is not None:
-        p.nascent_only_output = bool(strtobool(opt("nascent_only_output")))
-    if opt("post_elongation") is not None:
-        p.post_elongation = opt("post_elongation")
-    if opt("post_elongation_steps") is not None:
-        p.post_elongation_steps = int(str(opt("post_elongation_steps")).replace("_", ""))
-
-    log(f"  inputs: pdb_file={pdb_file}, ribosome={ribosome}")
-    log(f"  schedule: L0={L0}, L_max={L_max if L_max is not None else 'full'}, "
-        f"n_steps={p.n_steps}")
-    log(f"  ribosome forces (v2): {'on (rigid)' if p.rigid_ribosome else 'off (v1)'}"
-        + (f"; tether: {'tRNA bond+angle' if p.trna_tether else 'position restraint'}"
-           f"; tunnel wall: {('x>=%.2f nm' % p.tunnel_wall_x0_nm) if p.tunnel_wall else 'off'}"
-           f"; output: {'nascent-only' if p.nascent_only_output else 'full system'}"
-           if p.rigid_ribosome else ""))
-    log(f"  mechanics: constraints={'None (flexible)' if p.constraints is None else p.constraints}, "
-        f"restraint_k={p.restraint_k} kJ/mol/nm^2, buffer={p.buffer_nm} nm, minimize={p.minimize}")
-    if p.post_elongation_steps > 0:
-        _pe = p.post_elongation.strip().lower()
-        log(f"  post-elongation: {_pe} "
-            f"({'release tether' if _pe == 'ejection' else 'keep tether'}) "
-            f"for {p.post_elongation_steps} steps -> {_pe}/")
-    log(f"  integrator: dt={p.dt_ps} ps, ref_t={p.ref_t} K, tau_t={p.tau_t} /ps, nstout={p.nstout}")
-    log(f"  hardware/output: device={p.device}, ppn={p.ppn}, outdir={outdir}")
-
-    return ElongateConfig(pdb_file=pdb_file, ribosome=ribosome, L0=L0, L_max=L_max,
-                          outdir=outdir, domain_def=domain_def,
-                          stride_output_file=stride_output_file, params=p,
-                          config_file=config_file)
-
-
-# --------------------------------------------------------------------------
-# CLI
-# --------------------------------------------------------------------------
-def elongate(argv: Optional[List[str]] = None) -> None:
-    """Console entry point: ``topo-elongate -f elongate.ini``.
-
-    The simulation is controlled by an INI file (see :func:`read_elongate_config`).
-    ``-o`` / ``--device`` are optional overrides handy for sweeps; everything else
-    lives in the control file.
-    """
-    parser = argparse.ArgumentParser(
-        prog="topo-elongate",
-        description="Protein synthesis elongation loop (build step v1: "
-                    "nascent chain only, no ribosome forces). Grows the nascent "
-                    "chain N->C one residue per step, restraining the current "
-                    "C-terminus to the ribosome P-anchor. Controlled by an INI "
-                    "file: topo-elongate -f elongate.ini",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("-input", "-f", dest="config", type=str,
-                        help="elongation control file (INI, [OPTIONS] section).")
-    parser.add_argument("-o", "--outdir", default=None,
-                        help="override the output directory from the config file.")
-    parser.add_argument("--device", default=None, choices=["CPU", "GPU"],
-                        help="override the compute device from the config file.")
-
-    # A bare `topo-elongate` (no arguments) prints help.
-    if argv is None and len(sys.argv) == 1:
-        parser.print_help()
-        sys.exit(0)
-    args = parser.parse_args(argv)
-    if not args.config:
-        parser.error("an elongation control file is required: -f elongate.ini")
-
-    print(f"OpenMM version: {mm.__version__}")
-
-    cfg = read_elongate_config(args.config)
-    if args.outdir:
-        cfg.outdir = args.outdir
-    if args.device:
-        cfg.params.device = args.device
-
-    run_elongation(
-        cfg.pdb_file, cfg.ribosome, L0=cfg.L0, L_max=cfg.L_max, out_root=cfg.outdir,
-        domain_def=cfg.domain_def, stride_output_file=cfg.stride_output_file,
-        params=cfg.params)
-
-
-if __name__ == "__main__":
-    elongate()

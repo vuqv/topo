@@ -52,7 +52,7 @@ All paths below are relative to this directory
   mine it for the CHARMM-ingest path and any `cont_synth_ecoli.cntrl` → `csp.ini` mapping.
 - **Ribosome structure for `topo-csp`.** The reference `setup/50S_tRNA_cg_truncated.*`
   is CHARMM-format; a topo-ready CG PDB of an equivalent truncated 50S+tRNA ribosome is
-  `topo/translation/structures/4v9d_50S_PtR_5jte_AtR_model_cg_trunc.pdb` (≈ the same
+  `topo/csp/structures/4v9d_50S_PtR_5jte_AtR_model_cg_trunc.pdb` (≈ the same
   geometry). Use it for the topo run unless CHARMM ingestion of the exact `setup/` system
   is working.
 
