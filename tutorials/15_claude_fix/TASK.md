@@ -18,12 +18,13 @@ Stable continuous synthesis: (1) full length (4c5c 1→306, then P0CX28 1→106)
 - [x] **P0d** Create TASK.md + NOTES.md. — this file + NOTES.md
 
 ## Phase 1 — Definition of Done (4c5c)
-- [ ] **D0** Scaffold: inputs copied (4c5c + P0CX28); `analyze_validation.py` present;
-      raw inputs untouched. *(inputs present; need csp.ini + csp_val.ini)*
-- [ ] **D1** Configs: `csp.ini` (debug) + `csp_val.ini` (full) exist, use the fix path
-      (equil PTC geometry + AllBonds, no `=no`/`=None` pinning); banner confirms; kinetics match ref.
-- [ ] **D2** Fix active: debug run prints `optimal_ptc_targets`; seed peptide bond ≈ 3.79–3.81 Å;
-      dt-halving guard never fires. Record targets + max|PotE|.
+- [x] **D0** Scaffold: 4c5c + P0CX28 inputs present; `analyze_validation.py` present; raw inputs
+      untouched. *(P0CX28 needs its own analyze_validation.py copy for D8 — deferred to Phase 2)*
+- [x] **D1** Configs: `csp.ini` (debug, L=1→8) + `csp_val.ini` (full, L=1→306) written; both set
+      `equil_peptide_geometry=yes`+`constraints=AllBonds` (no `=no`/`=None`); banner confirms fix path;
+      kinetics (time_stage_1/2, scale_factor, mrna, trans_times) match O'Brien reference.
+- [x] **D2** Fix active (debug): optimal_ptc_targets printed (|A−P|=0.3810 nm); seed peptide bond
+      = **3.810 Å**; max|PotE| = **42.78 kJ/mol** (2.3e7× under limit); **0 dt-halving lines**.
 - [ ] **D3** Run completes: `topo-csp -f csp_val.ini` exit 0, full length 1→306.
 - [ ] **D4** Outputs: trajectory + per-residue `dwell_times.dat` under `synth_out/`.
 - [ ] **D5** Physically sane: no stage |PotE| ≳ 1e9; monotonic-ish +x egress; no collapse.
