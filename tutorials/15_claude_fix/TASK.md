@@ -59,4 +59,14 @@ Stable continuous synthesis: (1) full length (4c5c 1→306, then P0CX28 1→106)
   - [x] ✅5 10° tilt — N/A: superseded by equil-PTC seeding (seed = optimal A-target). No change.
   - NOT in scope: ribosome-traffic correction, post-only tunnel wall.
 
+## Phase 4 — Ribosome CG-coordinate fix (user direction) + force-field audit
+- [x] **R1** Confirmed inconsistency: topo R bead ≠ O'Brien C5′ (P-anchor off 3.6 Å); uniform 0.71 nm
+      radii vs O'Brien per-type. Added `load_obrien_ribosome(.cor/.psf/.prm)` + `load_ribosome_auto`.
+- [x] **R2** Re-validated 4c5c + P0CX28 on O'Brien's ribosome: D5/D6 PASS, R_g fidelity ↑ (0.96×),
+      surface penetration shallower, no leak; clash persists (weaker EV) → y-z wall confirmed needed.
+- [x] **R3** Force-field comparison `TOPO_OBrien_params_compare.md` (angles/dihedrals/electrostatics/
+      12-10-6 Gō match exactly; bond k 2× soft = latent unit bug; ribosome fixed).
+- [ ] **R4 (proposed, awaiting go-ahead)** y-z lumen tunnel-wall — a real lumen (~2–6 Å) now exists
+      with O'Brien radii; needs a curved/tabulated centerline. Targets FINAL GOAL #2 (no clash).
+
 ## Stop conditions (pause + ask): see AGENTS.md §8.

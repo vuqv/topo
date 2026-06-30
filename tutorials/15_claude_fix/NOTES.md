@@ -247,6 +247,8 @@ not a straight cylinder). → next step toward FINAL GOAL #2 (no clash) is the y
 | debug | equil-PTC + AllBonds | 1→8 | 216564650 | 42.78 | 3.810 | none | — | — | — | D1/D2 PASS (CPU) |
 | baseline full | equil-PTC + AllBonds | 1→306 | 216564650 | 1.48e3 | 3.810 | none | 2.41 (eject) / 2.87 (synth) | 1.01× | 1.06× | D3/D4/D5/D6 PASS; D5b clash+egress open |
 | P0CX28 full | equil-PTC + AllBonds | 1→106 | 216564650 | 241 | 3.810 | none | 2.29 (eject) | N/A (no ref) | R_g 1.345 nm (0.64× native) | D8: D5 PASS, wall PASS, threads −0.740, no leak; chain still in tunnel (egress N/A) |
+| 4c5c (O'Brien ribo) | equil-PTC + AllBonds | 1→306 | 216564650 | 1.54e3 | 3.810 | none | 1.71 (eject) | 1.01× | **0.96×** | corrected ribosome; D5/D6 PASS, wall+egress PASS, clash deeper (weaker EV) |
+| P0CX28 (O'Brien ribo) | equil-PTC + AllBonds | 1→106 | 216564650 | 381 | 3.810 | none | 1.74 (eject) | N/A | R_g 1.307 nm | corrected ribosome; D5/D5b PASS, no leak, threads −0.64 |
 
 ## 2026-06-30 — D8 P0CX28 (L=1→106) complete
 

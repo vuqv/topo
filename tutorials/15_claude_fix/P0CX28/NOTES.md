@@ -39,3 +39,24 @@ does NOT apply**. The deliverable is D0–D5/D5b + internal consistency (AGENTS.
 no dt-halving, correct tunnel threading with no wall leak, and a sensible (confinement-compact)
 R_g — the internal-consistency bar (D6 being N/A). The residual soft-EV clash and the
 short-chain egress behavior match the documented 4c5c findings.
+
+## 2026-06-30 — Re-validated with O'Brien's ribosome (`ribosome_obrien.cor`)
+
+Re-ran P0CX28 L=1→106 on the corrected ribosome (old run preserved as `synth_out_oldribo/`).
+**0 dt-halving.** Results: **D5 PASS** (worst 381 kJ/mol), **D5b** wall PASS + egress PASS
+(CoM 19.1→22.3 Å) + clash 1.74 Å, **internal consistency** corr(res,x) −0.64, **no leak**
+(0 beads x<0), R_g 1.307 nm. Old-vs-new (end-of-synthesis L=106):
+
+| metric | OLD ribo | NEW ribo (O'Brien) |
+|--------|----------|---------------------|
+| min center-dist | 2.81 Å | 2.50 Å |
+| min surf-gap (correct radii) | −4.29 Å | **−3.62 Å** (shallower) |
+| threading corr | −0.740 | −0.569 (weaker order) |
+| R_g | 1.345 nm | 1.299 nm (native 2.111) |
+| beads x<0 | 0 | 0 (no leak) |
+
+Same conclusion as 4c5c: O'Brien's ribosome is **more faithful** (shallower surface penetration,
+finite energy, no leak) but the residual soft-EV clash/lateral order is not resolved — confirming
+the need for an explicit y-z tunnel-wall (a real lumen, ~2–6 Å, now exists with the correct radii).
+The 106-mer remains entirely inside the ~100 Å tunnel (x 10–35 Å), so full egress is not
+observable at this length (no leak/collapse).

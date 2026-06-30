@@ -79,6 +79,20 @@ simplifications (see [`NOTES.md`](NOTES.md) for the full assessment + numbers):
 | ✅4 | ribosome L24 free loop | **Deferred** — topo's ribosome is scenery-only (no intra-ribosome FF to keep a freed loop physical); the clashes are 23S, not L24. |
 | ✅5 | 10° off-axis tilt | **N/A** — superseded by equil-PTC seeding (the seed already sits at the optimal off-axis target). |
 
+## Ribosome CG-coordinate fix (O'Brien C5′ mapping)
+
+topo originally used its own home-built CG ribosome (`ribosome_trunc.pdb`) whose **ribose (R)
+bead used a different atom than O'Brien's C5′** (P beads matched exactly; R beads differed up to
+3.6 Å, shifting the PtR:76 R **P-anchor by 3.6 Å**) and a **uniform 0.71 nm** radius for all RNA
+beads vs O'Brien's per-type Rmin/2 (R 0.523, P 0.645 nm). Tutorial 15 now loads **O'Brien's
+authentic truncated ribosome** (`ribosome_obrien.{cor,psf,prm}`) via
+`topo.csp.ribosome.load_obrien_ribosome` (his C5′ positions, per-type radii, psf charges). This
+**improves fidelity** — final R_g moves to **0.96×** the reference (from 1.06×), surface
+penetration is shallower, energies stay finite, egress stays clean — and, because the correct
+radii are smaller, it reveals a **real bead-free tunnel lumen** (~2–6 Å for x≈24–88 Å; the old
+fat beads left essentially none). See `TOPO_OBrien_params_compare.md` for the full force-field
+comparison and `NOTES.md` for the old-vs-new tables.
+
 ## The residual clash (model finding)
 
 The lone unmet strict criterion is the **2.2–2.9 Å nascent–23S interpenetration** as the
