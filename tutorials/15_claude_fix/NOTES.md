@@ -105,6 +105,54 @@ post-release dissociation, not a short-MD event. The clean-egress demo is theref
 popping out +x). Plan: demonstrate directional egress (C-term moves +x on release, no collapse/leak,
 finite energy) with `eject_demo.py`, at full length (directionality) and short length (full traverse).
 
+## 2026-06-30 — D9 §1b feature assessment (validate-first outcome)
+
+Per AGENTS.md §1b the approach is validate-first: implement features only as the baseline gap shows
+they matter, one at a time, recording before/after. The baseline already matches the reference on the
+quantitative metrics (dwell 1.01×, Rg 1.06×); the lone open gap is the residual soft-EV clash. Findings
+per feature:
+
+- **✅1 C-terminal mobility window — DEFERRED (incompatible).** Mass-0 freeze is forbidden with rigid
+  `AllBonds` (OpenMM: "a constraint cannot involve a massless particle"), and more fundamentally topo
+  extrudes by *diffusion of the whole mobile chain* (no explicit register translocation), so freezing
+  the bulk would halt extrusion and pile the chain at the PTC. Doing it O'Brien's way needs explicit
+  per-residue translocation — a mechanism topo deliberately replaced. Documented as a model-route
+  difference, not a quick mask.
+- **✅2 tRNA tether + orientation — IMPLEMENTED + measured (behind `trna_tether = yes`).** Full O'Brien
+  linkage now in `add_trna_tether`: bond N–R + harmonic angles N–R–P, N–R–PU2 + improper N–R–P–PU2
+  (periodic-harmonic) + backbone angle prev–N–R; CSP applies A-site beads in stages 1–2 and P-site in
+  stage 3. Debug A/B (L=8, `csp_tether.ini` → `synth_out_tether/`): **stable** (max|PotE| 596.8 vs 42.8
+  kJ/mol for the position spring, finite, **no dt-halving**), seed bond 3.810 Å, kinetics identical.
+  **Clash NOT reduced:** min nascent–ribosome dist 3.51 Å (tether) vs 4.08 Å (position) — the tether
+  bonds the C-terminus directly to the tRNA bead at the PTC, so it sits *closer* in, by design.
+  Geometry (L=10 Rg): tether 0.658 nm (0.88× ref) vs position 0.799 nm (1.06× ref) vs ref 0.750 —
+  both within ~15%; the tether's angles give a more compact, down-tunnel-aimed chain. → Kept as the
+  more O'Brien-faithful restraint *option*; position restraint stays the validated default (it does not
+  move the clash, so not promoted).
+- **✅3 Restrain previous AA (L−1) — IMPLEMENTED (pairs with ✅2).** In stage 1 the L−1 residue is also
+  tethered to the P-site (both ends of the new peptide bond pinned at the equilibrium PTC). Active only
+  on the tether path; validated together with ✅2 above.
+- **✅4 Ribosome L24 free loop — DEFERRED (out of scope for topo's ribosome).** topo loads the ribosome
+  as pure mass-0 *scenery with no intra-ribosome bonded FF* ("no intra-ribosome forces are ever
+  computed"). Freeing L24 42–59 (giving those beads mass) without their internal bonds/angles would let
+  them be dragged by the chain with no restoring force → unphysical. O'Brien has the full ribosome FF
+  (`combine_ribo_L24.prm`); topo deliberately omits it. Also, the observed clashes are with **23S rRNA**
+  beads, not L24, so freeing L24 would not address them. Documented as a scenery-model limitation.
+- **✅5 Placement 10° off-axis tilt — N/A (superseded).** With `equil_peptide_geometry`, the new residue
+  is seeded directly at the optimal A-site target (`seed_point = a_target`), which already encodes the
+  optimal off-axis bearing from the full O'Brien restraint solve. The legacy tilt would only apply on
+  the (unused) anchor+buffer seed path. DIFFERENCES.md itself flags it "largely superseded by optimal-PTC
+  targeting." No change made.
+
+**Net D9 conclusion.** Of the 5 selected features, only ✅2/✅3 are applicable to topo's deliberate
+simplifications; they are implemented, stable, and O'Brien-faithful but do **not** reduce the residual
+clash (and slightly tighten C-term proximity). ✅1/✅4 are incompatible with topo's diffusion-extrusion /
+scenery-only ribosome; ✅5 is superseded by equil-PTC seeding. → The residual 2.2–2.9 Å nascent–23S
+interpenetration is a **model property** (O'Brien's deliberately-soft EV at full tunnel packing), not a
+feature-fixable bug (§8 science finding): the chain otherwise meets the FINAL GOAL — full synthesis,
+finite energy, correct tunnel threading (corr −0.926), no leak through the truncation, and clean +x
+egress on release.
+
 ### Validation table (fill as runs complete)
 | Run | path | L range | scale_factor | max\|PotE\| (kJ/mol) | seed bond (Å) | dt-halving? | min NC dist (Å) | dwell ratio | Rg ratio | notes |
 |-----|------|---------|--------------|----------------------|---------------|-------------|-----------------|-------------|----------|-------|

@@ -42,13 +42,17 @@ Stable continuous synthesis: (1) full length (4c5c 1→306, then P0CX28 1→106)
 - [ ] **D8** Repeat D0–D5/D5b/D7 in `P0CX28/` (L=1→106). D6 N/A (no reference) → internal consistency.
 
 ## Phase 3 — §1b O'Brien-consistency features (VALIDATE-FIRST, one at a time)
-- [ ] **D9** After D6 baseline gap established, implement selected features only as comparison shows
-      they matter; re-validate dwell/geometry after each; record before/after in NOTES.md.
-  - [ ] ✅1 C-terminal mobility window (freeze all but last N=15 nascent residues; mass-0) — `run_length`
-  - [ ] ✅2 tRNA tether + orientation (bond + 2 angles + improper; A-site st1–2, P-site st3) — `add_trna_tether` + protocol
-  - [ ] ✅3 Restrain previous AA (L−1) at P-site; use P/PU2 sub-beads — `add_cterm_restraint`
-  - [ ] ✅4 Ribosome L24 free loop (residues 42–59 movable) — rigid-scenery build
-  - [ ] ✅5 Placement 10° off-axis tilt in seed direction — `seed_positions`
+- [x] **D9** Validate-first §1b assessment done; before/after recorded in NOTES. Baseline already
+      matches ref (dwell 1.01×, Rg 1.06×); the lone gap (clash) is a soft-EV model property.
+  - [x] ✅1 mobility window — DEFERRED: mass-0 forbidden with AllBonds + breaks topo's diffusion-extrusion
+        (needs explicit translocation). Documented model-route difference.
+  - [x] ✅2 tRNA tether + orientation — IMPLEMENTED behind `trna_tether=yes` (bond+2 angles+improper,
+        A-site st1–2/P-site st3). Stable, kinetics identical; does NOT reduce clash (tether sits closer
+        to PTC by design). Kept as O'Brien-faithful option; position restraint stays default.
+  - [x] ✅3 Restrain previous AA (L−1) at P-site in stage 1 — IMPLEMENTED (pairs with ✅2).
+  - [x] ✅4 L24 free loop — DEFERRED: topo's scenery-only ribosome has no intra-ribosome FF; clashes are
+        23S not L24. Documented scenery-model limitation.
+  - [x] ✅5 10° tilt — N/A: superseded by equil-PTC seeding (seed = optimal A-target). No change.
   - NOT in scope: ribosome-traffic correction, post-only tunnel wall.
 
 ## Stop conditions (pause + ask): see AGENTS.md §8.
