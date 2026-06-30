@@ -30,9 +30,9 @@ Stable continuous synthesis: (1) full length (4c5c 1→306, then P0CX28 1→106)
 - [x] **D4** Outputs: per-stage trajectories + `synth_out/dwell_times.dat` (306 rows) + ejection/.
 - [x] **D5** Physically sane: worst max|PotE| = 1.48e3 kJ/mol ≪ 1e12; chain threads tunnel
       (corr(residue,x)=−0.926, monotonic +x egress); no collapse into ribosome (no bead x<0).
-- [~] **D5b** Ejection: **wall not penetrated PASS** (analyzer wall bug fixed: 8.71 Å not 10.46 Å);
-      **clash + net-egress OPEN** — min NC dist 2.41 Å (eject) / 2.87 Å (synth, 6/306 res); 20k-step
-      ejection too short to show a 306-mer clearing. → addressed by §1b features + extended ejection demo.
+- [~] **D5b** Ejection: **wall PASS** (analyzer wall fixed 8.71 Å) + **egress PASS** (`eject_demo.py`
+      ejection_long: C-term +12.0 Å, CoM +22.8 Å along +x over 7.5 ns). **clash OPEN** — min 2.19 Å
+      (soft-EV grazing of 23S tunnel beads; candidate §8 model finding, see NOTES).
 - [x] **D6** Quantitative match (4c5c): in-vivo dwell ratio **1.01×**, final R_g **1.06×** (both well
       within tolerance); fix path reproduces ref ≥ as well as legacy 12/13 while being more faithful
       (rigid AllBonds, no guard). in-silico ns ratio 0.02× = 50× scale_factor (documented, scale-indep).

@@ -81,8 +81,55 @@ now PASS** (min nascent x 8.37 Å vs wall 8.71 Å, within slack).
 2. *Egress not demonstrated:* in-run ejection is only 20000 steps (~0.3 ns) — far too short for a folded
    306-mer to diffuse off; CoM-x barely moves. Need a proper extended-ejection demo for FINAL-GOAL #3.
 
+## 2026-06-30 — §1b design findings (before implementing features)
+
+**✅1 C-terminal mobility window — INCOMPATIBLE with topo's extrusion as-is (key finding).**
+OpenMM forbids any constraint involving a massless particle ("A constraint cannot involve a massless
+particle" — verified), so mass-0 freezing cannot coexist with the rigid `AllBonds` build at the
+frozen↔mobile boundary or within the frozen region. More fundamentally: **topo extrudes the chain by
+*diffusion* of the whole mobile chain** under the moving C-terminus restraint + the one-sided tunnel
+wall — there is **no explicit register translocation** (DIFFERENCES.md "same outcome, different route").
+Each new residue is seeded at the PTC and residues 1..L−1 are carried over from `prev_final`; the
+N-terminus reaches x≈109 Å only because the mobile bulk is pushed/diffuses outward over 3×306 stages.
+If the bulk is frozen, those carried-over positions never advance, so residue 1 would stay at its
+cold-start x≈6 Å forever and the chain piles up at the PTC — **freezing breaks extrusion**. To do ✅1
+O'Brien's way would also require implementing explicit per-residue register translocation of the frozen
+bulk (a substantial mechanism change topo deliberately avoided). → **✅1 deferred** as out-of-scope for
+the diffusion-extrusion path; documented as a genuine model-route difference, not a quick mask.
+
+**Egress geometry (✅ FINAL GOAL #3 scoping).** Truncated ribosome x-extent −14→112 Å; near the tunnel
+axis it reaches ≈106 Å. At L=306 the chain is *already extruded* (N-term x=141 Å, threaded, no leak);
+"C-terminus clears the ribosome" then means the whole folded 306-mer translates ~100 Å (+x) — a slow
+post-release dissociation, not a short-MD event. The clean-egress demo is therefore most meaningful at
+**short length** (the analyzer's `ejection_long/` design: a small chain traversing the tunnel and
+popping out +x). Plan: demonstrate directional egress (C-term moves +x on release, no collapse/leak,
+finite energy) with `eject_demo.py`, at full length (directionality) and short length (full traverse).
+
 ### Validation table (fill as runs complete)
 | Run | path | L range | scale_factor | max\|PotE\| (kJ/mol) | seed bond (Å) | dt-halving? | min NC dist (Å) | dwell ratio | Rg ratio | notes |
 |-----|------|---------|--------------|----------------------|---------------|-------------|-----------------|-------------|----------|-------|
 | debug | equil-PTC + AllBonds | 1→8 | 216564650 | 42.78 | 3.810 | none | — | — | — | D1/D2 PASS (CPU) |
 | baseline full | equil-PTC + AllBonds | 1→306 | 216564650 | 1.48e3 | 3.810 | none | 2.41 (eject) / 2.87 (synth) | 1.01× | 1.06× | D3/D4/D5/D6 PASS; D5b clash+egress open |
+
+## 2026-06-30 — Egress demo (`eject_demo.py`, FINAL GOAL #3)
+
+Extended free-MD ejection from the L=306 final structure (500000 steps ≈ 7.5 ns, restraint OFF,
+tunnel wall ON), → `synth_out/ejection_long/`. MD finished in 223 s on GPU.
+- **C-terminus x: 12.8 → 24.8 Å (net +12.0)** — moves OUT (+x), does not collapse back.
+- **nascent CoM-x: 59.3 → 82.1 Å (net +22.8)**, linear slope +0.014 Å/frame, 55% of steps advance.
+- min nascent–ribosome distance 2.19–2.84 Å (same soft-EV grazing).
+
+**D5b now: wall PASS + egress PASS** (analyzer uses `ejection_long/`). **Only `clash` still FAIL**
+(min 2.19 Å). FINAL GOAL status: #1 full synthesis ✅, #3 directional egress ✅, #4 no wall leak ✅;
+**#2 (no clash) is the lone open item** = the residual soft-EV interpenetration.
+
+**Clash assessment (candidate §8 model finding).** The sub-3 Å contacts are nascent residues threading
+the 23S rRNA tunnel (bead radius 7.1 Å) at 2.2–2.9 Å — O'Brien's EV is deliberately soft
+(ε = 0.000132 kcal/mol), so beads interpenetrate when other forces (folding contacts, the growing
+chain) push them, while total energy stays finite (≤1.5e3 kJ/mol). At the only length with a reference
+(L=10) ours (3.36 Å) and O'Brien (4.57 Å) are both clash-free; the sub-3 Å contacts are a *full-length
+tunnel-packing* effect. The §1b feature that could reduce it (✅1 mobility window — freeze extruded
+residues away from beads) is **incompatible with topo's diffusion-extrusion** (see above); the
+compatible features (✅2 orientation, ✅3 prev-AA, ✅4 L24, ✅5 tilt) all target the C-terminus / loop,
+not the mid-chain threading where the clash lives. → will implement the headline ✅2 to measure, then
+report the residual as a model property if unmoved.
