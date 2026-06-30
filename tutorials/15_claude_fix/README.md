@@ -93,16 +93,19 @@ radii are smaller, it reveals a **real bead-free tunnel lumen** (~2–6 Å for x
 fat beads left essentially none). See `TOPO_OBrien_params_compare.md` for the full force-field
 comparison and `NOTES.md` for the old-vs-new tables.
 
-## The residual clash (model finding)
+## NC↔ribosome excluded-volume fix — RESOLVES the clash
 
-The lone unmet strict criterion is the **2.2–2.9 Å nascent–23S interpenetration** as the
-chain threads the narrow truncated tunnel. It is a property of O'Brien's deliberately-soft
-excluded volume (ε = 0.000132 kcal/mol, bead radii ~7 Å) at *full-length* tunnel packing —
-energy stays finite and the chain otherwise respects the ribosome (threads the lumen, no leak
-through the truncation faces, clean egress). At the only length with a reference (L=10), ours
-(3.36 Å) and O'Brien (4.57 Å) are both clash-free; the sub-3 Å contacts appear only as the
-chain fully packs the tunnel. The §1b feature that could target it (mobility window) is
-incompatible with topo's extrusion route. → reported as a model property, not a bug.
+The earlier "residual clash" (nascent beads penetrating ribosome beads) traced to topo's
+**NC↔ribosome nonbonded force** being ~1000× too soft vs O'Brien's. topo used a pure `ε(σ/r)¹²`
+with an *average* combination rule; O'Brien uses the **12-10-6** form `ε[13(R/r)¹²−18(R/r)¹⁰+
+4(R/r)⁶]` with the *sum* rule `R_ij = Rmin/2_i + Rmin/2_j`. `append_ribosome` was changed to match
+(12-10-6 + sum rule + ε matched + nascent per-AA `SA..SY` Rmin/2, ribosome per-type Rmin/2), and the
+dt-halving guard was made NaN-robust for the stiffer wall. **Result (4c5c, L=306): hard clashes
+36→0, min nascent–ribosome distance 1.98→3.32 Å, extrusion x→179 Å (from 111), and D5b now passes
+clash + wall + egress.** Full analysis + numbers in
+[`TOPO_OBrien_NCribosome_nonbonded_compare.md`](TOPO_OBrien_NCribosome_nonbonded_compare.md). The
+only residual is the packed-PTC region (gap<0 for ~63/306 residues at the contact distance),
+intrinsic to the CG model (O'Brien has it too); no y-z tunnel wall was needed.
 
 ## Files
 

@@ -115,17 +115,36 @@ clash, the weak lateral confinement, and the reduced extrusion.
 | combination rule | **sum** of Rmin/2 | **average** of σ | ⚠️ **~0.6× contact** |
 | nascent per-bead radius | O'Brien Rmin/2 (mean 0.385 nm) | model `radii` (mean 0.588 nm) | ⚠️ different source/scale |
 
-## 6. Recommendation (to make NC↔ribosome match O'Brien)
+## 6. IMPLEMENTED (2026-06-30) — and it resolves the clash
 
-To reproduce O'Brien's tunnel excluded volume (and most likely resolve the clash without an ad-hoc
-y-z wall), change the `append_ribosome` NC force to:
+All four points were implemented in `append_ribosome` (`topo/csp/ribosome.py`):
 
-1. **12-10-6 form** (or at minimum the `13ε` leading coefficient + the −18/+4 tail), not pure `(σ/r)¹²`.
-2. **Sum combination rule**: `R_ij = Rmin/2_i + Rmin/2_j` (equivalently keep `½(σ_i+σ_j)` but feed
-   `σ = 2·Rmin/2` = the diameter — your "Rmin/2 = σ/2" point).
-3. **Consistent Rmin/2 for the nascent beads** — use O'Brien's per-residue Rmin/2 (from the protein
-   `.prm`) for the nascent `σ` rather than the current `model_parameters` radii, so both sides of
-   the pair use the same convention.
+1. **12-10-6 form** `_NC_126_ENERGY = "eps*(13*(R/r)^12 - 18*(R/r)^10 + 4*(R/r)^6); R=rm1+rm2"`.
+2. **Sum combination rule** `R_ij = rm1 + rm2` (per-bead `rm` = Rmin/2).
+3. **ε matched** (`RIBO_NC_EPS_KJ`, unchanged).
+4. **Nascent per-AA Rmin/2** = O'Brien's `SA..SY` (user-chosen **Option B**), table `OBRIEN_SC_RMIN2_NM`;
+   ribosome Rmin/2 already per-type via `load_obrien_ribosome`.
 
-ε and cutoffs already match, so these three changes fully align the NC↔ribosome excluded volume.
-(Verified numerically above; energies/curves reproducible from `rnc.prm` + `model_parameters`.)
+Because the stiff (correct) wall is ~1000× harder than the old soft one, chain beads the soft EV
+had let sit *inside* ribosome beads get ejected violently → NaN; the **dt-halving stability guard
+was made NaN-robust** (catches blow-ups + minimize failures, retries at halved dt, preserving the
+dwell time). Full 4c5c L=1→306 completed with **96 blow-ups auto-recovered** (201 dt-halving
+retries); worst max|PotE| = 1.9e6 kJ/mol (≪ 1e9; higher than the soft EV's 1.5e3 — the wall pushes
+harder, still finite).
+
+**Result — the clash is resolved (4c5c, full length):**
+
+| metric | SOFT-EV (pure (σ/r)¹² + avg) | NEW 12-10-6 + sum (O'Brien) |
+|--------|------------------------------|------------------------------|
+| **# residues center <3 Å (hard clash)** | 36 | **0** ✅ |
+| min nascent–ribosome center-dist | 1.98 Å | **3.32 Å** |
+| # residues inside contact (gap<0) | 267/306 | **63/306** |
+| chain x-range (extrusion) | 10..111 Å | **10..179 Å** |
+| beads x<0 (leak) | 0 | 0 |
+| **D5b ejection** (clash / wall / egress) | clash FAIL / wall OK / egress OK | **clash PASS / wall PASS / egress PASS** |
+| ejection min NC dist | 1.71 Å | **3.08 Å** |
+
+The O'Brien-consistent NC↔ribosome EV **eliminates all hard clashes (36→0)**, holds the chain off
+the bead surfaces, and **extrudes it much further down the tunnel (x→179 vs 111 Å)** — confirming
+this interaction was the root cause. **No y-z wall needed.** (Remaining gap<0 for 63 residues is the
+packed-PTC region, intrinsic to the CG model — O'Brien has it too.)
