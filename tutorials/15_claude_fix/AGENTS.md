@@ -22,12 +22,16 @@
 > A **stable** continuous-synthesis run in which:
 > 1. the protein is **synthesized successfully** to full length (4c5c: 1→306; then P0CX28: 1→106),
 >    with finite per-stage energy throughout (no blow-ups);
-> 2. the nascent chain **does not overlap / clash with any ribosome bead** at any frame;
-> 3. on tether release the chain **extrudes out through the exit tunnel** (egress along +x) and
->    fully clears the ribosome;
-> 4. it does so **without passing through the tunnel wall** of the **truncated CG ribosome** —
->    i.e. it exits via the real tunnel lumen, respecting the ribosome's excluded volume as a
->    **biological fact**, not by leaking through the truncation's open faces.
+> 2. the nascent chain **does not overlap / clash with any ribosome bead** at any frame, and
+>    **never collapses back into the ribosome** — i.e. no nascent bead reaches **`x < 0`** along
+>    the aligned exit-tunnel (+x) axis;
+> 3. on tether release the chain **extrudes out through the exit tunnel** with **axial egress
+>    (+x out the exit port)** and fully clears the ribosome;
+> 4. it does so **without passing through the tunnel wall** of the **truncated CG ribosome**.
+>    The wall is **radial (y–z)**: the chain must not leak sideways — within the tunnel x-window,
+>    no nascent bead's radial distance `r = √(y² + z²)` may cross outward past the ribosome wall
+>    beads. It exits via the real tunnel lumen, respecting the ribosome's excluded volume as a
+>    **biological fact**, not by leaking through the truncation's open shell or back-face.
 >
 > This goal supersedes "all D-boxes ticked": the D-checks (§5) are how you *verify* it.
 
@@ -219,10 +223,29 @@ Verify each — don't assume it. 4c5c first; the P0CX28 subset only after 4c5c's
 - [ ] **D4 — Outputs.** Trajectory + per-residue `dwell_times.dat` under `synth_out/`
       (mirroring the reference layout).
 - [ ] **D5 — Physically sane.** No stage |PotE| ≳ 1e9; chain threads the tunnel (monotonic-ish
-      +x egress), never collapses back into the ribosome. (`analyze_validation.py` D5 scan.)
-- [ ] **D5b — Clean ejection.** On tether release the chain diffuses out along +x and clears
-      the ribosome **without penetrating the tunnel wall** or overlapping ribosome beads
-      (energy finite throughout). Record min nascent–ribosome distance + CoM-x vs frame.
+      +x egress), never collapses back into the ribosome. **Collapse is defined geometrically:
+      NO nascent bead may reach `x < 0`** along the aligned exit-tunnel axis (the tunnel central
+      line is the +x axis; `x < 0` means a bead has gone *behind the PTC, back into the ribosome
+      body*). Check: `min nascent x` over the whole run **≥ 0**.
+- [ ] **D5b — Clean ejection (axial egress, no radial wall penetration).** On tether release the
+      chain must leave **axially** — CoM and beads advance in **+x out the exit port** (x ≈
+      `x_exit`) — and **never radially through the tunnel wall**. **The tunnel wall is defined in
+      the y–z plane**, not just by an x-plane: the wall is the ribosome beads forming the lumen
+      surface around the x-axis, so a bead *penetrates the wall* if — **while still inside the
+      tunnel x-window (`0 ≤ x ≲ x_exit`)** — its **radial distance `r = √(y² + z²)` from the
+      tunnel axis crosses outward past the ribosome wall beads / lumen radius** (i.e. it leaks
+      sideways through the truncated ribosome's open shell instead of threading out the port).
+      Verify **all three**: (a) `min nascent x ≥ 0` (no back-collapse, D5); (b) **radial check**
+      — within the tunnel x-window, no nascent bead's `r` exceeds the local ribosome-wall radius
+      (no sideways leak); (c) `min nascent–ribosome distance` ≥ bead-contact σ (no steric
+      overlap) throughout, energy finite. Record min nascent x, the radial-leak check, min
+      nascent–ribosome distance, and CoM-x vs frame.
+      > ⚠️ **`analyze_validation.py` is currently incomplete for D5b:** its wall test is
+      > **x-plane only** (`min_x ≥ x0_A`, ~line 164) and the min-distance test can *miss* a
+      > radial leak (a bead escaping past the truncated shell is *far* from all beads → looks
+      > clean). **Extend it** with the (b) radial-leak check above (per-frame max nascent `r`
+      > within the tunnel x-window vs the local ribosome-wall radius), keeping the x-plane and
+      > min-distance checks. Commit that as its own change.
 - [ ] **D6 — Quantitative match (4c5c only).** vs `../12_auto/continuous_synthesis/output/`:
       (a) total length matches; (b) per-codon dwell / total synthesis time agree within a
       stated tolerance (~2× on summed in-vivo time given stochastic FPT); (c) final geometry
