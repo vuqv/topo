@@ -12,10 +12,14 @@ scenery** and wires the two ribosome <-> nascent-chain interactions, following
    ribosome beads a dummy in-range ``id = 0`` ``addParticle`` entry (never read)
    and restrict the force to the interaction group ``{nascent}×{nascent}`` -- so
    the table stays ``L×L`` and ribosome beads are never evaluated by it.
-3. **Ribosome-NC excluded volume:** a separate ``CustomNonbondedForce`` with the
-   pure repulsion ``ε·(σ_ij/r)¹²`` (``ε = 0.000132 kcal/mol``,
-   ``σ_ij = ½(σ_i+σ_j)`` from the per-particle ``model_parameters['radii']``),
-   cutoff 2.0 nm / switch 1.8 nm, interaction group ``{nascent}×{ribosome}``.
+3. **Ribosome-NC excluded volume:** a separate ``CustomNonbondedForce`` reproducing
+   O'Brien's NC<->ribosome interaction -- the **12-10-6** form
+   ``ε[13(R/r)¹² − 18(R/r)¹⁰ + 4(R/r)⁶]`` (``ε = 0.000132 kcal/mol``) with the **sum**
+   combination rule ``R_ij = Rmin/2_i + Rmin/2_j`` (O'Brien's convention; nascent Rmin/2 =
+   per-AA ``OBRIEN_SC_RMIN2_NM``, ribosome Rmin/2 from ``load_obrien_ribosome``), cutoff
+   2.0 nm / switch 1.8 nm, interaction group ``{nascent}×{ribosome}``. (Earlier topo used a
+   pure ``ε(σ/r)¹²`` + average rule that was ~1000× too soft -- see
+   ``tutorials/15_claude_fix/TOPO_OBrien_NCribosome_nonbonded_compare.md``.)
 4. **Electrostatics:** extend the existing Yukawa force with the ribosome charges
    (rRNA phosphates −1e, charged residues ±1e) and restrict it to
    ``{nascent}×{nascent}`` + ``{nascent}×{ribosome}`` (the rigid ribosome's
@@ -63,6 +67,24 @@ _TRNA_SITE_GEOM = {
 # O'Brien improper-dihedral energy form (parse_cg_prm.py): periodic harmonic on |theta-theta0|.
 _IMPROPER_ENERGY = ("k*min(dtheta, 2*pi-dtheta)^2; dtheta = abs(theta-theta0); "
                     "pi = 3.1415926535")
+
+# O'Brien per-amino-acid sidechain-bead Rmin/2 (nm), the S<aa1> NONBONDED types from his
+# CG protein/ribosome .prm (combine_ribo_L24_Yang.prm). These are O'Brien's per-AA
+# excluded-volume radii (used for the ribosomal-protein beads). Tutorial 15 (user decision,
+# "Option B") uses them as the NASCENT-chain per-residue Rmin/2 in the NC<->ribosome
+# excluded-volume force, so both sides of every NC<->ribosome pair use O'Brien's Rmin/2
+# convention with his SUM combination rule (R_ij = Rmin/2_i + Rmin/2_j). HSD/HSE/HSP alias HIS.
+OBRIEN_SC_RMIN2_NM = {
+    "ALA": 0.2862278, "ARG": 0.3704125, "ASN": 0.3199017, "ASP": 0.3142894,
+    "CYS": 0.3030648, "GLN": 0.3423509, "GLU": 0.3367386, "GLY": 0.2525540,
+    "HIS": 0.3423509, "ILE": 0.3423509, "LEU": 0.3423509, "LYS": 0.3535755,
+    "MET": 0.3423509, "PHE": 0.3535755, "PRO": 0.3086771, "SER": 0.2918401,
+    "THR": 0.3142894, "TRP": 0.3816371, "TYR": 0.3591879, "VAL": 0.3311263,
+    "HSD": 0.3423509, "HSE": 0.3423509, "HSP": 0.3423509,
+}
+# O'Brien's 12-10-6 Go/excluded-volume leading coefficients (U = eps[13(R/r)^12 -
+# 18(R/r)^10 + 4(R/r)^6]); well minimum -eps at r=R. Same form parse_cg_prm.py emits.
+_NC_126_ENERGY = ("eps*(13*(R/r)^12 - 18*(R/r)^10 + 4*(R/r)^6); R = rm1 + rm2")
 
 # Planar tunnel wall (O'Brien): a one-sided restraint that keeps the nascent chain
 # at x >= x0, so it can only extrude *forward* (+x, toward the exit) and cannot move
@@ -357,13 +379,26 @@ def append_ribosome(nascent_model, ribo: Ribosome) -> Tuple[List[int], List[int]
     yf.addInteractionGroup(nascent_idx, nascent_idx)
     yf.addInteractionGroup(nascent_idx, ribo_idx)
 
-    # 4. Ribosome-NC excluded volume: pure (sigma/r)^12, nascent x ribosome only.
-    nc = mm.CustomNonbondedForce("eps*(sigma/r)^12; sigma=0.5*(sigma1+sigma2)")
+    # 4. Ribosome-NC excluded volume, O'Brien-consistent (nascent x ribosome only).
+    #    Reproduces O'Brien's continuous_synthesis_v6 NC<->ribosome interaction (the rnc.xml
+    #    CustomNonbondedForce): the 12-10-6 form U = eps[13(R/r)^12 - 18(R/r)^10 + 4(R/r)^6]
+    #    with the SUM combination rule R_ij = Rmin/2_i + Rmin/2_j (NOT the average 0.5*(s1+s2)),
+    #    same eps (RIBO_NC_EPS_KJ = 0.000132 kcal/mol). Per TOPO_OBrien_NCribosome_nonbonded_
+    #    compare.md, the old pure (sigma/r)^12 + average rule was ~1000x too soft. Nascent
+    #    per-bead Rmin/2 uses O'Brien's per-AA sidechain values (OBRIEN_SC_RMIN2_NM, "Option B");
+    #    ribosome per-bead Rmin/2 are O'Brien's per-type values (ribo.radii_nm, via
+    #    load_obrien_ribosome). Both sides are thus on O'Brien's Rmin/2 convention.
+    nc = mm.CustomNonbondedForce(_NC_126_ENERGY)
     nc.addGlobalParameter("eps", RIBO_NC_EPS_KJ)
-    nc.addPerParticleParameter("sigma")
-    for s in nascent_model.rf_sigma:          # nascent collision diameters (nm)
-        nc.addParticle((s,))
-    for s in ribo.radii_nm:                    # ribosome collision diameters (nm)
+    nc.addPerParticleParameter("rm")    # per-bead Rmin/2 (nm); pair R = rm1 + rm2
+    nascent_atoms = list(topology.atoms())[:L]   # nascent CA beads (ribosome not appended yet)
+    for atom in nascent_atoms:                    # nascent: O'Brien per-AA sidechain Rmin/2 (nm)
+        rn = atom.residue.name
+        if rn not in OBRIEN_SC_RMIN2_NM:
+            raise ValueError(f"NC-ribosome EV: residue {rn!r} has no O'Brien Rmin/2 "
+                             f"(OBRIEN_SC_RMIN2_NM); cannot set the nascent excluded-volume radius.")
+        nc.addParticle((OBRIEN_SC_RMIN2_NM[rn],))
+    for s in ribo.radii_nm:                       # ribosome: O'Brien per-type Rmin/2 (nm)
         nc.addParticle((s,))
     nc.setNonbondedMethod(mm.CustomNonbondedForce.CutoffNonPeriodic)
     nc.setUseSwitchingFunction(True)

@@ -1003,35 +1003,54 @@ def run_length(L: int, *, full_pdb: str, R_full: np.ndarray, eps_full: np.ndarra
                   f"steps (identical dwell time; attempt {attempt + 1}/"
                   f"{STABILITY_MAX_ATTEMPTS}).")
         ctx = engine.setup_simulation(cfg, built)
+        diverged = False
+        max_pe = 0.0
         if params.minimize:
             if attempt == 0:
                 print("Minimizing seeded structure (relax placement / new bond)...")
-            ctx.simulation.minimizeEnergy()
-            # Re-draw velocities for the relaxed structure.
-            ctx.simulation.context.setVelocitiesToTemperature(cfg.ref_t)
-
-        engine.attach_reporters(cfg, ctx.simulation, suffix="", total_steps=cfg.md_steps)
-        if nascent_only:
-            # Swap the full-system DCD reporter for a nascent-only one (the rigid
-            # ribosome is static -- no need to write its ~thousands of beads/frame).
-            ctx.simulation.reporters[1] = NascentDCDReporter(
-                cfg.output_path(".dcd"), cfg.nstxout, nascent_topology, L)
-
-        # Step in chunks so a divergence is caught (and the stage aborted) mid-run.
-        max_pe = 0.0
-        chunk = max(cfg.nstxout, cfg.md_steps // 20, 1)
-        done = 0
-        diverged = False
-        while done < cfg.md_steps:
-            n = min(chunk, cfg.md_steps - done)
-            ctx.simulation.step(n)
-            done += n
-            pe = abs(ctx.simulation.context.getState(getEnergy=True).getPotentialEnergy(
-                ).value_in_unit(unit.kilojoule_per_mole))
-            max_pe = max(max_pe, pe)
-            if not math.isfinite(pe) or pe > STABILITY_POTE_LIMIT_KJ:
+            try:
+                ctx.simulation.minimizeEnergy()
+                # Re-draw velocities for the relaxed structure.
+                ctx.simulation.context.setVelocitiesToTemperature(cfg.ref_t)
+            except Exception as exc:
+                # A NaN during minimization (e.g. a bead seeded deep inside the stiff
+                # O'Brien ribosome 12-10-6 wall) -> treat as divergence and retry with a
+                # halved timestep (the seeded geometry is the same; smaller dt + more steps
+                # lets the wall push the bead out without overshooting).
+                print(f"[stability] minimization failed ({type(exc).__name__}: "
+                      f"{str(exc).splitlines()[0][:80]}); treating as divergence.")
                 diverged = True
-                break
+
+        if not diverged:
+            engine.attach_reporters(cfg, ctx.simulation, suffix="", total_steps=cfg.md_steps)
+            if nascent_only:
+                # Swap the full-system DCD reporter for a nascent-only one (the rigid
+                # ribosome is static -- no need to write its ~thousands of beads/frame).
+                ctx.simulation.reporters[1] = NascentDCDReporter(
+                    cfg.output_path(".dcd"), cfg.nstxout, nascent_topology, L)
+
+            # Step in chunks so a divergence is caught (and the stage aborted) mid-run.
+            chunk = max(cfg.nstxout, cfg.md_steps // 20, 1)
+            done = 0
+            while done < cfg.md_steps:
+                n = min(chunk, cfg.md_steps - done)
+                try:
+                    ctx.simulation.step(n)
+                except Exception as exc:
+                    # OpenMM raises "Particle coordinate is NaN" when a stage blows up
+                    # outright (stiff EV + 15 fs). Catch it so the dt-halving guard can
+                    # retry instead of crashing the whole synthesis.
+                    print(f"[stability] integration blew up ({type(exc).__name__}: "
+                          f"{str(exc).splitlines()[0][:80]}).")
+                    diverged = True
+                    break
+                done += n
+                pe = abs(ctx.simulation.context.getState(getEnergy=True).getPotentialEnergy(
+                    ).value_in_unit(unit.kilojoule_per_mole))
+                max_pe = max(max_pe, pe)
+                if not math.isfinite(pe) or pe > STABILITY_POTE_LIMIT_KJ:
+                    diverged = True
+                    break
         if not diverged:
             break
     else:
