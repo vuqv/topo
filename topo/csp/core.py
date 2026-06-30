@@ -842,6 +842,8 @@ def run_length(L: int, *, full_pdb: str, R_full: np.ndarray, eps_full: np.ndarra
                out_subdir: Optional[str] = None,
                n_steps_override: Optional[int] = None,
                seed_point: Optional[np.ndarray] = None,
+               tether_segid: str = "PtR",
+               tether_prev_segid: Optional[str] = None,
                label: Optional[str] = None) -> np.ndarray:
     """Build, seed, (restrain,) minimize and run one length-``L`` system.
 
@@ -922,8 +924,18 @@ def run_length(L: int, *, full_pdb: str, R_full: np.ndarray, eps_full: np.ndarra
     # generic harmonic position restraint of residue L to the P-target point.
     if restrain:
         if ribo is not None and params.trna_tether:
+            # O'Brien tRNA tether for the current C-terminus (residue L) to this
+            # stage's site (A-site stages 1-2, P-site stage 3): bond + 2 orienting
+            # angles + improper + a backbone angle aiming the chain down the tunnel.
             prev_index = (L - 2) if L >= 2 else None
-            add_trna_tether(cgModel, L - 1, prev_index, ribo, L)
+            add_trna_tether(cgModel, L - 1, prev_index, ribo, L, segid=tether_segid)
+            # Optionally also tether the previous residue L-1 to its site (the P-site
+            # in O'Brien stage 1, where L sits at A and L-1 rests at P) -- pins both
+            # ends of the new peptide bond at the equilibrium-PTC geometry (feature 3).
+            if tether_prev_segid is not None and L >= 2:
+                pprev_index = (L - 3) if L >= 3 else None
+                add_trna_tether(cgModel, L - 2, pprev_index, ribo, L,
+                                segid=tether_prev_segid)
         else:
             add_cterm_restraint(cgModel.system, L - 1, p_anchor, params.restraint_k)
 

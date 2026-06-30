@@ -49,6 +49,20 @@ RIBO_NC_EPS_KJ = 0.000132 * 4.184
 #   angle  CA(L-1) -- CA(L) -- R       double-Gaussian Ep (TOPO backbone-angle form)
 TRNA_TETHER_BOND_NM = 0.476
 TRNA_TETHER_BOND_K = 83680.0   # kJ/mol/nm^2 (= 200 kcal/mol/A^2)
+# O'Brien orienting-restraint force constants (continuous_synthesis_v6.py):
+#   harmonic angle   k = 25 kcal/mol/rad^2,  improper k = 25 kcal/mol/rad^2.
+TRNA_TETHER_ANGLE_K = 25.0 * 4.184      # kJ/mol/rad^2 (= 104.6)
+TRNA_TETHER_IMPROPER_K = 25.0 * 4.184   # kJ/mol/rad^2
+# Per-site resting geometry of the peptidyl-/aminoacyl-tRNA tether (O'Brien), tuple
+#   (bond N--R nm, angle N-R-P deg, angle N-R-PU2 deg, improper N-R-P-PU2 deg).
+# topo bead names: R == tRNA:76 R, P == O'Brien's P (R-1), BR2 == O'Brien's PU2 (R+2).
+_TRNA_SITE_GEOM = {
+    "AtR": (0.427, 106.0, 127.0, 128.0),    # A-site (aminoacyl-tRNA): stages 1-2
+    "PtR": (0.476, 117.0, 130.0, -161.0),   # P-site (peptidyl-tRNA):  stage 3 / prev-AA
+}
+# O'Brien improper-dihedral energy form (parse_cg_prm.py): periodic harmonic on |theta-theta0|.
+_IMPROPER_ENERGY = ("k*min(dtheta, 2*pi-dtheta)^2; dtheta = abs(theta-theta0); "
+                    "pi = 3.1415926535")
 
 # Planar tunnel wall (O'Brien): a one-sided restraint that keeps the nascent chain
 # at x >= x0, so it can only extrude *forward* (+x, toward the exit) and cannot move
@@ -282,45 +296,48 @@ def bead_system_index(ribo: Ribosome, L_nascent: int, segid: str,
 
 def add_trna_tether(nascent_model, cterm_index: int, prev_index,
                     ribo: Ribosome, L_nascent: int,
-                    segid: str = "PtR", resid: int = 76,
-                    bond_length_nm: float = TRNA_TETHER_BOND_NM,
-                    bond_k: float = TRNA_TETHER_BOND_K) -> None:
-    """Tether the nascent C-terminus to the P-site tRNA, O'Brien-style.
+                    segid: str = "PtR", resid: int = 76) -> None:
+    """Tether a nascent residue to a tRNA, the full O'Brien orienting way.
 
-    Replaces the generic position restraint with the peptidyl-tRNA linkage from the
-    O'Brien continuous-synthesis protocol (P-site resting geometry):
+    Reproduces the aminoacyl-/peptidyl-tRNA linkage of ``continuous_synthesis_v6.py``
+    (``A_site_tRNA_binding`` / ``translocation_AtR``) for the resting geometry of the
+    given site (``segid``: ``"AtR"`` A-site / ``"PtR"`` P-site). For the restrained
+    residue N (= ``cterm_index``):
 
-    - **bond** ``CA(L) -- tRNA:R`` (frozen tRNA bead -> holds the C-terminus at the PTC);
-    - **orienting angle** ``CA(L-1) -- CA(L) -- tRNA:R`` (double-Gaussian backbone-angle
-      form; constrains the terminal CA--CA vector's bend to aim the chain down the tunnel).
+    - **bond** ``N -- tRNA:R``  (length/k from :data:`_TRNA_SITE_GEOM` / :data:`TRNA_TETHER_BOND_K`);
+    - **orienting angles** ``N -- R -- P`` and ``N -- R -- PU2``  (harmonic,
+      :data:`TRNA_TETHER_ANGLE_K`) -- fix the residue's bearing in the tRNA frame;
+    - **improper** ``N -- R -- P -- PU2``  (periodic-harmonic on \\|θ−θ0\\|,
+      :data:`TRNA_TETHER_IMPROPER_K`) -- fixes the out-of-plane sense;
+    - **backbone orienting angle** ``prev -- N -- R`` (double-Gaussian backbone form) --
+      aims the chain down the tunnel toward the exit.
 
-    ``prev_index`` is the CA(L-1) particle index, or None for L == 1 (the CA--CA--R
-    angle is then skipped).
+    Together (vs. the single bond + 1 angle of the old version) these reproduce
+    O'Brien's full orientation control: the chain extrudes N-first down the tunnel
+    rather than balling up at the PTC. The peptide bond ``N-1<->N`` is left in place
+    (topo keeps the always-bonded chain -- a deliberate deviation, DIFFERENCES.md).
+
+    ``prev_index`` is the CA(N-1) particle index, or None (skips the backbone angle).
+    ``P`` (O'Brien R-1) and ``PU2`` (O'Brien R+2) are resolved by topo bead name
+    (``"P"`` / ``"BR2"``); a site missing either bead skips that angle/improper.
 
     Parameters
     ----------
     nascent_model : object
-        The built nascent model whose ``.system`` receives the tether bond and
-        whose ``.gaussianAngleForce`` receives the orienting angle.
+        The built nascent model whose ``.system`` receives the tether forces and
+        whose ``.gaussianAngleForce`` receives the backbone orienting angle.
     cterm_index : int
-        System index of the nascent C-terminal CA(L) bead.
+        System index of the restrained nascent CA(N) bead.
     prev_index : int or None
-        System index of the CA(L-1) bead, or None for L == 1 (skips the angle).
+        System index of CA(N-1), or None (skips the backbone angle).
     ribo : Ribosome
-        The parsed ribosome containing the P-site tRNA bead.
+        The parsed ribosome (supplies the tRNA R/P/BR2 beads).
     L_nascent : int
-        Number of nascent particles preceding the ribosome beads (offset used to
-        resolve the tRNA R bead's system index).
+        Number of nascent particles preceding the ribosome beads (index offset).
     segid : str, optional
-        Segment id of the peptidyl-tRNA. Default is ``"PtR"``.
+        tRNA segment id: ``"AtR"`` (A-site) or ``"PtR"`` (P-site, default).
     resid : int, optional
-        Residue id of the tRNA acceptor bead. Default is ``76``.
-    bond_length_nm : float, optional
-        Equilibrium length (nm) of the CA(L)--R tether bond. Default is
-        :data:`TRNA_TETHER_BOND_NM`.
-    bond_k : float, optional
-        Force constant (kJ/mol/nm^2) of the tether bond. Default is
-        :data:`TRNA_TETHER_BOND_K`.
+        tRNA acceptor residue id. Default is ``76``.
 
     Returns
     -------
@@ -329,19 +346,45 @@ def add_trna_tether(nascent_model, cterm_index: int, prev_index,
     Raises
     ------
     ValueError
-        If the ``R`` bead for the given ``segid``/``resid`` is not found.
+        If ``segid`` is not a known tRNA site, or its ``R`` bead is not found.
     """
+    import math
+    if segid not in _TRNA_SITE_GEOM:
+        raise ValueError(f"tRNA tether: unknown site {segid!r} (expected one of "
+                         f"{sorted(_TRNA_SITE_GEOM)}).")
     system = nascent_model.system
     R_idx = bead_system_index(ribo, L_nascent, segid, resid, "R")
     if R_idx is None:
         raise ValueError(f"tRNA tether: {segid} resid {resid} R bead not found.")
+    P_idx = bead_system_index(ribo, L_nascent, segid, resid, "P")
+    U2_idx = bead_system_index(ribo, L_nascent, segid, resid, "BR2")
+    bond_nm, ang_P_deg, ang_U2_deg, imp_deg = _TRNA_SITE_GEOM[segid]
+    d2r = math.radians
 
-    # 1. bond CA(L) -- R  (bond_k in OpenMM units, kJ/mol/nm^2)
+    # 1. bond N -- R (holds the residue at the PTC at its site's resting length).
     bond = mm.HarmonicBondForce()
-    bond.addBond(int(cterm_index), R_idx, bond_length_nm, bond_k)
+    bond.addBond(int(cterm_index), R_idx, bond_nm, TRNA_TETHER_BOND_K)
     system.addForce(bond)
 
-    # 2. orienting angle CA(L-1) -- CA(L) -- R via the double-Gaussian angle force.
+    # 2. orienting harmonic angles N -- R -- P and N -- R -- PU2 (tRNA frame).
+    haf = mm.HarmonicAngleForce()
+    if P_idx is not None:
+        haf.addAngle(int(cterm_index), R_idx, P_idx, d2r(ang_P_deg), TRNA_TETHER_ANGLE_K)
+    if U2_idx is not None:
+        haf.addAngle(int(cterm_index), R_idx, U2_idx, d2r(ang_U2_deg), TRNA_TETHER_ANGLE_K)
+    if haf.getNumAngles() > 0:
+        system.addForce(haf)
+
+    # 3. improper N -- R -- P -- PU2 (out-of-plane sense; O'Brien periodic-harmonic form).
+    if P_idx is not None and U2_idx is not None:
+        imf = mm.CustomTorsionForce(_IMPROPER_ENERGY)
+        imf.addPerTorsionParameter("k")
+        imf.addPerTorsionParameter("theta0")
+        imf.addTorsion(int(cterm_index), R_idx, P_idx, U2_idx,
+                       [TRNA_TETHER_IMPROPER_K, d2r(imp_deg)])
+        system.addForce(imf)
+
+    # 4. backbone orienting angle prev -- N -- R (aims the chain down the tunnel).
     if prev_index is not None and nascent_model.gaussianAngleForce is not None:
         nascent_model.gaussianAngleForce.addAngle(int(prev_index), int(cterm_index), R_idx)
 

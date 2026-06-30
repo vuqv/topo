@@ -188,8 +188,19 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
     if params is None:
         params = CSPParams()
     ep = params.elong
-    # CSP needs the A<->P switchable position restraint: force the tRNA tether off.
-    ep.trna_tether = False
+    # Two C-terminus restraint paths (selected by ep.trna_tether, set from the INI):
+    #  - position restraint (default): a moving harmonic spring to the A/P target POINT,
+    #    switched a->a->p over the 3 stages (the validated Tutorials 12/13 path);
+    #  - O'Brien tRNA tether (trna_tether = yes): a bond + orienting angles + improper to
+    #    the A-site tRNA beads (stages 1-2) then the P-site tRNA beads (stage 3), which
+    #    reproduces O'Brien's orientation control. The A<->P switch is by tether site
+    #    (tether_segid below), so the tether supports translocation too.
+    if ep.trna_tether:
+        print("C-terminus restraint: O'Brien tRNA tether (bond + 2 angles + improper; "
+              "A-site stages 1-2, P-site stage 3).")
+    else:
+        print("C-terminus restraint: position restraint to the A/P target point "
+              "(a->a->p migration).")
 
     out_path = Path(out_root)
     out_path.mkdir(parents=True, exist_ok=True)
@@ -328,15 +339,25 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
         dwell_fh.flush()
 
         ldir = f"L_{L:03d}"
+        # Per-stage tRNA-tether site (used only when ep.trna_tether): the new residue is
+        # held at the A-site in stages 1-2 and translocated to the P-site in stage 3. At
+        # cold start (no previous residue) the first residue is held at the P-site. In
+        # stage 1 the previous residue (L-1) is additionally tethered to the P-site
+        # (feature 3) so both ends of the new peptide bond sit at the equilibrium PTC.
+        cold = prev_final is None
+        stage1_segid = "PtR" if cold else "AtR"
+        stage1_prev_segid = None if cold else "PtR"
+
         # Stage 1: deliver the new residue at the A-site (cold-start lays the
         # initial segment from the P-anchor instead) and restrain there.
-        stage1_anchor = p_target if prev_final is None else a_target
+        stage1_anchor = p_target if cold else a_target
         f1 = run_length(L, full_pdb=full_pdb, R_full=R_full, eps_full=eps_full,
                         p_anchor=stage1_anchor, a_anchor=a_anchor,
                         prev_final=prev_final, out_root=out_path, params=ep,
                         ribo=ribo, restrain=True,
                         out_subdir=f"{ldir}/stage_1", n_steps_override=s1,
-                        seed_point=seed_point,
+                        seed_point=seed_point, tether_segid=stage1_segid,
+                        tether_prev_segid=stage1_prev_segid,
                         label=f"L={L} stage 1 (peptidyl transfer) {s1} steps")
 
         # Stage 2: continue from stage 1, still held at the A-site.
@@ -345,6 +366,7 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
                         prev_final=None, seed_override=f1, out_root=out_path,
                         params=ep, ribo=ribo, restrain=True,
                         out_subdir=f"{ldir}/stage_2", n_steps_override=s2,
+                        tether_segid=stage1_segid,
                         label=f"L={L} stage 2 (translocation) {s2} steps")
 
         # Stage 3: translocate A->P (restrain the C-terminus to the P-anchor).
@@ -353,6 +375,7 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
                         prev_final=None, seed_override=f2, out_root=out_path,
                         params=ep, ribo=ribo, restrain=True,
                         out_subdir=f"{ldir}/stage_3", n_steps_override=s3,
+                        tether_segid="PtR",
                         label=f"L={L} stage 3 (tRNA binding) {s3} steps")
         prev_final = f3
 
@@ -607,6 +630,11 @@ def read_csp_config(config_file: str, verbose: bool = True) -> CSPConfig:
         ep.buffer_nm = float(opt("buffer"))
     if opt("equil_peptide_geometry") is not None:
         ep.equil_peptide_geometry = bool(strtobool(opt("equil_peptide_geometry")))
+    # C-terminus restraint mode. Default OFF = the validated position-restraint path
+    # (Tutorials 12/13/14/15 baseline). `trna_tether = yes` switches to O'Brien's full
+    # tRNA tether (bond + 2 angles + improper, A-site stages 1-2 / P-site stage 3).
+    ep.trna_tether = (bool(strtobool(opt("trna_tether")))
+                      if opt("trna_tether") is not None else False)
     if opt("minimize") is not None:
         ep.minimize = bool(strtobool(opt("minimize")))
     # rigid_ribosome is intentionally NOT read: a ribosome PDB is required, and supplying
