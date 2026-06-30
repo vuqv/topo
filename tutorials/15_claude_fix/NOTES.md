@@ -211,6 +211,36 @@ point at `ribosome_obrien.cor`. Verified: anchors now match O'Brien exactly (PtR
 → re-validating full 4c5c (and P0CX28) with the corrected ribosome; baseline runs preserved as
 `synth_out_oldribo/`.
 
+## 2026-06-30 — 4c5c re-validation with O'Brien's ribosome (old vs new)
+
+Full 4c5c L=1→306 on the corrected ribosome (`ribosome_obrien.cor`); old run preserved as
+`synth_out_oldribo/`. **0 dt-halving** lines. Comparison (end-of-synthesis L=306):
+
+| metric | OLD ribo (topo-built, 0.71 nm) | NEW ribo (O'Brien, C5′ + per-type) |
+|--------|-------------------------------|-------------------------------------|
+| worst max\|PotE\| | 1.48e3 kJ/mol | 1.54e3 kJ/mol (D5 PASS) |
+| D6 in-vivo dwell ratio | 1.01× | 1.01× (kinetics ribosome-independent) |
+| D6 final R_g (L=10) | 0.799 nm (1.06×) | **0.722 nm (0.96×)** — closer to ref 0.750 |
+| min nascent–ribo center-dist | 2.87 Å (synth) / 2.19 (eject) | 1.98 Å (synth) / **1.71** (eject) |
+| min surf-gap (vs bead radii) | −4.23 Å | **−3.40 Å** (less deep vs correct radii) |
+| threading corr(res,x) | −0.926 | −0.921 |
+| in-tunnel yz-spread (x<60) p90 | 17.6 Å | **20.7 Å** (more lateral bulge) |
+| chain x-range | 9..142 Å | 10..111 Å (less extruded) |
+| egress (eject_long) | C-term +12.0, CoM +22.8 | C-term +12.0, CoM **+22.5** (PASS) |
+
+**Interpretation.** The ribosome fix is a **net improvement in fidelity**: correct C5′ anchors +
+per-type radii → R_g agreement improves (0.96× vs 1.06×), surface-penetration is less deep
+(−3.40 vs −4.23 Å), energies finite, egress clean. BUT the **clash is not resolved and the
+lateral (y-z) bulge is worse** (p90 20.7 vs 17.6 Å; chain less extruded) — because O'Brien's
+**smaller, correct radii make the soft EV weaker**, so it provides even less lateral confinement.
+This **confirms the user's y-z-wall direction**: an explicit lateral tunnel confinement is needed.
+
+**Key enabling finding:** with O'Brien's correct (smaller) radii a **real bead-free lumen now
+exists** (grid-searched per x-slab: lumen radius ~2–6 Å for x≈24–88 Å, vs ~0–2 Å — i.e. *none* —
+with the old fat 0.71 nm beads). So a y-z lumen-confinement wall is now **geometrically feasible**
+(the lumen centerline wanders, ~(−2,−5)→(5,1)→(2,1) Å, so it needs a curved/tabulated centerline,
+not a straight cylinder). → next step toward FINAL GOAL #2 (no clash) is the y-z tunnel wall.
+
 ### Validation table (fill as runs complete)
 | Run | path | L range | scale_factor | max\|PotE\| (kJ/mol) | seed bond (Å) | dt-halving? | min NC dist (Å) | dwell ratio | Rg ratio | notes |
 |-----|------|---------|--------------|----------------------|---------------|-------------|-----------------|-------------|----------|-------|
