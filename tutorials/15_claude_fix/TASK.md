@@ -40,7 +40,10 @@ Stable continuous synthesis: (1) full length (4c5c 1→306, then P0CX28 1→106)
       `tutorials/README.md` rows 14 + 15 added.
 
 ## Phase 2 — P0CX28 (only after 4c5c D0–D7)
-- [ ] **D8** Repeat D0–D5/D5b/D7 in `P0CX28/` (L=1→106). D6 N/A (no reference) → internal consistency.
+- [x] **D8** P0CX28 L=1→106 on the claude-fix path: D2 fix active (seed 3.810 Å), D3 completes
+      (0 dt-halving), D5 PASS (worst 241 kJ/mol), D5b wall PASS, threads corr −0.740, no leak,
+      R_g 1.345 nm (0.64× native, tunnel-confined). D6 N/A (no reference). Chain still inside the
+      ~100 Å tunnel (egress not observable at 106 res). Docs: `P0CX28/NOTES.md`.
 
 ## Phase 3 — §1b O'Brien-consistency features (VALIDATE-FIRST, one at a time)
 - [x] **D9** Validate-first §1b assessment done; before/after recorded in NOTES. Baseline already

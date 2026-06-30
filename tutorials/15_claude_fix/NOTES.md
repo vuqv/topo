@@ -158,6 +158,17 @@ egress on release.
 |-----|------|---------|--------------|----------------------|---------------|-------------|-----------------|-------------|----------|-------|
 | debug | equil-PTC + AllBonds | 1→8 | 216564650 | 42.78 | 3.810 | none | — | — | — | D1/D2 PASS (CPU) |
 | baseline full | equil-PTC + AllBonds | 1→306 | 216564650 | 1.48e3 | 3.810 | none | 2.41 (eject) / 2.87 (synth) | 1.01× | 1.06× | D3/D4/D5/D6 PASS; D5b clash+egress open |
+| P0CX28 full | equil-PTC + AllBonds | 1→106 | 216564650 | 241 | 3.810 | none | 2.29 (eject) | N/A (no ref) | R_g 1.345 nm (0.64× native) | D8: D5 PASS, wall PASS, threads −0.740, no leak; chain still in tunnel (egress N/A) |
+
+## 2026-06-30 — D8 P0CX28 (L=1→106) complete
+
+Full claude-fix run on P0CX28 (106 res, strength 2.5044). **D5 PASS** (worst 241 kJ/mol), **0
+dt-halving**, seed bond 3.810 Å. **D5b wall PASS**; threads tunnel corr −0.740, **no leak** (0
+beads x<0); R_g 1.345 nm (0.64× the 2.111 nm native — tunnel-confined, more compact than native,
+as expected). D6 N/A (no O'Brien reference). Egress: the 106-mer is still entirely inside the
+~100 Å tunnel (all beads x 8.6–35.9 Å) — too short to emerge, so full clearing is not observable
+at this length (no leak/collapse). Residual 2.29 Å clash = same soft-EV model property as 4c5c.
+Details in [`P0CX28/NOTES.md`](P0CX28/NOTES.md).
 
 ## 2026-06-30 — Egress demo (`eject_demo.py`, FINAL GOAL #3)
 
