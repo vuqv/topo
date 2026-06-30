@@ -153,6 +153,37 @@ feature-fixable bug (§8 science finding): the chain otherwise meets the FINAL G
 finite energy, correct tunnel threading (corr −0.926), no leak through the truncation, and clean +x
 egress on release.
 
+## 2026-06-30 — User note "Add to revise": the y-z tunnel wall + clash re-analysis
+
+User left a note: *"No collapse to ribosome must be defined as no bead x < 0 (along the aligned
+exit tunnel). But the tunnel wall [should be] defined by y-z coordinate as well."* → the chain
+should be confined laterally (y-z), not only forward (x≥x0). Investigated thoroughly:
+
+1. **The chain leaks laterally, not only forward.** At L=306 the in-tunnel chain bulges to a
+   yz-radius of ~24 Å (p90 ~17 Å) off its centroid — nothing confines it radially (the x-wall only
+   blocks −x). This is the lateral leak the note flags.
+2. **But there is NO bead-free lumen to confine it to.** Grid-searching each x-slab for the y-z
+   point farthest from every bead σ-surface gives a max bead-free radius of only **~0.1–2.7 Å for
+   x = 8–86 Å** (a real opening appears only past x≈90 Å, the exit). The 23S rRNA beads (σ = 7.1 Å)
+   so densely fill the truncated tunnel that **no channel wider than a single chain bead exists** —
+   a lumen-confining radial wall is not geometrically realizable.
+3. **"Within σ" is normal in this CG model — not a hard clash.** Recomputed: the **O'Brien
+   reference** chain (L=10) sits at min center-distance **4.57 Å** to rRNA, itself *within* the
+   σ = 7.1 Å shell (surf gap −2.5 Å). So both models' chains live inside the soft σ-shells; that is
+   how O'Brien's deliberately-soft EV (ε = 0.000132 kcal/mol) tunnel works. The **real difference**
+   is magnitude: topo's chain relaxes ~2 Å *deeper* (min center-dist 2.2–2.9 Å vs O'Brien's 4.57 Å)
+   because topo keeps the **whole chain mobile**, so it settles into the soft beads, whereas O'Brien
+   **freezes all-but-15 C-terminal residues + explicitly translocates**, holding the chain on the
+   reference path. Energy stays finite in both (topo total ≤1.5e3 kJ/mol).
+
+**Conclusion.** The lateral confinement the note asks for is the right instinct, but (a) it cannot be
+a lumen-radial wall (no lumen exists in the CG truncated ribosome), and (b) the residual deeper
+penetration is driven by topo's whole-chain mobility vs O'Brien's frozen-window+translocation — the
+same root as the ✅1 incompatibility. Options: a pragmatic y-z *tube* wall around the exit axis
+(curbs the 24 Å lateral bulge / void-leak but cannot remove the intrinsic σ-overlap), accept it as a
+characterized CG-model property, or take on the O'Brien frozen-window + explicit-translocation
+rebuild. → surfaced to the user (§8 model question) for direction before proceeding.
+
 ### Validation table (fill as runs complete)
 | Run | path | L range | scale_factor | max\|PotE\| (kJ/mol) | seed bond (Å) | dt-halving? | min NC dist (Å) | dwell ratio | Rg ratio | notes |
 |-----|------|---------|--------------|----------------------|---------------|-------------|-----------------|-------------|----------|-------|
