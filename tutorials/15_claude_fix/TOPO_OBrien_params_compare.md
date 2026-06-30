@@ -176,6 +176,12 @@ O'Brien's CG ribosome (`combine_ribo_L24_Yang.prm` NONBONDED + `.psf`/`.cor`):
 | BR (base) | **0.534** | 0 | 0.71, 0 |
 | protein (per type) | 0.25–0.52 | ±1/0 | per-AA-type table |
 
+> **The NC↔ribosome excluded-volume *interaction* (form + combination rule), which is what
+> shapes the tunnel and gates egress, is analyzed in depth in
+> [`TOPO_OBrien_NCribosome_nonbonded_compare.md`](TOPO_OBrien_NCribosome_nonbonded_compare.md).
+> Key result: topo's pure `ε(σ/r)¹²` + average-σ rule is ~1000× softer than O'Brien's 12-10-6 +
+> sum-of-Rmin/2 rule — the mechanistic root of the residual clash. (Confirms "Rmin/2 = σ/2".)**
+
 ε (ribosome–NC excluded volume) = **0.000132 kcal/mol = 5.5×10⁻⁴ kJ/mol** in both. 🔧 **Fixed
 in tut 15**: topo had built its *own* CG ribosome whose **R (ribose) bead used a different atom
 than O'Brien's C5′** (P beads matched exactly; R beads differed mean 0.49 Å, max 3.6 Å,

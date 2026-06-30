@@ -241,6 +241,21 @@ with the old fat 0.71 nm beads). So a y-z lumen-confinement wall is now **geomet
 (the lumen centerline wanders, ~(−2,−5)→(5,1)→(2,1) Å, so it needs a curved/tabulated centerline,
 not a straight cylinder). → next step toward FINAL GOAL #2 (no clash) is the y-z tunnel wall.
 
+## 2026-06-30 — NC↔ribosome nonbonded deep-dive (critical; user-requested)
+
+Confirmed from code (see `TOPO_OBrien_NCribosome_nonbonded_compare.md`). O'Brien's NC↔ribosome
+interaction is `system.getForce(4)` = the `rnc.xml` **12-10-6** CustomNonbondedForce
+(`U=ε[13(R/r)¹²−18(R/r)¹⁰+4(R/r)⁶]`) with **R_ij = Rmin/2_i + Rmin/2_j (SUM)**. topo's
+`append_ribosome` uses a **pure `ε(σ/r)¹²`** with **σ_ij = ½(σ_i+σ_j) (AVERAGE)**. ε (5.5×10⁻⁴
+kJ/mol), cutoff (2.0 nm) and switch (1.8 nm) **match**; the **form** (13× softer + no 12-10-6
+tail) and **combination rule** (~0.6× contact distance) do not. Net: topo's NC↔ribosome repulsion
+is **~1000–3000× weaker** at clash separations (e.g. r=0.5 nm: O'Brien 5.44 vs topo 0.0020 kJ/mol)
+→ **the mechanistic root of the residual clash / weak lateral confinement / reduced extrusion**.
+**User's "Rmin/2 = σ/2" CONFIRMED**: O'Brien's tabulated Rmin/2 is a radius; topo's average rule
+only reproduces O'Brien's sum if σ = 2·Rmin/2 (diameter), but topo feeds Rmin/2 directly.
+→ This is a stronger lead than the y-z wall: fixing the NC↔ribosome EV (12-10-6 + sum rule +
+consistent nascent Rmin/2) should resolve the clash at its source.
+
 ### Validation table (fill as runs complete)
 | Run | path | L range | scale_factor | max\|PotE\| (kJ/mol) | seed bond (Å) | dt-halving? | min NC dist (Å) | dwell ratio | Rg ratio | notes |
 |-----|------|---------|--------------|----------------------|---------------|-------------|-----------------|-------------|----------|-------|
