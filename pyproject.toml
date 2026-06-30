@@ -13,6 +13,7 @@ requires-python = ">=3.9"
 # All are import-time requirements of `import topo`.
 dependencies = [
     "numpy>=1.22",
+    "scipy>=1.7",
     "openmm>=7.7",
     "parmed>=3.4",
     "MDAnalysis>=2.2",

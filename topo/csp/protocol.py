@@ -57,7 +57,8 @@ import openmm as mm
 
 from topo.csp.core import (ElongationParams, TUNNEL_AXIS,
                                        precompute_contacts, read_anchor,
-                                       run_length, TRNA_TETHER_BOND_NM)
+                                       run_length, optimal_ptc_targets,
+                                       TRNA_TETHER_BOND_NM)
 from topo.csp.ribosome import load_ribosome
 from topo.utils.config import strtobool
 from topo.csp import kinetics
@@ -199,34 +200,51 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
     print(f"P-anchor (PtR 76 R): {p_anchor} nm")
     print(f"A-anchor (AtR 76 R): {a_anchor} nm")
 
-    # Hold/seed targets, offset into the tunnel (+x) from the anchor bead so the
-    # C-terminus does not sit on top of a ribosome bead (clash). The supplied ribosome
-    # is always treated as rigid scenery, so the offset defaults to the tether bond
-    # length (override via `ptc_offset`).
-    offset = ep.ptc_offset_nm
-    if offset is None:
-        offset = TRNA_TETHER_BOND_NM
-    p_target = p_anchor + offset * TUNNEL_AXIS
-    a_target = a_anchor + offset * TUNNEL_AXIS
-
-    # Tunnel wall plane (auto-derived from the structure -- never a stale user knob):
-    # place the one-sided wall at the LOWER (deeper-in-tunnel, smaller-x) of the two
-    # C-terminus hold planes, i.e. min(P,A anchor x) + ptc_offset (the P-site, where
-    # the nascent C-terminus is tethered). This blocks the chain from slipping below
-    # the synthesis point into the void left where the 50S was truncated, while the
-    # held C-terminus still sits at (just on) the plane. Recomputed for whatever
-    # ribosome PDB is supplied, so switching structures can never leave it wrong.
-    if ep.tunnel_wall:
-        ep.tunnel_wall_x0_nm = float(min(p_anchor[0], a_anchor[0]) + offset)
-        print(f"Tunnel wall plane: x >= {ep.tunnel_wall_x0_nm:.4f} nm "
-              f"(auto: lower P/A-site C-terminus hold plane = min(P.x,A.x)+ptc_offset).")
-
     # --- rigid ribosome (always: the supplied PDB is rigid scenery) ---------
     # Loaded once; identical at every length. Providing a ribosome PDB *is* the
-    # signal to treat it as rigid -- there is no separate on/off flag.
+    # signal to treat it as rigid -- there is no separate on/off flag. Loaded here
+    # (before the targets) because the equilibrium-bond geometry needs its beads.
     ribo = load_ribosome(ribosome_pdb, model="topo")
     print(f"Rigid ribosome: {ribo.n} beads from {ribosome_pdb} "
           f"(mass-0 scenery; ribosome<->nascent forces on).")
+
+    # Hold/seed targets. Default path: offset into the tunnel (+x) from each anchor
+    # bead so the C-terminus does not sit on top of a ribosome bead (clash); offset
+    # defaults to the tether bond length (override via `ptc_offset`).
+    offset = ep.ptc_offset_nm
+    if offset is None:
+        offset = TRNA_TETHER_BOND_NM
+    seed_point: Optional[np.ndarray] = None
+    if ep.equil_peptide_geometry:
+        # Equilibrium-bond PTC geometry (tutorials/14 step 2; opt-in via the flag).
+        # Replace the far A-anchor+buffer seed / anchor-offset targets with the optimal
+        # A-site & P-site *target points* -- one peptide bond (0.381 nm) apart and clear
+        # of the ribosome excluded volume. Seeding the new residue at a_target (one
+        # equilibrium bond from the previous C-terminus, which rests at p_target) makes
+        # the always-present peptide bond start at equilibrium, so a rigid AllBonds build
+        # seeds/minimizes cleanly at 15 fs without the dt-halving guard firing.
+        a_target, p_target = optimal_ptc_targets(ribo)
+        seed_point = a_target
+        print(f"[equil_peptide_geometry] optimal PTC restraint targets "
+              f"(|A-P| = {np.linalg.norm(a_target - p_target):.4f} nm; fixed points, "
+              f"not bonds):")
+        print(f"  A-site target (new AA seed + stage-1/2 restraint): {a_target} nm")
+        print(f"  P-site target (prev AA / stage-3 restraint)      : {p_target} nm")
+    else:
+        p_target = p_anchor + offset * TUNNEL_AXIS
+        a_target = a_anchor + offset * TUNNEL_AXIS
+
+    # Tunnel wall plane (auto-derived from the structure -- never a stale user knob):
+    # place the one-sided wall at the LOWER (deeper-in-tunnel, smaller-x) C-terminus
+    # hold plane so the held C-terminus still sits at (just on) the plane while the
+    # chain cannot slip below the synthesis point into the truncated-50S void.
+    if ep.tunnel_wall:
+        if ep.equil_peptide_geometry:
+            ep.tunnel_wall_x0_nm = float(min(a_target[0], p_target[0]))
+        else:
+            ep.tunnel_wall_x0_nm = float(min(p_anchor[0], a_anchor[0]) + offset)
+        print(f"Tunnel wall plane: x >= {ep.tunnel_wall_x0_nm:.4f} nm "
+              f"(auto: lower C-terminus hold plane).")
 
     # --- build-once-subset contacts on the full native structure ------------
     R_full, eps_full = precompute_contacts(full_pdb, domain_def, stride_output_file)
@@ -318,6 +336,7 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
                         prev_final=prev_final, out_root=out_path, params=ep,
                         ribo=ribo, restrain=True,
                         out_subdir=f"{ldir}/stage_1", n_steps_override=s1,
+                        seed_point=seed_point,
                         label=f"L={L} stage 1 (peptidyl transfer) {s1} steps")
 
         # Stage 2: continue from stage 1, still held at the A-site.
@@ -586,6 +605,8 @@ def read_csp_config(config_file: str, verbose: bool = True) -> CSPConfig:
         ep.restraint_k = float(opt("restraint_k"))
     if opt("buffer") is not None:
         ep.buffer_nm = float(opt("buffer"))
+    if opt("equil_peptide_geometry") is not None:
+        ep.equil_peptide_geometry = bool(strtobool(opt("equil_peptide_geometry")))
     if opt("minimize") is not None:
         ep.minimize = bool(strtobool(opt("minimize")))
     # rigid_ribosome is intentionally NOT read: a ribosome PDB is required, and supplying

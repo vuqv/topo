@@ -56,7 +56,7 @@ from topo.core.system import system as TopoSystem
 from topo.csp.ribosome import (Ribosome, load_ribosome, append_ribosome,
                                        add_trna_tether, add_tunnel_wall,
                                        TRNA_TETHER_BOND_NM, TUNNEL_WALL_X0_NM,
-                                       TUNNEL_WALL_K)
+                                       TUNNEL_WALL_K, RIBO_NC_EPS_KJ)
 from topo.utils.nonbonded import build_nonbonded_interaction
 
 # --- physical constants / conversions -------------------------------------
@@ -85,6 +85,153 @@ RESTRAINT_K_KJ = 83680.0
 # kJ/mol, so the 1e9 limit cleanly separates "diverged" from "fine" with margin.
 STABILITY_POTE_LIMIT_KJ = 1.0e9
 STABILITY_MAX_ATTEMPTS = 6
+
+
+# --------------------------------------------------------------------------
+# Optimal PTC restraint-target geometry (step 2 -- equilibrium-bond seeding)
+# --------------------------------------------------------------------------
+# All quantities here are in OpenMM default units: length nm, energy kJ/mol, angle rad.
+# O'Brien resting-geometry restraint parameters (continuous_synthesis_v6.py), in nm:
+#   aminoacyl/peptidyl-tRNA bond lengths + the equilibrium peptide bond.
+_PTC_D_A_NM, _PTC_D_P_NM = 0.427, 0.476        # tRNA bond lengths (nm; O'Brien 4.27/4.76 A)
+_PTC_PEPTIDE_NM = 0.381                          # equilibrium peptide bond (nm; 3.81 A)
+# Orienting-angle / improper restraint force constant: O'Brien 25 kcal/mol/rad^2 in kJ/mol/rad^2.
+_PTC_ANGLE_K_KJ = 25.0 * 4.184                   # = 104.6 kJ/mol/rad^2
+# (The excluded-volume well depth is topo.csp.ribosome.RIBO_NC_EPS_KJ, kJ/mol.)
+
+
+def _ptc_bead_index(ribo, segid: str, resid: int, name: str) -> int:
+    """Index of one named ribosome bead in a :class:`Ribosome` (or raise)."""
+    for i in range(ribo.n):
+        if ribo.segids[i] == segid and ribo.resids[i] == resid and ribo.names[i] == name:
+            return i
+    raise ValueError(f"ribosome bead {segid}:{resid}@{name} not found.")
+
+
+def optimal_ptc_targets(ribo, *, aa_radius_nm: float = 0.678,
+                        n_starts: int = 60
+                        ) -> Tuple[np.ndarray, np.ndarray]:
+    """Optimal A-site / P-site C-terminus restraint **target points** (nm).
+
+    Returns ``(a_target, p_target)`` -- two **fixed points in space** (nm; NOT bonds;
+    the CSP path restrains the C-terminus to a fixed point via
+    :func:`add_cterm_restraint`) that sit exactly one peptide bond
+    (``_PTC_PEPTIDE_NM`` = 0.381 nm) apart and clear of the ribosome excluded volume.
+    Seeding the new residue at ``a_target`` while the previous residue rests at
+    ``p_target`` makes the always-present peptide bond start at its equilibrium
+    length, so a rigid ``AllBonds`` constraint seeds/minimizes cleanly at 15 fs and
+    the dt-halving stability guard is not triggered (tutorials/14 step 2).
+
+    The points are found (all in OpenMM units: nm, kJ/mol, rad) by minimizing the soft
+    O'Brien restraint energy -- the **A/P tRNA bonds** (``_PTC_D_A_NM`` / ``_PTC_D_P_NM``,
+    harmonic ``kb = RESTRAINT_K_KJ``) and orienting **angles/improper**
+    (``_PTC_ANGLE_K_KJ``; ``continuous_synthesis_v6.py``) -- plus the ribosome
+    ``eps*(sigma/r)^12`` excluded volume (``eps = RIBO_NC_EPS_KJ``,
+    ``sigma_ij = 1/2 (sigma_AA + sigma_bead)``), subject to:
+
+    - the **peptide bond** as the only **hard** distance constraint
+      (``_PTC_PEPTIDE_NM`` = 0.381 nm -- it is topo's AllBonds constraint length, so it
+      must hold exactly);
+    - an **exit-side inequality** keeping each point at ``x >= x`` of its tRNA R bead
+      (between the tRNA and the +x exit port, not buried in the ribosome); and
+    - O'Brien's two excluded-volume exclusions (new AA<->AtR:76@R, prev AA<->PtR:76@R),
+
+    over ``n_starts`` deterministic full-sphere starts. The tRNA bond lengths are soft
+    (finite-k, as in O'Brien's model), so ``|A-RA|`` / ``|P-RP|`` come out *near*
+    0.427 / 0.476 nm rather than exactly -- and the solve stays feasible even on
+    geometries where those distances cannot be met exactly together with the peptide bond.
+
+    Parameters
+    ----------
+    ribo : Ribosome
+        The parsed rigid CG ribosome (supplies the AtR/PtR 76 R/P/BR2 beads, all bead
+        coordinates and the excluded-volume radii).
+    aa_radius_nm : float, optional
+        Collision radius (nm) of the restrained amino-acid bead used in the excluded
+        volume; default 0.678 (TRP, the largest -- the tightest clash test).
+    n_starts : int, optional
+        Number of deterministic multistart initial orientations (default 60).
+
+    Returns
+    -------
+    (numpy.ndarray, numpy.ndarray)
+        ``a_target`` and ``p_target``, each a ``(3,)`` coordinate in nm.
+    """
+    from scipy.optimize import minimize  # lazy: only needed for this geometry mode
+
+    RB = ribo.coords_nm                                     # all bead coords (nm)
+    RBr = np.asarray(ribo.radii_nm)                         # bead radii (nm)
+    iRA = _ptc_bead_index(ribo, "AtR", 76, "R"); RA = RB[iRA]
+    iRP = _ptc_bead_index(ribo, "PtR", 76, "R"); RP = RB[iRP]
+    PA = RB[_ptc_bead_index(ribo, "AtR", 76, "P")]
+    PP = RB[_ptc_bead_index(ribo, "PtR", 76, "P")]
+    U2A = RB[_ptc_bead_index(ribo, "AtR", 76, "BR2")]       # topo BR2 == O'Brien PU2
+    U2P = RB[_ptc_bead_index(ribo, "PtR", 76, "BR2")]
+
+    sig = 0.5 * (aa_radius_nm + RBr)                        # pair contact dist (nm)
+    mA = np.ones(ribo.n, bool); mA[iRA] = False             # O'Brien exclusions
+    mP = np.ones(ribo.n, bool); mP[iRP] = False
+    ka, eps = _PTC_ANGLE_K_KJ, RIBO_NC_EPS_KJ               # kJ/mol/rad^2 , kJ/mol
+    kb = RESTRAINT_K_KJ                                      # tRNA bond k (kJ/mol/nm^2; O'Brien 200 kcal/mol/A^2)
+
+    def _ang(p, q, r):
+        u = p - q; v = r - q
+        return np.arccos(np.clip(u.dot(v) / np.linalg.norm(u) / np.linalg.norm(v), -1, 1))
+
+    def _dih(p, q, r, s):
+        b1, b2, b3 = q - p, r - q, s - r
+        n1, n2 = np.cross(b1, b2), np.cross(b2, b3)
+        m = np.cross(n1, b2 / np.linalg.norm(b2))
+        return np.arctan2(m.dot(n2), n1.dot(n2))
+
+    def _ev(pt, mask):                                      # excluded volume (kJ/mol)
+        d = np.linalg.norm(RB[mask] - pt, axis=1)
+        return np.sum(eps * (sig[mask] / d) ** 12)
+
+    d2r = np.deg2rad
+    # Only the peptide bond is a HARD equality constraint -- it is topo's AllBonds
+    # constraint length, so a_target/p_target MUST be exactly 0.381 nm apart or the
+    # rigid bond is seeded stretched. The two tRNA bond lengths are SOFT harmonic
+    # penalties in the objective (O'Brien's bonds are finite-k harmonic, not rigid):
+    # they pull the pair toward the PTC but give a little, so the result stays feasible
+    # even on geometries where 0.427/0.476 cannot be met exactly. Inequality
+    # constraints keep each point on the EXIT side of its tRNA R bead (x >= x_tRNA),
+    # i.e. between the tRNA and the +x exit port -- never buried back in the ribosome
+    # (the working ribosome is +x-aligned; FILES.md / tutorials/14). Without this a
+    # feasible-but-buried minimum (A behind the A-tRNA) can win on excluded volume alone.
+    cons = [{"type": "eq", "fun": lambda x: np.linalg.norm(x[:3] - x[3:]) - _PTC_PEPTIDE_NM},
+            {"type": "ineq", "fun": lambda x: x[0] - RA[0]},   # A.x >= A-tRNA.x (exit side)
+            {"type": "ineq", "fun": lambda x: x[3] - RP[0]}]   # P.x >= P-tRNA.x (exit side)
+
+    def _obj(x):                                            # kJ/mol
+        A, P = x[:3], x[3:]
+        E = kb * (np.linalg.norm(A - RA) - _PTC_D_A_NM) ** 2     # soft A-tRNA bond
+        E += kb * (np.linalg.norm(P - RP) - _PTC_D_P_NM) ** 2    # soft P-tRNA bond
+        E += ka * (_ang(A, RA, PA) - d2r(106)) ** 2 + ka * (_ang(A, RA, U2A) - d2r(127)) ** 2
+        E += ka * (_ang(P, RP, PP) - d2r(117)) ** 2 + ka * (_ang(P, RP, U2P) - d2r(130)) ** 2
+        E += ka * (_dih(A, RA, PA, U2A) - d2r(128)) ** 2 + ka * (_dih(P, RP, PP, U2P) - d2r(-161)) ** 2
+        return E + _ev(A, mA) + _ev(P, mP)
+
+    # Deterministic full-sphere (Fibonacci) multistart over the new-residue offset
+    # direction: covers out-of-plane orientations so the global minimum is found
+    # robustly and unit-invariantly (a planar ring of starts misses it and makes the
+    # result depend on the variable scale). The previous residue is seeded toward the
+    # P-tRNA. Keep the lowest-objective feasible solution.
+    best = None
+    golden = np.pi * (1.0 + 5.0 ** 0.5)
+    for t in range(n_starts):
+        z = 1.0 - 2.0 * (t + 0.5) / n_starts
+        rho = np.sqrt(max(0.0, 1.0 - z * z))
+        dirn = np.array([rho * np.cos(golden * t), rho * np.sin(golden * t), z])
+        sA = RA + _PTC_D_A_NM * dirn
+        sP = sA + _PTC_PEPTIDE_NM * (RP - sA) / np.linalg.norm(RP - sA)
+        r = minimize(_obj, np.concatenate([sA, sP]), method="SLSQP",
+                     constraints=cons, options={"maxiter": 300, "ftol": 1e-12})
+        if r.success and (best is None or r.fun < best.fun):
+            best = r
+    if best is None:
+        raise RuntimeError("optimal_ptc_targets: no feasible restraint geometry found.")
+    return best.x[:3], best.x[3:]                           # nm (already)
 
 
 # --------------------------------------------------------------------------
@@ -320,16 +467,24 @@ def cold_start_positions(L0: int, p_anchor: np.ndarray) -> np.ndarray:
 
 
 def seed_positions(prev_final: np.ndarray, a_anchor: np.ndarray,
-                   buffer_nm: float) -> np.ndarray:
+                   buffer_nm: float,
+                   seed_point: Optional[np.ndarray] = None) -> np.ndarray:
     """Seed length ``L`` from the previous final structure + the new residue.
 
     Residues ``1..L-1`` keep their coordinates from step ``L-1``'s final
-    structure (``prev_final``, shape ``(L-1, 3)`` nm); the new C-terminal residue
-    ``L`` is placed at the A-anchor offset by ``buffer_nm`` along +x (the buffer
-    clears excluded volume so the new bead does not get a huge ``(sigma/r)^12``
-    kick — DESIGN §2.5 / invariant 6). Returns an ``(L, 3)`` array in nm.
+    structure (``prev_final``, shape ``(L-1, 3)`` nm). The new C-terminal residue
+    ``L`` is placed either at ``seed_point`` directly (the equilibrium-bond A-site
+    target from :func:`optimal_ptc_targets`, when given -- so the always-present
+    peptide bond ``L-1<->L`` starts at its equilibrium length and a rigid ``AllBonds``
+    constraint seeds cleanly; tutorials/14 step 2), or at the A-anchor offset by
+    ``buffer_nm`` along +x (default; the buffer clears excluded volume so the new bead
+    does not get a huge ``(sigma/r)^12`` kick -- DESIGN §2.5 / invariant 6). Returns an
+    ``(L, 3)`` array in nm.
     """
-    new_residue = a_anchor + buffer_nm * TUNNEL_AXIS
+    if seed_point is not None:
+        new_residue = np.asarray(seed_point, dtype=float)
+    else:
+        new_residue = a_anchor + buffer_nm * TUNNEL_AXIS
     return np.vstack([prev_final, new_residue[None, :]])
 
 
@@ -571,6 +726,15 @@ class ElongationParams:
     constraints: object = None
     restraint_k: float = RESTRAINT_K_KJ   # kJ/mol/nm^2 (= 200 kcal/mol/A^2)
     buffer_nm: float = 0.4
+    # Equilibrium-bond PTC geometry (tutorials/14 step 2; opt-in). When True, the CSP
+    # runner seeds each new residue at the optimal A-site target point one peptide bond
+    # (0.381 nm) from the previous C-terminus (:func:`optimal_ptc_targets`), so the
+    # always-present peptide bond starts at its equilibrium length -- letting a rigid
+    # `constraints='AllBonds'` build seed/minimize cleanly at 15 fs without the
+    # dt-halving stability guard firing. Default False keeps the validated far-seed +
+    # flexible-bond + dt-halving behavior (Tutorials 12 & 13 unchanged). Enable with
+    # `equil_peptide_geometry = yes` + `constraints = AllBonds` in the INI.
+    equil_peptide_geometry: bool = False
     minimize: bool = True
     # NOTE: whether to append the truncated ribosome as rigid (mass-0) scenery is no
     # longer a flag here -- the CSP runner always loads the supplied ribosome PDB as
@@ -677,6 +841,7 @@ def run_length(L: int, *, full_pdb: str, R_full: np.ndarray, eps_full: np.ndarra
                restrain: bool = True,
                out_subdir: Optional[str] = None,
                n_steps_override: Optional[int] = None,
+               seed_point: Optional[np.ndarray] = None,
                label: Optional[str] = None) -> np.ndarray:
     """Build, seed, (restrain,) minimize and run one length-``L`` system.
 
@@ -730,7 +895,8 @@ def run_length(L: int, *, full_pdb: str, R_full: np.ndarray, eps_full: np.ndarra
         if prev_final.shape[0] != L - 1:
             raise ValueError(
                 f"prev_final has {prev_final.shape[0]} residues but L-1 = {L - 1}.")
-        nascent_pos = seed_positions(prev_final, a_anchor, params.buffer_nm)
+        nascent_pos = seed_positions(prev_final, a_anchor, params.buffer_nm,
+                                     seed_point=seed_point)
 
     # With a ribosome present, output is always nascent-only: write only the nascent
     # chain to the trajectory / PSF / final structure. Capture a nascent (L-atom)
