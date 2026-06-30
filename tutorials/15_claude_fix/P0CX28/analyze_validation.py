@@ -24,19 +24,14 @@ warnings.filterwarnings("ignore")
 
 HERE = Path(__file__).resolve().parent
 OUT = HERE / "synth_out"
-RIBO_PDB = HERE / "ribosome_trunc.pdb"
-from topo.csp.core import read_anchor, optimal_ptc_targets
-from topo.csp.ribosome import load_ribosome, TRNA_TETHER_BOND_NM
-
+# O'Brien's authentic truncated CG ribosome (.cor + sibling .psf/.prm), as the run used.
+from topo.csp.core import optimal_ptc_targets
+from topo.csp.ribosome import load_ribosome_auto, anchor_coord
+RIBO = load_ribosome_auto(str(HERE / "ribosome_obrien.cor"))
+RIBO_COORDS_A = RIBO.coords_nm * 10.0
 # Tunnel wall plane: same equil-PTC rule the runner uses (min of the two PTC target x).
-_pa = read_anchor(str(RIBO_PDB), "PtR", 76, "R")
-_aa = read_anchor(str(RIBO_PDB), "AtR", 76, "R")
-try:
-    _ribo = load_ribosome(str(RIBO_PDB), model="topo")
-    _at, _pt = optimal_ptc_targets(_ribo)
-    TUNNEL_WALL_X0_NM = float(min(_at[0], _pt[0]))
-except Exception:
-    TUNNEL_WALL_X0_NM = float(min(_pa[0], _aa[0]) + TRNA_TETHER_BOND_NM)
+_at, _pt = optimal_ptc_targets(RIBO)
+TUNNEL_WALL_X0_NM = float(min(_at[0], _pt[0]))
 BLOWUP_LIMIT = 1.0e12
 
 
@@ -97,7 +92,7 @@ def analyze_ejection():
     if not dcd.is_file():
         print("  no ejection trajectory found -- SKIP")
         return None
-    ribo = read_pdb_coords(RIBO_PDB, names=None)
+    ribo = RIBO_COORDS_A
     u = mda.Universe(str(psf), str(dcd))
     nas = u.select_atoms("all")
     com_x, min_x, min_d = [], [], []
@@ -134,7 +129,7 @@ def internal_consistency():
     nas = read_pdb_coords(last, names=None)
     L = len(nas)
     corr = float(np.corrcoef(np.arange(L), nas[:, 0])[0, 1])
-    ribo = read_pdb_coords(RIBO_PDB, names=None)
+    ribo = RIBO_COORDS_A
     below = int((nas[:, 0] < 0).sum())
     print(f"  final length L = {L}")
     print(f"  threads tunnel: corr(residue index, x) = {corr:.3f} "

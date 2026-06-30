@@ -56,10 +56,10 @@ import numpy as np
 import openmm as mm
 
 from topo.csp.core import (ElongationParams, TUNNEL_AXIS,
-                                       precompute_contacts, read_anchor,
+                                       precompute_contacts,
                                        run_length, optimal_ptc_targets,
                                        TRNA_TETHER_BOND_NM)
-from topo.csp.ribosome import load_ribosome
+from topo.csp.ribosome import (load_ribosome, load_obrien_ribosome, anchor_coord)
 from topo.utils.config import strtobool
 from topo.csp import kinetics
 
@@ -140,6 +140,8 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
                              trans_times: Optional[str] = None,
                              domain_def: Optional[str] = None,
                              stride_output_file: Optional[str] = None,
+                             ribosome_psf: Optional[str] = None,
+                             ribosome_prm: Optional[str] = None,
                              params: Optional[CSPParams] = None) -> None:
     """Run the full O'Brien continuous synthesis ``L = L0 .. L_max``.
 
@@ -205,19 +207,21 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
     out_path = Path(out_root)
     out_path.mkdir(parents=True, exist_ok=True)
 
-    # --- anchors (fixed points from the truncated ribosome) -----------------
-    p_anchor = read_anchor(ribosome_pdb, "PtR", resid=76, bead="R")
-    a_anchor = read_anchor(ribosome_pdb, "AtR", resid=76, bead="R")
-    print(f"P-anchor (PtR 76 R): {p_anchor} nm")
-    print(f"A-anchor (AtR 76 R): {a_anchor} nm")
-
-    # --- rigid ribosome (always: the supplied PDB is rigid scenery) ---------
-    # Loaded once; identical at every length. Providing a ribosome PDB *is* the
-    # signal to treat it as rigid -- there is no separate on/off flag. Loaded here
-    # (before the targets) because the equilibrium-bond geometry needs its beads.
-    ribo = load_ribosome(ribosome_pdb, model="topo")
+    # --- rigid ribosome (always: the supplied file is rigid scenery) --------
+    # Loaded once; identical at every length. A '.cor' path loads O'Brien's authentic
+    # truncated CG ribosome (his C5'-based R beads + per-type radii from the sibling
+    # .psf/.prm); any other path is a topo PDB. Loaded before the anchors/targets
+    # because both are derived from its beads.
+    ribo = load_ribosome_auto(ribosome_pdb, psf=ribosome_psf, prm=ribosome_prm,
+                              model="topo")
     print(f"Rigid ribosome: {ribo.n} beads from {ribosome_pdb} "
           f"(mass-0 scenery; ribosome<->nascent forces on).")
+
+    # --- anchors (fixed points from the truncated ribosome) -----------------
+    p_anchor = anchor_coord(ribo, "PtR", resid=76, bead="R")
+    a_anchor = anchor_coord(ribo, "AtR", resid=76, bead="R")
+    print(f"P-anchor (PtR 76 R): {p_anchor} nm")
+    print(f"A-anchor (AtR 76 R): {a_anchor} nm")
 
     # Hold/seed targets. Default path: offset into the tunnel (+x) from each anchor
     # bead so the C-terminus does not sit on top of a ribosome bead (clash); offset
@@ -455,6 +459,8 @@ class CSPConfig:
     trans_times: Optional[str] = None
     domain_def: Optional[str] = None
     stride_output_file: Optional[str] = None
+    ribosome_psf: Optional[str] = None
+    ribosome_prm: Optional[str] = None
     params: CSPParams = field(default_factory=CSPParams)
     config_file: Optional[str] = None
 
@@ -607,6 +613,9 @@ def read_csp_config(config_file: str, verbose: bool = True) -> CSPConfig:
     trans_times = opt("trans_times")
     domain_def = req("domain_def")   # required: defines the protein's contact strengths
     stride_output_file = opt("stride_output_file")
+    # O'Brien ribosome (.cor) optional sibling files; default to same-stem .psf/.prm.
+    ribosome_psf = opt("ribosome_psf")
+    ribosome_prm = opt("ribosome_prm")
 
     # --- MD / ribosome knobs (reused ElongationParams) ----------------------
     ep = ElongationParams()
@@ -706,6 +715,7 @@ def read_csp_config(config_file: str, verbose: bool = True) -> CSPConfig:
     return CSPConfig(pdb_file=pdb_file, ribosome=ribosome, L0=L0, L_max=L_max,
                      outdir=outdir, mrna=mrna, trans_times=trans_times,
                      domain_def=domain_def, stride_output_file=stride_output_file,
+                     ribosome_psf=ribosome_psf, ribosome_prm=ribosome_prm,
                      params=p, config_file=config_file)
 
 
@@ -764,7 +774,8 @@ def csp(argv: Optional[List[str]] = None) -> None:
     run_continuous_synthesis(
         cfg.pdb_file, cfg.ribosome, L0=cfg.L0, L_max=cfg.L_max, out_root=cfg.outdir,
         mrna=cfg.mrna, trans_times=cfg.trans_times, domain_def=cfg.domain_def,
-        stride_output_file=cfg.stride_output_file, params=cfg.params)
+        stride_output_file=cfg.stride_output_file, ribosome_psf=cfg.ribosome_psf,
+        ribosome_prm=cfg.ribosome_prm, params=cfg.params)
 
 
 if __name__ == "__main__":

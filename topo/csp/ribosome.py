@@ -176,6 +176,147 @@ def load_ribosome(pdb_file: str, model: str = "topo") -> Ribosome:
                     names, resnames, resids, segids)
 
 
+# O'Brien CG bead-name map (his RNA atom names -> topo convention used by the geometry
+# lookups optimal_ptc_targets / add_trna_tether / bead_system_index). PU1/PU2 are the two
+# purine base beads (-> BR1/BR2); PY the single pyrimidine base bead (-> BR1). Protein beads
+# (atom name 'B' or 'S<aa1>') become 'CA' (their identity is carried by radii/charge, read
+# from O'Brien's own .psf/.prm -- not by name).
+_OBRIEN_RNA_NAME = {"P": "P", "R": "R", "PU1": "BR1", "PU2": "BR2", "PY": "BR1"}
+
+
+def _parse_prm_radii(prm_path: str) -> dict:
+    """Parse a CHARMM .prm NONBONDED block -> {atom type: Rmin/2 in nm}.
+
+    O'Brien's excluded volume uses the per-type Rmin/2 as the bead collision radius
+    (column 4 of each NONBONDED line; column 3 is eps = -0.000132 kcal/mol for all).
+    """
+    radii: dict = {}
+    in_nb = False
+    for ln in open(prm_path):
+        s = ln.strip()
+        if s.startswith("NONBONDED"):
+            in_nb = True
+            continue
+        if in_nb and (s.startswith(("NBFIX", "HBOND", "END")) or s.startswith("BONDS")):
+            break
+        if not in_nb or not s or s.startswith("!"):
+            continue
+        p = s.split()
+        # type  polarizability  eps  Rmin/2   (skip CUTNB/header continuations)
+        if len(p) >= 4 and p[0] not in ("CUTNB", "CTOFNB", "CTONNB", "EPS", "E14FAC", "WMIN"):
+            try:
+                radii[p[0]] = float(p[3]) / 10.0   # angstrom -> nm
+            except ValueError:
+                continue
+    return radii
+
+
+def load_obrien_ribosome(cor_path: str, psf_path: str, prm_path: str,
+                         model: str = "topo") -> Ribosome:
+    """Load O'Brien's truncated CG ribosome from his own .cor/.psf/.prm files.
+
+    topo's :func:`load_ribosome` builds a :class:`Ribosome` from a PDB and derives radii
+    /charge from ``model_parameters`` by bead name -- but topo's home-built CG ribosome
+    placed the **ribose (R) bead** differently from O'Brien (who uses the **C5'** atom),
+    shifting the tRNA anchors (PtR:76 R by ~3.6 A) and the whole PTC/tunnel geometry, and
+    it used a single 0.71 nm radius for every RNA bead instead of O'Brien's per-type
+    Rmin/2 (P 0.645, R 0.523, base 0.534 nm). This loader instead reads **O'Brien's own**
+    truncated ribosome verbatim so the geometry and excluded volume match the reference:
+
+    - **positions** from the ``.cor`` (his C5'-based R beads, in angstrom -> nm);
+    - **radii** = per-type Rmin/2 from the ``.prm`` NONBONDED block (his soft EV);
+    - **charges** from the ``.psf`` (rRNA phosphate -1, charged protein residues +/-1);
+    - **bead names** mapped to topo's convention (RNA P/R/BR1/BR2; protein -> CA) so the
+      PTC/tether lookups (which search 'R'/'P'/'BR2' on AtR/PtR:76) work unchanged.
+
+    The three files must list atoms in the same order (they do -- both 4577 atoms).
+
+    Parameters
+    ----------
+    cor_path, psf_path, prm_path : str
+        O'Brien's truncated-ribosome CHARMM coordinate / topology / parameter files.
+    model : str, optional
+        Unused (kept for signature parity with :func:`load_ribosome`); O'Brien's own
+        parameters are used, not ``model_parameters[model]``.
+
+    Returns
+    -------
+    Ribosome
+        The ribosome with O'Brien's exact coordinates, radii and charges.
+
+    Raises
+    ------
+    ValueError
+        If the .cor / .psf atom counts disagree, or an atom type is missing from the .prm.
+    """
+    prm_radii = _parse_prm_radii(prm_path)
+
+    # --- .psf NATOM: ordered (segid, resid, resname, atomname, atomtype, charge) ------
+    psf_rows = []
+    in_atoms = False
+    for ln in open(psf_path):
+        if "!NATOM" in ln:
+            in_atoms = True
+            continue
+        if in_atoms:
+            if ln.strip() == "" or "!N" in ln:
+                break
+            p = ln.split()
+            if len(p) < 8 or not p[0].isdigit():
+                continue
+            # id segid resid resname atomname atomtype charge mass
+            psf_rows.append((p[1], int(p[2]), p[3], p[4], p[5], float(p[6])))
+
+    # --- .cor: ordered coordinates (CHARMM EXT) --------------------------------------
+    cor_xyz = []
+    for ln in open(cor_path):
+        if ln.startswith("*"):
+            continue
+        p = ln.split()
+        if len(p) < 10 or not p[0].isdigit():
+            continue
+        cor_xyz.append((float(p[4]), float(p[5]), float(p[6])))
+
+    if len(psf_rows) != len(cor_xyz):
+        raise ValueError(f"O'Brien ribosome: .psf has {len(psf_rows)} atoms but .cor has "
+                         f"{len(cor_xyz)} -- they must match.")
+
+    coords, radii, charges, names, resnames, resids, segids = [], [], [], [], [], [], []
+    for (segid, resid, resname, atomname, atomtype, charge), (x, y, z) in zip(psf_rows, cor_xyz):
+        if atomtype not in prm_radii:
+            raise ValueError(f"O'Brien ribosome: atom type {atomtype!r} (atom {atomname!r}, "
+                             f"residue {resname!r}) missing from {prm_path} NONBONDED.")
+        # bead name in topo convention (RNA mapped; protein -> CA)
+        name = _OBRIEN_RNA_NAME.get(atomname, "CA")
+        coords.append((x / 10.0, y / 10.0, z / 10.0))
+        radii.append(prm_radii[atomtype])
+        charges.append(charge)
+        names.append(name)
+        resnames.append(resname)
+        resids.append(resid)
+        segids.append(segid)
+    return Ribosome(np.asarray(coords, dtype=float), radii, charges,
+                    names, resnames, resids, segids)
+
+
+def load_ribosome_auto(path: str, psf: Optional[str] = None,
+                       prm: Optional[str] = None, model: str = "topo") -> Ribosome:
+    """Load a ribosome, dispatching on file type.
+
+    - ``path`` ending in ``.cor`` -> :func:`load_obrien_ribosome` (O'Brien's authentic
+      truncated CG ribosome). ``psf`` / ``prm`` default to the same-stem siblings
+      (``foo.cor`` -> ``foo.psf`` / ``foo.prm``) when not given explicitly.
+    - otherwise -> :func:`load_ribosome` (a topo PDB, params from ``model_parameters``).
+    """
+    import os
+    if str(path).lower().endswith(".cor"):
+        stem = os.path.splitext(path)[0]
+        psf = psf or (stem + ".psf")
+        prm = prm or (stem + ".prm")
+        return load_obrien_ribosome(path, psf, prm, model=model)
+    return load_ribosome(path, model=model)
+
+
 def append_ribosome(nascent_model, ribo: Ribosome) -> Tuple[List[int], List[int]]:
     """Append the rigid ribosome to a built nascent model (system + topology).
 
@@ -278,6 +419,24 @@ def _append_topology(topology, ribo: Ribosome) -> None:
             res = topology.addResidue(ribo.resnames[i], chain, id=str(ribo.resids[i]))
             residues[rkey] = res
         topology.addAtom(ribo.names[i], _CARBON, res)
+
+
+def anchor_coord(ribo: Ribosome, segid: str, resid: int = 76,
+                 bead: str = "R") -> np.ndarray:
+    """Coordinate (nm) of a named ribosome bead from a loaded :class:`Ribosome`.
+
+    The :class:`Ribosome`-object analog of :func:`topo.csp.core.read_anchor` (which parses
+    a PDB): used to pick the P-/A-anchors (``segid='PtR'/'AtR'``, resid 76, ``R`` bead)
+    when the ribosome was loaded from O'Brien's .cor (no PDB to re-parse). Raises if the
+    bead is absent or non-unique.
+    """
+    matches = [i for i in range(ribo.n)
+               if ribo.segids[i] == segid and ribo.resids[i] == resid
+               and ribo.names[i] == bead]
+    if len(matches) != 1:
+        raise ValueError(f"expected exactly one bead (segid={segid!r}, resid={resid}, "
+                         f"name={bead!r}) in the ribosome, found {len(matches)}.")
+    return ribo.coords_nm[matches[0]]
 
 
 def bead_system_index(ribo: Ribosome, L_nascent: int, segid: str,

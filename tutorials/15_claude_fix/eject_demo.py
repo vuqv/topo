@@ -29,9 +29,9 @@ import openmm as mm
 from openmm import unit
 
 from topo.csp.protocol import read_csp_config
-from topo.csp.core import (precompute_contacts, read_anchor, run_length,
+from topo.csp.core import (precompute_contacts, run_length,
                            optimal_ptc_targets, TUNNEL_AXIS)
-from topo.csp.ribosome import load_ribosome, TRNA_TETHER_BOND_NM
+from topo.csp.ribosome import load_ribosome_auto, anchor_coord, TRNA_TETHER_BOND_NM
 
 
 def _final_nascent_nm(out_root: Path, L: int) -> np.ndarray:
@@ -73,9 +73,10 @@ def main() -> None:
     if final_nm.shape[0] != L:
         raise ValueError(f"final structure has {final_nm.shape[0]} residues but L={L}.")
 
-    ribo = load_ribosome(cfg.ribosome, model="topo")
-    p_anchor = read_anchor(cfg.ribosome, "PtR", 76, "R")
-    a_anchor = read_anchor(cfg.ribosome, "AtR", 76, "R")
+    ribo = load_ribosome_auto(cfg.ribosome, psf=cfg.ribosome_psf,
+                              prm=cfg.ribosome_prm, model="topo")
+    p_anchor = anchor_coord(ribo, "PtR", 76, "R")
+    a_anchor = anchor_coord(ribo, "AtR", 76, "R")
 
     # Same target / wall geometry the run used (equil-PTC fix path).
     if ep.equil_peptide_geometry:

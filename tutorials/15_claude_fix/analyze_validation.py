@@ -30,24 +30,15 @@ OUT = HERE / "synth_out"
 # Tutorial 15 reuses the O'Brien reference RUN from Tutorial 12 (there is no copy here --
 # the reference data is read-only and lives under ../12_auto/). The reference covers L=1->10.
 REF = HERE.parent / "12_auto" / "continuous_synthesis" / "output"
-RIBO_PDB = HERE / "ribosome_trunc.pdb"
-# Tunnel wall plane: auto-derived from the ribosome structure EXACTLY as the CSP runner
-# does it (run_continuous_synthesis). For the claude-fix path (equil_peptide_geometry),
-# the runner sets the wall at the lower equilibrium-PTC target x: min(a_target.x,
-# p_target.x). The legacy path used min(P.x, A.x) + ptc_offset. Mirror the fix path so
-# the D5b wall check uses the SAME plane the run enforced (else it flags false leaks).
-from topo.csp.core import (read_anchor, optimal_ptc_targets, TRNA_TETHER_BOND_NM)
-from topo.csp.ribosome import load_ribosome
-_pa = read_anchor(str(RIBO_PDB), "PtR", 76, "R")
-_aa = read_anchor(str(RIBO_PDB), "AtR", 76, "R")
-try:
-    _ribo = load_ribosome(str(RIBO_PDB), model="topo")
-    _at, _pt = optimal_ptc_targets(_ribo)
-    TUNNEL_WALL_X0_NM = float(min(_at[0], _pt[0]))  # nm (equil-PTC fix path)
-    _WALL_SRC = "equil-PTC targets"
-except Exception as _e:  # fall back to the legacy formula if the solver is unavailable
-    TUNNEL_WALL_X0_NM = float(min(_pa[0], _aa[0]) + TRNA_TETHER_BOND_NM)
-    _WALL_SRC = f"legacy anchor+tether (solver unavailable: {_e})"
+# Ribosome: O'Brien's authentic truncated CG ribosome (.cor + sibling .psf/.prm), the same
+# one the run used. Loaded so the wall plane + clash check match the run exactly.
+from topo.csp.core import optimal_ptc_targets
+from topo.csp.ribosome import load_ribosome_auto, anchor_coord
+RIBO = load_ribosome_auto(str(HERE / "ribosome_obrien.cor"))
+RIBO_COORDS_A = RIBO.coords_nm * 10.0   # (M,3) angstrom
+# Tunnel wall plane: same equil-PTC rule the runner uses -- min(a_target.x, p_target.x).
+_at, _pt = optimal_ptc_targets(RIBO)
+TUNNEL_WALL_X0_NM = float(min(_at[0], _pt[0]))  # nm
 BLOWUP_LIMIT = 1.0e12              # D5 threshold (kJ/mol)
 
 
@@ -133,7 +124,7 @@ def analyze_ejection():
         print("  no ejection trajectory found -- SKIP")
         return None
     # Ribosome beads (Angstrom) -- everything in ribosome_trunc.pdb.
-    ribo = read_pdb_coords(RIBO_PDB, names=None)
+    ribo = RIBO_COORDS_A
     u = mda.Universe(str(psf), str(dcd))
     nas = u.select_atoms("all")
     n_frames = len(u.trajectory)
