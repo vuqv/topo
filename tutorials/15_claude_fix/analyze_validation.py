@@ -1,8 +1,9 @@
 #!/usr/bin/env python
-"""Validation analysis for Tutorial 12_auto (O'Brien CSP reproduced in topo-style).
+"""Validation analysis for Tutorial 15 (claude_fix: equilibrium-PTC + AllBonds CSP).
 
-Checks the Goal.md Definition-of-Done criteria against the topo-csp output in
-``synth_out/`` and the reference run in ``continuous_synthesis/output/``:
+Checks the AGENTS.md Definition-of-Done criteria against the topo-csp output in
+``synth_out/`` and the read-only O'Brien reference run in
+``../12_auto/continuous_synthesis/output/`` (reference covers L=1->10):
 
 * D5   -- per-stage potential energy stays finite (no >1e12 kJ/mol blow-ups).
 * D5b  -- ejection: the released chain diffuses out along +x, never penetrates the
@@ -26,7 +27,9 @@ warnings.filterwarnings("ignore")
 
 HERE = Path(__file__).resolve().parent
 OUT = HERE / "synth_out"
-REF = HERE / "continuous_synthesis" / "output"
+# Tutorial 15 reuses the O'Brien reference RUN from Tutorial 12 (there is no copy here --
+# the reference data is read-only and lives under ../12_auto/). The reference covers L=1->10.
+REF = HERE.parent / "12_auto" / "continuous_synthesis" / "output"
 RIBO_PDB = HERE / "ribosome_trunc.pdb"
 # Tunnel wall plane: auto-derived from the ribosome structure (same rule as the CSP
 # runner -- lower P/A-site C-terminus hold plane = min(P.x, A.x) + ptc_offset), so
