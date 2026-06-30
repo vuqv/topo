@@ -256,6 +256,33 @@ only reproduces O'Brien's sum if σ = 2·Rmin/2 (diameter), but topo feeds Rmin/
 → This is a stronger lead than the y-z wall: fixing the NC↔ribosome EV (12-10-6 + sum rule +
 consistent nascent Rmin/2) should resolve the clash at its source.
 
+## 2026-06-30 — NC↔ribosome EV fix RESOLVES the clash (4c5c, full length)
+
+Implemented all 4 points (12-10-6 form; sum rule R_ij=Rmin/2_i+Rmin/2_j; matched ε; nascent per-AA
+`SA..SY` Rmin/2 = Option B). dt-halving guard made NaN-robust (catches blow-ups/minimize failures).
+Full 4c5c L=1→306 completed; **96 blow-ups auto-recovered via 201 dt-halving retries** (the stiff
+wall is harder to integrate at 15 fs). Worst max|PotE| = 1.9e6 kJ/mol (≪ 1e9; higher than soft-EV's
+1.5e3 — the stiff wall pushes harder). Clash comparison (end-of-synthesis L=306), old `synth_out_softEV/`
+vs new `synth_out/`:
+
+| metric | SOFT-EV (pure (σ/r)¹² + avg) | NEW 12-10-6 + sum (O'Brien) |
+|--------|------------------------------|------------------------------|
+| **# residues center <3 Å (hard clash)** | **36** | **0** ✅ eliminated |
+| min nascent–ribosome center-dist | 1.98 Å | **3.32 Å** |
+| min O'Brien-gap (center − ΣRmin/2) | −6.65 Å | **−4.76 Å** |
+| # residues inside contact (gap<0) | 267/306 | **63/306** |
+| chain x-range (extrusion) | 10..111 Å | **10..179 Å** |
+| beads x<0 (leak through truncation) | 0 | 0 |
+| threading corr(res,x) | −0.921 | −0.863 |
+
+**Result:** the O'Brien-consistent NC↔ribosome EV (a) **eliminates all hard clashes** (36→0 beads
+<3 Å), (b) holds the chain ~1.3 Å further off bead centers, and (c) **extrudes the chain much
+further down/out the tunnel** (x→179 vs 111 Å) — the stiff wall drives the chain along the exit
+instead of letting it bulge into beads. **Confirms the user's NC↔ribosome diagnosis was the root
+cause of the clash; fixing the EV resolves it at the source — no y-z wall needed.** Cost: heavier
+integration (96 dt-halving recoveries, higher transient energies, still finite). Remaining gap<0
+(63 residues) is the packed-PTC region (unavoidable; O'Brien has it too).
+
 ### Validation table (fill as runs complete)
 | Run | path | L range | scale_factor | max\|PotE\| (kJ/mol) | seed bond (Å) | dt-halving? | min NC dist (Å) | dwell ratio | Rg ratio | notes |
 |-----|------|---------|--------------|----------------------|---------------|-------------|-----------------|-------------|----------|-------|
