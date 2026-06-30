@@ -184,6 +184,33 @@ same root as the ✅1 incompatibility. Options: a pragmatic y-z *tube* wall arou
 characterized CG-model property, or take on the O'Brien frozen-window + explicit-translocation
 rebuild. → surfaced to the user (§8 model question) for direction before proceeding.
 
+## 2026-06-30 — Ribosome CG-coordinate inconsistency FIXED (user direction)
+
+User: *"there are inconsistencies between how I and O'Brien calculate the CG coordinate of the
+ribosome. Please use his 'wrong way' (he used C5' as the ribo base). First, use his truncated
+Ribosome."* Investigated and confirmed a real inconsistency:
+
+- topo had built its **own** CG ribosome (`ribosome_trunc.pdb`, from 4v9d/5jte). Its **P** beads
+  match O'Brien exactly (0.00 Å), but its **R (ribose) beads differ** (mean 0.49 Å, max 3.6 Å):
+  O'Brien places R at the **C5′** atom; topo used a different atom. The R bead is both the
+  tunnel-lining bead and the tRNA **anchor**, so this shifted the **P-anchor (PtR:76 R) by 3.6 Å**
+  (topo x=5.71 vs O'Brien x=9.28 Å) — distorting the PTC targets, tunnel-wall plane, seeding and
+  the whole tunnel geometry.
+- topo also used a **uniform 0.71 nm radius** for every RNA bead, vs O'Brien's per-type Rmin/2 from
+  the `.prm`: **P 0.645, R 0.523, base(BR) 0.534 nm**. topo's beads were ~0.2 nm too fat, inflating
+  the apparent clash.
+
+**Fix:** added `load_obrien_ribosome(.cor, .psf, .prm)` (+ `load_ribosome_auto` dispatch on `.cor`)
+that reads O'Brien's authentic truncated ribosome verbatim — his C5′-based positions, per-type
+`.prm` radii, `.psf` charges — mapping bead names to topo convention (RNA P/R/BR1/BR2; protein→CA)
+so the PTC/tether lookups still work. CSP + `eject_demo` + both analyzers now load via `.cor`;
+anchors come from the loaded ribosome (`anchor_coord`) instead of re-parsing a PDB. Copied O'Brien's
+`50S_tRNA_cg_truncated.{cor,psf,prm}` into the tutorial as `ribosome_obrien.{cor,psf,prm}`; all INIs
+point at `ribosome_obrien.cor`. Verified: anchors now match O'Brien exactly (PtR:76 R =
+[9.28,2.42,−0.96]), radii per-type, debug run green (4577 beads, AllBonds, 0 dt-halving, 1→8).
+→ re-validating full 4c5c (and P0CX28) with the corrected ribosome; baseline runs preserved as
+`synth_out_oldribo/`.
+
 ### Validation table (fill as runs complete)
 | Run | path | L range | scale_factor | max\|PotE\| (kJ/mol) | seed bond (Å) | dt-halving? | min NC dist (Å) | dwell ratio | Rg ratio | notes |
 |-----|------|---------|--------------|----------------------|---------------|-------------|-----------------|-------------|----------|-------|
