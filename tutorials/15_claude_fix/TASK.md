@@ -25,13 +25,17 @@ Stable continuous synthesis: (1) full length (4c5c 1→306, then P0CX28 1→106)
       kinetics (time_stage_1/2, scale_factor, mrna, trans_times) match O'Brien reference.
 - [x] **D2** Fix active (debug): optimal_ptc_targets printed (|A−P|=0.3810 nm); seed peptide bond
       = **3.810 Å**; max|PotE| = **42.78 kJ/mol** (2.3e7× under limit); **0 dt-halving lines**.
-- [ ] **D3** Run completes: `topo-csp -f csp_val.ini` exit 0, full length 1→306.
-- [ ] **D4** Outputs: trajectory + per-residue `dwell_times.dat` under `synth_out/`.
-- [ ] **D5** Physically sane: no stage |PotE| ≳ 1e9; monotonic-ish +x egress; no collapse.
-- [ ] **D5b** Clean ejection: chain diffuses +x, clears ribosome, no wall penetration / bead overlap.
-      Record min nascent–ribosome distance + CoM-x vs frame.
-- [ ] **D6** Quantitative match (4c5c only) vs `../12_auto/.../output/` (ref = L 1→10):
-      length, per-codon dwell / total time (~2×), final R_g. Also compare fix vs legacy 12/13 path.
+- [x] **D3** Run completes: `topo-csp -f csp_val.ini` → "Done. Synthesized 1 → 306", exit clean,
+      zero dt-halving lines across 919 stages.
+- [x] **D4** Outputs: per-stage trajectories + `synth_out/dwell_times.dat` (306 rows) + ejection/.
+- [x] **D5** Physically sane: worst max|PotE| = 1.48e3 kJ/mol ≪ 1e12; chain threads tunnel
+      (corr(residue,x)=−0.926, monotonic +x egress); no collapse into ribosome (no bead x<0).
+- [~] **D5b** Ejection: **wall not penetrated PASS** (analyzer wall bug fixed: 8.71 Å not 10.46 Å);
+      **clash + net-egress OPEN** — min NC dist 2.41 Å (eject) / 2.87 Å (synth, 6/306 res); 20k-step
+      ejection too short to show a 306-mer clearing. → addressed by §1b features + extended ejection demo.
+- [x] **D6** Quantitative match (4c5c): in-vivo dwell ratio **1.01×**, final R_g **1.06×** (both well
+      within tolerance); fix path reproduces ref ≥ as well as legacy 12/13 while being more faithful
+      (rigid AllBonds, no guard). in-silico ns ratio 0.02× = 50× scale_factor (documented, scale-indep).
 - [ ] **D7** Documented: `README.md` reproduce commands; `NOTES.md` table; add to `tutorials/README.md`.
 
 ## Phase 2 — P0CX28 (only after 4c5c D0–D7)
