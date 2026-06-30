@@ -59,7 +59,7 @@ from topo.csp.core import (ElongationParams, TUNNEL_AXIS,
                                        precompute_contacts,
                                        run_length, optimal_ptc_targets,
                                        TRNA_TETHER_BOND_NM)
-from topo.csp.ribosome import (load_ribosome, load_obrien_ribosome, anchor_coord)
+from topo.csp.ribosome import (load_ribosome_auto, anchor_coord)
 from topo.utils.config import strtobool
 from topo.csp import kinetics
 
