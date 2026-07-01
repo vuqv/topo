@@ -14,7 +14,7 @@ Mapping
   bead types defined in :mod:`topo.parameters.model_parameters`:
 
     - ``P``  : the phosphate (placed at the phosphate ``P`` atom; q = -1e),
-    - ``R``  : the ribose-ring centroid (C1',C2',C3',C4',O4'),
+    - ``R``  : the ribose-carbon centroid (C1',C2',C3',C4',C5' -- O'Brien's set, no O4'),
     - ``BR`` : the centroid of **each** conjugated base ring
                (pyrimidine: 1 ring -> ``BR1``; purine: 2 rings -> ``BR1`` + ``BR2``).
 
@@ -61,7 +61,13 @@ PURINES = {"A", "G", "RA", "RG", "ADE", "GUA"}
 PYRIMIDINES = {"C", "U", "RC", "RU", "CYT", "URA"}
 
 # Ring atom sets (PDB v3 names).
-RIBOSE_RING = ["C1'", "C2'", "C3'", "C4'", "O4'"]
+# The R (ribose) bead is the average of the five ribose *carbons* C1'..C5' (NOT the
+# ring oxygen O4'). This matches O'Brien's CG construction verbatim -- his
+# create_cg_ribosome_model.py averages {C1',C2',C3',C4',C5'} for the 'R' site. Using
+# O'Brien's exact set reproduces his ribosome R-bead coordinates to ~0.000 A (median)
+# on the same all-atom structure; the earlier {C1'..C4',O4'} set was ~0.48 A off per
+# bead and shifted the tRNA anchors / PTC geometry (why topo used to load his .cor).
+RIBOSE_RING = ["C1'", "C2'", "C3'", "C4'", "C5'"]
 BASE_RING_6 = ["N1", "C2", "N3", "C4", "C5", "C6"]   # pyrimidine ring; purine 6-ring
 PURINE_RING_5 = ["C4", "C5", "N7", "C8", "N9"]       # purine 5-ring (fused)
 
@@ -91,8 +97,10 @@ def _centroid(coords):
 def _parse_pdb(path):
     """Parse ATOM/HETATM records into ordered residues.
 
-    Returns a list of residues, each:
+    Returns a list of residues, each of the form::
+
         {"chain", "resseq", "icode", "resname", "atoms": OrderedDict(name -> (x,y,z))}
+
     Only the first altloc of each atom name in a residue is kept.
     """
     residues = OrderedDict()      # key -> residue dict
@@ -127,8 +135,9 @@ def _beads_for_residue(res, warn):
     """Build the coarse-grained beads for a single residue.
 
     Proteins map to one ``CA`` bead (residue name unchanged). Nucleotides map
-    to a phosphate bead (``P``, when present), a ribose-ring centroid bead
-    (``R``), and one base-ring centroid bead for pyrimidines (``BR1``) or two
+    to a phosphate bead (``P``, when present), a ribose-carbon centroid bead
+    (``R``; C1'..C5', O'Brien's set), and one base-ring centroid bead for
+    pyrimidines (``BR1``) or two
     for purines (``BR1`` + ``BR2``). Missing or insufficient atoms trigger a
     warning via ``warn`` and the affected bead is skipped.
 
