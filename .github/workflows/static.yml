@@ -1,14 +1,21 @@
-# Deploy Sphinx documentation to GitHub Pages.
+# Deploy multi-version Sphinx documentation to GitHub Pages.
 # Required: In the repo go to Settings → Pages → Build and deployment,
 # and set "Source" to "GitHub Actions". Otherwise this workflow will fail with "Get Pages site failed".
 #
-# The site must contain index.html at the root. This workflow builds docs in docs/
-# and uploads docs/_build/html so the deployed site has index.html and the full doc tree.
+# sphinx-polyversion (docs/poly.py) builds every whitelisted branch/tag of docs/
+# into its own subfolder of docs/_build/html (e.g. /main/, /translation/) plus a
+# root index.html redirect and a versions.json manifest; that whole tree is
+# uploaded so the deployed site hosts all versions with an in-page switcher.
+#
+# NOTE: the running workflow is the copy on the branch that triggered it, so these
+# multi-version changes must reach `main` for the live site to become multi-version.
 name: Deploy docs to Pages
 
 on:
   push:
-    branches: ["main"]
+    # A push to any of these rebuilds the WHOLE multi-version site (poly.py
+    # enumerates every whitelisted branch regardless of which one triggered).
+    branches: ["main", "translation"]
     tags: ["*"]
   workflow_dispatch:
 
@@ -34,7 +41,10 @@ jobs:
         with:
           ref: ${{ github.sha }}
           token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
-          fetch-depth: 1
+          # Full history + all branches/tags so sphinx-polyversion can enumerate
+          # and check out every published version.
+          fetch-depth: 0
+          fetch-tags: true
           lfs: false
 
       - name: Set up Python
@@ -49,9 +59,15 @@ jobs:
           # Runtime deps for autodoc (Sphinx imports topo; topo needs these)
           pip install "numpy>=1.22" "openmm>=7.7" "parmed>=3.4" "MDAnalysis>=2.2" "pandas>=1.4" "pyyaml"
 
-      - name: Build documentation
+      - name: Build all documentation versions
         run: |
-          make -C docs html
+          # poly.py enumerates LOCAL branches (sphinx-polyversion 2.0.0 mis-parses
+          # remote refs), so materialize a local branch for each origin branch.
+          # `git branch -f` can't touch the currently checked-out branch -> `|| true`.
+          git for-each-ref --format='%(refname:short)' refs/remotes/origin \
+            | sed 's#^origin/##' | grep -v '^HEAD$' \
+            | while read -r b; do git branch -f "$b" "origin/$b" 2>/dev/null || true; done
+          sphinx-polyversion docs/poly.py docs/_build/html
 
       - name: Setup Pages
         uses: actions/configure-pages@v4

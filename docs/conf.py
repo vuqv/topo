@@ -84,9 +84,8 @@ pdf_documents = [('index', u'rst2pdf', u'TOPO', u'Quyen Vu'),]
 #    'jax': ['input/TeX', 'output/HTML-CSS'],
 #}
 
-# Let Furo supply its own sidebar (global nav + search + local TOC). Overriding
-# html_sidebars with the basic templates would remove Furo's navigation, so we
-# leave it at the theme default.
+# The sidebar (Furo's own components + a version switcher) is configured via
+# html_sidebars near the bottom of this file, in the sphinx-polyversion section.
 
 
 
@@ -212,82 +211,39 @@ texinfo_documents = [
 ]
 
 
-# -- Extension configuration ------------------------------------------------- 
-##########################
-# "EDIT ON GITHUB" LINKS #
-##########################
-
-############################
-# SETUP THE RTD LOWER-LEFT #
-############################
+# -- Multi-version docs (sphinx-polyversion) ---------------------------------
+# When the docs are built via ``sphinx-polyversion`` (see docs/poly.py), the driver
+# injects the list of built versions through the POLYVERSION_DATA env var. ``load``
+# reads it and populates ``html_context`` with ``current`` (this version) and
+# ``revisions`` (all built versions, as GitRef namedtuples), which
+# ``_templates/versions.html`` renders as a sidebar version switcher.
+#
+# A plain ``make html`` build has no such env var -> LoadError is swallowed and the
+# switcher is simply omitted, so local single-version builds keep working.
 try:
-    html_context
-except NameError:
-    html_context = dict()
-html_context['display_lower_left'] = True
-
-templates_path = ['_templates']
-
-if 'REPO_NAME' in os.environ:
-    REPO_NAME = os.environ['REPO_NAME']
-else:
-    REPO_NAME = 'topo'
-
-# SET CURRENT_LANGUAGE
-if 'current_language' in os.environ:
-    # get the current_language env var set by buildDocs.sh
-    current_language = os.environ['current_language']
-else:
-    # the user is probably doing `make html`
-    # set this build's current language to english
-    current_language = 'en'
-
-# tell the theme which language to we're currently building
-html_context['current_language'] = current_language
-
-# SET CURRENT_VERSION (and versions list); git optional for local builds without GitPython
-try:
-    from git import Repo
-    repo = Repo(search_parent_directories=True)
-    _has_git = True
+    # importing .git registers GitRef with the JSON decoder used by load()
+    from sphinx_polyversion.git import GitRef  # noqa: F401
+    from sphinx_polyversion import load
+    load(globals())  # -> html_context["current"], html_context["revisions"]
 except Exception:
-    repo = None
-    _has_git = False
+    pass
 
-if 'current_version' in os.environ:
-    current_version = os.environ['current_version']
-elif _github_ref.startswith('refs/tags/'):
-    current_version = version
-elif _has_git:
-    try:
-        current_version = repo.active_branch.name
-    except TypeError:
-        current_version = os.environ.get('GITHUB_REF', 'refs/heads/main').replace('refs/heads/', '')
-else:
-    current_version = os.environ.get('GITHUB_REF', 'refs/heads/main').replace('refs/heads/', '') or 'main'
+# Furo supplies its own sidebar (nav + search). We list its components explicitly
+# so we can insert the version switcher (versions.html) under the search box while
+# keeping the rest of Furo's navigation intact.
+# Furo's default sidebar order (see furo/theme/furo/theme.conf) with versions.html
+# inserted at the top of the scrollable nav area. Keep this list in sync with Furo.
+html_sidebars = {
+    "**": [
+        "sidebar/brand.html",
+        "sidebar/search.html",
+        "sidebar/scroll-start.html",
+        "versions.html",
+        "sidebar/navigation.html",
+        "sidebar/ethical-ads.html",
+        "sidebar/scroll-end.html",
+        "sidebar/variant-selector.html",
+    ]
+}
 
-html_context['current_version'] = current_version
-html_context['version'] = current_version
-html_context['languages'] = [('en', '/' + REPO_NAME + '/en/' + current_version + '/')]
-html_context['versions'] = list()
-
-if _has_git and repo is not None:
-    for b in repo.branches:
-        html_context['versions'].append((b.name, '/' + REPO_NAME + '/' + current_language + '/' + b.name + '/'))
-else:
-    html_context['versions'].append((current_version, '/' + REPO_NAME + '/' + current_language + '/' + current_version + '/'))
-
-# POPULATE LINKS TO OTHER FORMATS/DOWNLOADS
-
-# settings for creating PDF with rinoh
-rinoh_documents = [(
-    master_doc,
-    'target',
-    project + ' Documentation',
-    '© ' + copyright,
-)]
 today_fmt = "%B %d, %Y"
-html_context['display_github'] = True
-html_context['github_user'] = 'qvv5013'
-html_context['github_repo'] = 'rtd-github-pages'
-html_context['github_version'] = 'main'

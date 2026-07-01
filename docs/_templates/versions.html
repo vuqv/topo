@@ -1,55 +1,30 @@
-{% if READTHEDOCS or display_lower_left %}
-{# Add rst-badge after rst-versions for small badge style. #}
-<div class="rst-versions" data-toggle="rst-versions" role="note" aria-label="versions">
-    <span class="rst-current-version" data-toggle="rst-current-version">
-      <span class="fa fa-book"> Read the Docs</span>
-      v: {{ current_version }}
-      <span class="fa fa-caret-down"></span>
-    </span>
-    <div class="rst-other-versions">
-        {% if languages|length >= 1 %}
-        <dl>
-            <dt>{{ _('Languages') }}</dt>
-            {% for slug, url in languages %}
-            {% if slug == current_language %} <strong> {% endif %}
-            <dd><a href="{{ url }}">{{ slug }}</a></dd>
-            {% if slug == current_language %} </strong> {% endif %}
-            {% endfor %}
-        </dl>
-        {% endif %}
-        {% if versions|length >= 1 %}
-        <dl>
-            <dt>{{ _('Versions') }}</dt>
-            {% for slug, url in versions %}
-            {% if slug == current_version %} <strong> {% endif %}
-            <dd><a href="{{ url }}">{{ slug }}</a></dd>
-            {% if slug == current_version %} </strong> {% endif %}
-            {% endfor %}
-        </dl>
-        {% endif %}
-        {% if downloads|length >= 1 %}
-        <dl>
-            <dt>{{ _('Downloads') }}</dt>
-            {% for type, url in downloads %}
-            <dd><a href="{{ url }}">{{ type }}</a></dd>
-            {% endfor %}
-        </dl>
-        {% endif %}
-        {% if READTHEDOCS %}
-        <dl>
-            <dt>{{ _('On Read the Docs') }}</dt>
-            <dd>
-                <a href="//{{ PRODUCTION_DOMAIN }}/projects/{{ slug }}/?fromdocs={{ slug }}">{{ _('Project Home') }}</a>
-            </dd>
-            <dd>
-                <a href="//{{ PRODUCTION_DOMAIN }}/builds/{{ slug }}/?fromdocs={{ slug }}">{{ _('Builds') }}</a>
-            </dd>
-        </dl>
-        {% endif %}
-        <hr/>
-        {% trans %}Free document hosting provided by <a href="http://www.readthedocs.org">Read the Docs</a>.{% endtrans
-        %}
+{#- Version switcher for the Furo sidebar, populated by sphinx-polyversion.
 
-    </div>
+    conf.py's load() puts two values into html_context (and therefore into the
+    template namespace):
+      * current   -- the GitRef of the version being rendered
+      * revisions -- all built versions (GitRef namedtuples: .name, .date, ...)
+    Both are absent on a plain `make html` build, so nothing is rendered then.
+
+    Every version lives in a sibling directory of the site root
+    (<site>/<name>/...). `pathto('index')` is the relative path from the current
+    page to *this* version's index.html; stripping the trailing "index.html"
+    yields the path to this version's root, from which "../<name>/" reaches any
+    other version. This is correct at any nesting depth.
+-#}
+{%- if revisions %}
+{#- pathto('index') is the relative path to this version's index.html, EXCEPT on the
+    index page itself where Sphinx returns the self-anchor '#'; treat that as root. -#}
+{%- set _p = pathto('index') %}
+{%- set vroot = '' if _p == '#' else _p | replace('index.html', '') %}
+<div class="sidebar-tree polyversion-switcher">
+  <p class="caption" role="heading"><span class="caption-text">Versions</span></p>
+  <ul>
+    {%- for rev in revisions | sort(attribute='name') %}
+    <li class="toctree-l1{% if current and rev.name == current.name %} current-page{% endif %}">
+      <a class="reference internal" href="{{ vroot }}../{{ rev.name }}/index.html">{{ rev.name }}</a>
+    </li>
+    {%- endfor %}
+  </ul>
 </div>
-{% endif %}
+{%- endif %}

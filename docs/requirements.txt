@@ -1,5 +1,5 @@
-Sphinx>=5.0
+Sphinx>=7.2
 furo>=2024.1
-myst-parser>=1.0
+myst-parser>=2.0
 rst2pdf>=0.100
-GitPython>=3.1
+sphinx-polyversion>=2.0
