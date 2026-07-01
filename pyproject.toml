@@ -25,7 +25,7 @@ dependencies = [
 [project.scripts]
 # Console command for the simulation runner: `topo-mdrun -f md.ini`
 topo-mdrun = "topo.mdrun:mdrun"
-# Console command for the strength (n_scale) optimizer: `topo-optimize -f optimize.ini`
+# Console command for the nscale optimizer: `topo-optimize -f optimize.ini`
 topo-optimize = "topo.optimize:optimize"
 # Console command for the O'Brien continuous synthesis protocol (per-codon, 3-stage
 # co-translational synthesis): `topo-csp -f csp.ini`

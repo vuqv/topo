@@ -1,7 +1,7 @@
 """
-Strength (n_scale) optimizer for TOPO coarse-grained models.
+Nscale (nscale) optimizer for TOPO coarse-grained models.
 
-Automatically chooses the per-domain and per-interface ``strength`` in
+Automatically chooses the per-domain and per-interface ``nscale`` in
 ``domain.yaml`` — the smallest value on a discrete per-class ladder that keeps
 every domain and interface folded across ``ntraj`` independent trajectories.
 
@@ -16,7 +16,7 @@ The optimizer owns the search logic and drives the package tools as sub-steps,
 one round at a time::
 
     round loop:
-      1. write round_N/domain.yaml with the current strengths
+      1. write round_N/domain.yaml with the current nscales
       2. topo.mdrun                 (one multi-copy run -> ntraj chains)
       3. topo.split_chains          (split into per-copy DCDs, in-process)
       4. score Q per domain / per interface  (topo.analysis.native_contacts)
@@ -30,7 +30,7 @@ simulation parameter (pdb_file, domain_def, md_steps, sampling, ref_t, ...)
 passed through to each round's md.ini. Anything unset uses the optimizer's
 implicit protocol defaults (:data:`IMPLICIT_DEFAULTS` / :data:`OPT_DEFAULTS`).
 Each round the driver expands ``optimize.ini`` into a full ``round_N/md.ini`` and
-writes ``round_N/domain.yaml`` with the current strengths.
+writes ``round_N/domain.yaml`` with the current nscales.
 
 Per round it also writes one Q time series per trajectory next to its DCD:
 ``round_N/traj/Q_<k>.csv`` (paired with ``traj_<k>.dcd``; columns
@@ -64,7 +64,7 @@ from topo.utils.multichain import split_chains
 
 
 # --------------------------------------------------------------------------- #
-# The strength ladder (Table 1). Each class: 5 levels + a median fallback.
+# The nscale ladder (Table 1). Each class: 5 levels + a median fallback.
 # --------------------------------------------------------------------------- #
 LADDER = {
     "alpha":      ([1.1954, 1.4704, 1.7453, 2.0322, 2.5044], 1.7453),
@@ -93,8 +93,8 @@ def normalize_class(raw):
     return CLASS_ALIASES[key]
 
 
-def strength_for(class_key, level):
-    """Strength for a given class and ladder level index (>=5 -> fallback)."""
+def nscale_for(class_key, level):
+    """Nscale for a given class and ladder level index (>=5 -> fallback)."""
     levels, fallback = LADDER[class_key]
     return fallback if level >= len(levels) else levels[level]
 
@@ -132,7 +132,7 @@ IMPLICIT_DEFAULTS = {
 
 # max_rounds = 6 covers the normal case exactly: 5 ladder levels + the median
 # fallback, with every unstable unit climbing one level per round. A run can in
-# theory need more only if raising one unit's strength destabilizes a previously
+# theory need more only if raising one unit's nscale destabilizes a previously
 # stable unit (rare); such a protein simply fails to stabilize in 6 rounds and is
 # flagged with a WARNING in the report for the user to inspect/exclude.
 # min_contacts: a unit (domain or interface) with fewer than this many native
@@ -203,14 +203,15 @@ def write_round_ini(path, base_options, overrides):
 # --------------------------------------------------------------------------- #
 # domain.yaml per round
 # --------------------------------------------------------------------------- #
-def write_domain_yaml(path, raw_cfg, interfaces, strength_dom, strength_int):
+def write_domain_yaml(path, raw_cfg, interfaces, nscale_dom, nscale_int):
     """Write a domain.yaml that keeps residues/class from the input and sets the
-    current per-domain and per-interface strengths."""
+    current per-domain and per-interface nscales."""
     cfg = copy.deepcopy(raw_cfg)
     for name, vals in cfg["intra_domains"].items():
-        vals["strength"] = round(float(strength_dom[name]), 4)
+        vals.pop("strength", None)   # drop the deprecated alias if the seed used it
+        vals["nscale"] = round(float(nscale_dom[name]), 4)
     cfg["inter_domains"] = {
-        f"{a}-{b}": round(float(strength_int[(a, b)]), 4) for (a, b) in interfaces
+        f"{a}-{b}": round(float(nscale_int[(a, b)]), 4) for (a, b) in interfaces
     }
     with open(path, "w") as fh:
         yaml.safe_dump(cfg, fh, sort_keys=False)
@@ -224,6 +225,28 @@ class Scorer:
 
     def __init__(self, pdb, domain_yaml, cutoff=4.5, local_separation=3,
                  tolerance=1.2):
+        """Build the per-domain and per-interface native-contact lists once.
+
+        Parameters
+        ----------
+        pdb : str
+            All-atom reference PDB defining the native contacts.
+        domain_yaml : str
+            Domain definition file assigning residues to domains.
+        cutoff : float, optional
+            Heavy-atom distance (Å) defining a native contact (default 4.5).
+        local_separation : int, optional
+            Minimum sequence separation ``|i - j| >`` this for a contact
+            (default 3).
+        tolerance : float, optional
+            Cα-distance stretch factor for a "formed" contact when scoring
+            (default 1.2).
+
+        Raises
+        ------
+        ValueError
+            If the domain file's residue count disagrees with the reference.
+        """
         self.tolerance = tolerance
 
         u_ref = ncmod.load_universe(pdb)
@@ -258,6 +281,13 @@ class Scorer:
                 heavy_positions, heavy_res, ca_positions, cutoff, local_separation)
 
     def unit_keys(self):
+        """Return all scoring-unit keys (domain and interface) as a list.
+
+        Returns
+        -------
+        list
+            The ``("domain", name)`` and ``("interface", (a, b))`` keys.
+        """
         return list(self.units)
 
     def n_contacts(self, key):
@@ -267,6 +297,18 @@ class Scorer:
 
     @staticmethod
     def label(key):
+        """Column label for a scoring unit, e.g. ``Q_D1`` or ``Q_D1-D2``.
+
+        Parameters
+        ----------
+        key : tuple
+            A ``("domain", name)`` or ``("interface", (a, b))`` unit key.
+
+        Returns
+        -------
+        str
+            ``"Q_<name>"`` for a domain, ``"Q_<a>-<b>"`` for an interface.
+        """
         kind, name = key
         return f"Q_{name}" if kind == "domain" else f"Q_{name[0]}-{name[1]}"
 
@@ -333,7 +375,7 @@ def run_md(round_dir, md_ini, python_exe):
 # --------------------------------------------------------------------------- #
 def run_optimizer(config, outdir="opt_out", device=None, md_steps=None,
                   python_exe=None):
-    """Run the strength optimization end to end.
+    """Run the nscale optimization end to end.
 
     Parameters
     ----------
@@ -373,6 +415,13 @@ def run_optimizer(config, outdir="opt_out", device=None, md_steps=None,
     log_fh = open(opt_log, "w", buffering=1)
 
     def log(msg):
+        """Print ``msg`` and append it to the optimization log file (both flushed).
+
+        Parameters
+        ----------
+        msg : str
+            Line to emit to stdout and the ``optimization.log`` file.
+        """
         print(msg, flush=True)
         log_fh.write(msg + "\n")
         log_fh.flush()
@@ -407,7 +456,7 @@ def _optimize_loop(log, pdb, domain_path, raw_cfg, sim_options, out_root,
     frozen = {k for k in scorer.unit_keys()
               if scorer.n_contacts(k) < min_contacts}
 
-    log(f"# Strength optimization for {Path(pdb).name}")
+    log(f"# Nscale optimization for {Path(pdb).name}")
     log(f"# domains: {scorer.domain_names}  interfaces: {scorer.interfaces}")
     log("# native contacts detected (heavy-atom <= 4.5 A, |i-j| > 3):")
     for key in scorer.unit_keys():
@@ -428,18 +477,31 @@ def _optimize_loop(log, pdb, domain_path, raw_cfg, sim_options, out_root,
         round_dir = out_root / f"round_{rnd}"
         round_dir.mkdir(exist_ok=True)
 
-        # 1. current strengths from each unit's class ladder
-        strength_dom = {name: strength_for(unit_class[("domain", name)],
+        # 1. current nscales from each unit's class ladder
+        nscale_dom = {name: nscale_for(unit_class[("domain", name)],
                                             level[("domain", name)])
                         for name in scorer.domain_names}
-        strength_int = {(a, b): strength_for("interface", level[("interface", (a, b))])
+        nscale_int = {(a, b): nscale_for("interface", level[("interface", (a, b))])
                         for (a, b) in scorer.interfaces}
 
         domain_yaml = round_dir / "domain.yaml"
         write_domain_yaml(domain_yaml, raw_cfg, scorer.interfaces,
-                          strength_dom, strength_int)
+                          nscale_dom, nscale_int)
 
         def level_tag(key):
+            """Human-readable ladder-level tag for a unit's current level.
+
+            Parameters
+            ----------
+            key : tuple
+                A domain or interface unit key.
+
+            Returns
+            -------
+            str
+                ``"frozen"`` for pinned units, ``"fallback"`` at or past the
+                fallback index, otherwise ``"level N"`` (1-based).
+            """
             if key in frozen:
                 return "frozen"
             lv = level[key]
@@ -448,10 +510,10 @@ def _optimize_loop(log, pdb, domain_path, raw_cfg, sim_options, out_root,
         log(f"\n## Round {rnd}:")
         for name in scorer.domain_names:
             tag = level_tag(("domain", name))
-            log(f"   domain {name:<10} {tag:<9} strength = {strength_dom[name]:.4f}")
+            log(f"   domain {name:<10} {tag:<9} nscale = {nscale_dom[name]:.4f}")
         for a, b in scorer.interfaces:
             tag = level_tag(("interface", (a, b)))
-            log(f"   iface  {a}-{b:<8} {tag:<9} strength = {strength_int[(a, b)]:.4f}")
+            log(f"   iface  {a}-{b:<8} {tag:<9} nscale = {nscale_int[(a, b)]:.4f}")
 
         # 2-3. produce ntraj independent trajectories (one multi-copy MD run)
         md_ini = round_dir / "md.ini"
@@ -536,19 +598,19 @@ def _optimize_loop(log, pdb, domain_path, raw_cfg, sim_options, out_root,
         log(f"\n# Stopped: reached max_rounds={max_rounds}.")
 
     # --- final calibrated domain.yaml ---
-    final_dom = {name: strength_for(unit_class[("domain", name)],
+    final_dom = {name: nscale_for(unit_class[("domain", name)],
                                     level[("domain", name)])
                  for name in scorer.domain_names}
-    final_int = {(a, b): strength_for("interface", level[("interface", (a, b))])
+    final_int = {(a, b): nscale_for("interface", level[("interface", (a, b))])
                  for (a, b) in scorer.interfaces}
     final_yaml = out_root / "domain_optimized.yaml"
     write_domain_yaml(final_yaml, raw_cfg, scorer.interfaces, final_dom, final_int)
 
-    log("\n## Final strengths:")
+    log("\n## Final nscales:")
     for name in scorer.domain_names:
-        log(f"   domain {name:<10} strength = {final_dom[name]:.4f}")
+        log(f"   domain {name:<10} nscale = {final_dom[name]:.4f}")
     for a, b in scorer.interfaces:
-        log(f"   iface  {a}-{b:<8} strength = {final_int[(a, b)]:.4f}")
+        log(f"   iface  {a}-{b:<8} nscale = {final_int[(a, b)]:.4f}")
     if frozen:
         log(f"# frozen (< min_contacts={min_contacts}, pinned at level 1, "
             f"not optimized): "
@@ -562,7 +624,7 @@ def _optimize_loop(log, pdb, domain_path, raw_cfg, sim_options, out_root,
         log(f"# WARNING: {Path(pdb).name} did NOT stabilize after {rnd} rounds "
             f"(max_rounds={max_rounds}).")
         log(f"# Unstable units at the final model: {', '.join(unstable_labels)}")
-        log("# Their strengths are left at the highest level / median fallback.")
+        log("# Their nscales are left at the highest level / median fallback.")
         log("# Consider excluding this protein or inspecting it manually.")
         log(bar)
         log(f"# Calibrated model written anyway: {final_yaml}")
@@ -571,9 +633,24 @@ def _optimize_loop(log, pdb, domain_path, raw_cfg, sim_options, out_root,
 
 
 def parse_args(argv=None):
+    """Parse command-line arguments for the ``topo-optimize`` entry point.
+
+    A bare invocation (no arguments) prints help and exits.
+
+    Parameters
+    ----------
+    argv : list of str, optional
+        Argument list to parse; defaults to ``sys.argv[1:]``.
+
+    Returns
+    -------
+    argparse.Namespace
+        Parsed arguments: ``config``, ``outdir``, ``device``, ``md_steps`` and
+        ``python``.
+    """
     p = argparse.ArgumentParser(
         prog="topo-optimize",
-        description="Per-domain/interface strength (n_scale) optimizer for "
+        description="Per-domain/interface nscale optimizer for "
                     "TOPO coarse-grained models.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )

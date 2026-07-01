@@ -84,7 +84,7 @@ A `md.ini` sets options such as `pdb_file`, `model` (use `topo`), `md_steps`,
 `dt`, `device`, `n_copies`, output naming, etc. See the
 [tutorials](tutorials/) for ready-to-run templates.
 
-**Optimize interaction strengths** (per-domain / per-interface `n_scale`) from a
+**Optimize interaction nscales** (per-domain / per-interface `nscale`) from a
 minimal `optimize.ini` — equivalent forms:
 
 ```bash
