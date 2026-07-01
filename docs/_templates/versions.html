@@ -1,30 +1,29 @@
 {#- Version switcher for the Furo sidebar, populated by sphinx-polyversion.
 
-    conf.py's load() puts two values into html_context (and therefore into the
-    template namespace):
+    conf.py's load() puts two values into the template namespace:
       * current   -- the GitRef of the version being rendered
       * revisions -- all built versions (GitRef namedtuples: .name, .date, ...)
     Both are absent on a plain `make html` build, so nothing is rendered then.
 
-    Every version lives in a sibling directory of the site root
-    (<site>/<name>/...). `pathto('index')` is the relative path from the current
-    page to *this* version's index.html; stripping the trailing "index.html"
-    yields the path to this version's root, from which "../<name>/" reaches any
-    other version. This is correct at any nesting depth.
+    Rendered as a native <select> dropdown pinned to the bottom of the sidebar
+    (see html_sidebars in conf.py). Every version lives in a sibling directory of
+    the site root (<site>/<name>/...); `pathto('index')` is the relative path from
+    the current page to *this* version's index.html (except on the index page
+    itself, where Sphinx returns the self-anchor '#'), so stripping the trailing
+    "index.html" yields this version's root, from which "../<name>/" reaches any
+    other version. Correct at any nesting depth.
 -#}
 {%- if revisions %}
-{#- pathto('index') is the relative path to this version's index.html, EXCEPT on the
-    index page itself where Sphinx returns the self-anchor '#'; treat that as root. -#}
 {%- set _p = pathto('index') %}
 {%- set vroot = '' if _p == '#' else _p | replace('index.html', '') %}
-<div class="sidebar-tree polyversion-switcher">
-  <p class="caption" role="heading"><span class="caption-text">Versions</span></p>
-  <ul>
+<div class="polyversion-switcher">
+  <label class="polyversion-label" for="polyversion-select">Version</label>
+  <select id="polyversion-select"
+          onchange="if (this.value) window.location.href = this.value;">
     {%- for rev in revisions | sort(attribute='name') %}
-    <li class="toctree-l1{% if current and rev.name == current.name %} current-page{% endif %}">
-      <a class="reference internal" href="{{ vroot }}../{{ rev.name }}/index.html">{{ rev.name }}</a>
-    </li>
+    <option value="{{ vroot }}../{{ rev.name }}/index.html"
+            {%- if current and rev.name == current.name %} selected{% endif %}>{{ rev.name }}</option>
     {%- endfor %}
-  </ul>
+  </select>
 </div>
 {%- endif %}

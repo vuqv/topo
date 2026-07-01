@@ -231,18 +231,19 @@ except Exception:
 # Furo supplies its own sidebar (nav + search). We list its components explicitly
 # so we can insert the version switcher (versions.html) under the search box while
 # keeping the rest of Furo's navigation intact.
-# Furo's default sidebar order (see furo/theme/furo/theme.conf) with versions.html
-# inserted at the top of the scrollable nav area. Keep this list in sync with Furo.
+# Furo's default sidebar order (see furo/theme/furo/theme.conf) with the version
+# switcher (versions.html) pinned at the very bottom, below the light/dark toggle.
+# Keep the Furo component list in sync with Furo.
 html_sidebars = {
     "**": [
         "sidebar/brand.html",
         "sidebar/search.html",
         "sidebar/scroll-start.html",
-        "versions.html",
         "sidebar/navigation.html",
         "sidebar/ethical-ads.html",
         "sidebar/scroll-end.html",
         "sidebar/variant-selector.html",
+        "versions.html",
     ]
 }
 

@@ -32,7 +32,7 @@ from sphinx_polyversion.sphinx import SphinxBuilder
 
 # -- Configuration (each overridable from the CLI via -o KEY=VALUE) -----------
 #: Branches to publish (full-match regex). Add branches here as needed.
-BRANCH_REGEX = r"^(main|translation|tut15-claude-fix)$"
+BRANCH_REGEX = r"^(main|translation|dev)$"
 #: Tags to publish (none by default; use r".*" to publish every tag).
 TAG_REGEX = r"^$"
 #: Which git remote the branches live on. Left empty so we enumerate *local*

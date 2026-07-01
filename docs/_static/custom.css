@@ -42,3 +42,36 @@ article table.docutils .literal {
     white-space: normal;
     overflow-wrap: anywhere;
 }
+
+/* 3. Version switcher (sphinx-polyversion) — a dropdown pinned to the bottom of
+      the sidebar, below Furo's light/dark toggle (see _templates/versions.html
+      and html_sidebars in conf.py). */
+.polyversion-switcher {
+    padding: 0.5rem var(--sidebar-item-spacing-horizontal, 1rem) 0.75rem;
+    border-top: 1px solid var(--color-sidebar-background-border, var(--color-background-border));
+}
+
+.polyversion-switcher .polyversion-label {
+    display: block;
+    margin-bottom: 0.25rem;
+    font-size: var(--sidebar-caption-font-size, 0.8125rem);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-sidebar-caption-text, var(--color-foreground-secondary));
+}
+
+.polyversion-switcher select {
+    width: 100%;
+    padding: 0.35rem 0.5rem;
+    font: inherit;
+    color: var(--color-foreground-primary);
+    background-color: var(--color-background-primary);
+    border: 1px solid var(--color-background-border);
+    border-radius: 0.25rem;
+    cursor: pointer;
+}
+
+.polyversion-switcher select:hover {
+    border-color: var(--color-foreground-border);
+}

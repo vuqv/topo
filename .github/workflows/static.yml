@@ -15,7 +15,7 @@ on:
   push:
     # A push to any of these rebuilds the WHOLE multi-version site (poly.py
     # enumerates every whitelisted branch regardless of which one triggered).
-    branches: ["main", "translation"]
+    branches: ["main", "translation", "dev"]
     tags: ["*"]
   workflow_dispatch:
 
