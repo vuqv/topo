@@ -108,7 +108,7 @@ def _ptc_bead_index(ribo, segid: str, resid: int, name: str) -> int:
     raise ValueError(f"ribosome bead {segid}:{resid}@{name} not found.")
 
 
-def optimal_ptc_targets(ribo, *, aa_radius_nm: float = 0.678,
+def optimal_ptc_targets(ribo, *, aa_rmin2_nm: float = 0.5,
                         n_starts: int = 60
                         ) -> Tuple[np.ndarray, np.ndarray]:
     """Optimal A-site / P-site C-terminus restraint **target points** (nm).
@@ -146,9 +146,12 @@ def optimal_ptc_targets(ribo, *, aa_radius_nm: float = 0.678,
     ribo : Ribosome
         The parsed rigid CG ribosome (supplies the AtR/PtR 76 R/P/BR2 beads, all bead
         coordinates and the excluded-volume radii).
-    aa_radius_nm : float, optional
-        Collision radius (nm) of the restrained amino-acid bead used in the excluded
-        volume; default 0.678 (TRP, the largest -- the tightest clash test).
+    aa_rmin2_nm : float, optional
+        Nascent-bead Rmin/2 (nm) used in the seed excluded-volume term, combined with the
+        ribosome per-bead Rmin/2 by O'Brien's SUM rule (R = aa_rmin2_nm + Rmin/2_ribo) --
+        the SAME EV the simulation applies. Default 0.5 (a conservative value ~ the largest
+        per-residue Karanicolas-Brooks radius, so the seed clears the wall for essentially
+        every residue -> fewer dt-halving blow-ups).
     n_starts : int, optional
         Number of deterministic multistart initial orientations (default 60).
 
@@ -168,7 +171,12 @@ def optimal_ptc_targets(ribo, *, aa_radius_nm: float = 0.678,
     U2A = RB[_ptc_bead_index(ribo, "AtR", 76, "BR2")]       # topo BR2 == O'Brien PU2
     U2P = RB[_ptc_bead_index(ribo, "PtR", 76, "BR2")]
 
-    sig = 0.5 * (aa_radius_nm + RBr)                        # pair contact dist (nm)
+    # Pair contact distance for the seed EV, CONSISTENT with the simulation's NC<->ribosome
+    # force (topo.csp.ribosome.append_ribosome): O'Brien's SUM rule R_ij = Rmin/2_nascent +
+    # Rmin/2_ribo (NOT the average 0.5*(sig_i+sig_j)). aa_rmin2_nm is the nascent bead's Rmin/2
+    # (a conservative value ~ the max per-residue Karanicolas-Brooks radius, so the seed is
+    # placed clear of the wall for essentially every residue -> fewer dt-halving blow-ups).
+    R_pair = aa_rmin2_nm + RBr                              # pair contact dist (nm), sum rule
     mA = np.ones(ribo.n, bool); mA[iRA] = False             # O'Brien exclusions
     mP = np.ones(ribo.n, bool); mP[iRP] = False
     ka, eps = _PTC_ANGLE_K_KJ, RIBO_NC_EPS_KJ               # kJ/mol/rad^2 , kJ/mol
@@ -185,8 +193,12 @@ def optimal_ptc_targets(ribo, *, aa_radius_nm: float = 0.678,
         return np.arctan2(m.dot(n2), n1.dot(n2))
 
     def _ev(pt, mask):                                      # excluded volume (kJ/mol)
+        # O'Brien 12-10-6 (same form as the simulation NC<->ribosome force), summed over
+        # ribosome beads. Minimizing it places the seed at the least-buried point of the
+        # actual wall (the -18/+4 terms give a negligible eps-deep attractive tail).
         d = np.linalg.norm(RB[mask] - pt, axis=1)
-        return np.sum(eps * (sig[mask] / d) ** 12)
+        x = R_pair[mask] / d
+        return np.sum(eps * (13.0 * x ** 12 - 18.0 * x ** 10 + 4.0 * x ** 6))
 
     d2r = np.deg2rad
     # Only the peptide bond is a HARD equality constraint -- it is topo's AllBonds
