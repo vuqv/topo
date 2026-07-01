@@ -83,10 +83,39 @@ a **much more complete egress** (chain fully leaves, CoM +161 Å, ends 140 Å fr
 Option B's +22 Å). Both pass all D-checks. **Cost:** ~2.7× more dt-halving (larger radii ⇒ seeds sit
 deeper in the wall — the seeding-consistency fix would reduce this).
 
-### P0CX28 (L=1→106)
+### P0CX28 (L=1→106) — DONE
 | metric | Option A value | vs B |
 |--------|----------------|------|
-| hard clashes | | |
-| min center-dist / corr / x-range / R_g | | |
-| D5b | | |
-| dt-halving recoveries | | |
+| hard clashes (<3 Å) | 0 | tie (both 0) |
+| min center-dist (synth) | 3.86 Å | ~tie (B 3.91) |
+| threading corr | −0.969 | tie (B −0.969, identical) |
+| extrusion x-range | 10..91 Å | ~tie (B 10..98) |
+| final R_g | 2.219 nm | ~tie (B 2.306; both ≈ native 2.111) |
+| D5b (wall/clash/egress) | PASS / PASS / PASS | tie (both pass) |
+| ejection: CoM-x net / min NC dist | +21.1 Å / 3.01 Å | ~tie (B +15.7 / 3.18) |
+| worst max\|PotE\| | 7.96e3 kJ/mol | B lower (2.75e3) |
+| dt-halving recoveries | 61 / 127 | **A ~2.8× worse** (B 22 / 47) |
+
+**P0CX28 verdict:** Option A and B are **essentially equivalent** in outcome (clash, threading,
+extrusion, near-native R_g, D5b all pass); Option A just costs ~2.8× more dt-halving.
+
+---
+
+## Overall verdict & recommendation
+
+| | Option B (per-AA `SA..SY`) | Option A (per-residue K–B) |
+|--|--|--|
+| Faithful to O'Brien's nascent radii | ✗ (those are ribosomal-protein radii) | ✅ (O'Brien's actual `A_i`) |
+| 4c5c: clash / energy / egress | 0 / 1.9e6 / +22 Å | **0 / 1.94e4 / +161 Å (fully clears)** |
+| P0CX28 | ✅ all pass | ✅ all pass (≈ B) |
+| D-checks (both proteins) | all PASS | all PASS |
+| dt-halving cost | 96 (4c5c) / 22 (P0CX28) | **263 / 61 (~2.7–2.8× more)** |
+
+**Recommendation: adopt Option A as the default.** It is the O'Brien-faithful choice (per-position
+Karanicolas–Brooks = his `A_i` nascent radii), is *at least as good* on every D-check for both
+proteins, and is clearly better for 4c5c (better exclusion, cleaner energies, a far more complete
+egress). Its only downside is ~2.7–2.8× more dt-halving, caused by the *larger* per-residue radii
+seeding the new residue deeper into the (now correct) wall. **Next improvement:** make
+`optimal_ptc_targets` place the A/P seed against the *same* 12-10-6 + sum-rule EV so the new residue
+is born clear of the wall — that should cut the dt-halving overhead back down while keeping Option A's
+fidelity. (Option B remains available as the `append_ribosome(..., nascent_rmin2=None)` fallback.)
