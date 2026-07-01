@@ -55,6 +55,41 @@ clean +x egress, and no leak through the truncated ribosome.
   CHARMM→OpenMM ×2). Now E = 209.2 kJ/mol at a 1 Å stretch = O'Brien/CHARMM (50 kcal/mol/Å²). Moot
   under `AllBonds` (bonds are constraints; tut15 unaffected), corrects flexible-bond runs.
 
+## 7. Nascent NC↔ribosome Rmin/2: Option A vs B, seeding fix, speedup (2026-06-30, after `0c8f7d0`)
+
+The initial NC↔ribosome fix (§5) used **Option B** for the *nascent* side (per-AA `SA..SY`). Verified
+from O'Brien's source (`rnc.prm`/`rnc.xml`: nascent = per-position `A1..An`, NBFIX only A–A + B–B,
+nascent↔ribosome = LB of self-Rmin) that O'Brien actually uses **per-position Karanicolas–Brooks**
+radii — **Option A**. Switched to A (default), kept B optional, then removed A's cost with a seeding
+fix and a stage-2 speedup. Commit-by-commit:
+
+| commit | change |
+|--------|--------|
+| `1dc64d6` | Record Option B baseline metrics (for A/B compare) → `OPTION_A_vs_B.md`. Commit `0c8f7d0` **is** the Option B code state. |
+| `83dfd6a` | **Option A implemented**: nascent Rmin/2 = per-residue K–B (structure-derived). Exposed via `build_nonbonded_interaction(return_rmin2=True)` → `precompute_contacts` (now 3-tuple) → `run_length(nascent_rmin2=)` → `append_ribosome(nascent_rmin2=)`. Reproduces O'Brien `.prm` A-values (76/306 exact, mean 0.06 nm). tut09 `cylinder.py` updated for the 3-tuple. |
+| `efcf44d` | 4c5c A-vs-B recorded: A better (excl 4.12 vs 3.32 Å, energy 1.94e4 vs 1.9e6, egress +161 vs +22 Å); ~2.7× more dt-halving. |
+| `a6c50e0` | P0CX28 A-vs-B + overall verdict: A ≈ B on P0CX28; adopt A. |
+| `40f54e3` | **Optional key** `nascent_ev_radii = kb` (Option A, DEFAULT) \| `per_aa` (Option B). Both kept (`ElongationParams.nascent_ev_radii`; read in `read_csp_config`). |
+| `2c01dec` | **Seeding-consistency fix**: `optimal_ptc_targets` now minimizes the *same* 12-10-6 sum-rule EV (`R = aa_rmin2_nm + Rmin/2_ribo`, default `aa_rmin2_nm=0.5`) as the simulation, so the A/P seed sits at the least-buried point of the real wall (a_target clearance 2.37 → 4.27 Å). Param renamed `aa_radius_nm` → `aa_rmin2_nm`. |
+| `7bda1c6` | Seeding-fix **result** (4c5c): dt-halving **263/534 → 0/0**, worst \|PotE\| **1.94e4 → 1.02e3**, min NC-dist 4.12 → 4.79 Å, still 0 clash / no leak. Recorded in `OPTION_A_vs_B.md`. |
+| `18af082` | Run **all profiles on GPU** (debug INIs `csp.ini`/`csp_tether.ini`/`P0CX28/csp.ini` switched CPU→GPU; full + eject already GPU). |
+| `a2b8519` | **Low-risk speedup**: skip the redundant **stage-2 minimize** (continues from stage-1's relaxed final at the same A-site target). `run_length(minimize_override=)`; protocol passes `False` for stage 2. |
+
+**Net (4c5c, Option A + seeding fix):** clash-free (0 hard clashes, min NC-dist 4.79 Å), no leak,
+finite energy (worst 1.02e3 kJ/mol), **0 dt-halving**, D5b all PASS, dwell 1.01×. Measured cost split:
+the seed solve (`optimal_ptc_targets`) runs **once per run** (not per length); per-stage cost is
+minimize+MD (rebuild/context ≈ 0.5 s ≈ 80% of a fast 0.6 s stage). The "single build per L" refactor
+was measured to save only ~40% (not 3×) and was declined in favor of the stage-2-minimize skip.
+
+**Investigation records (read for the reasoning):** `TOPO_OBrien_NCribosome_nonbonded_compare.md`
+(NC↔ribosome force comparison + root cause), `OPTION_A_vs_B.md` (A/B + seeding-fix tables),
+`TOPO_OBrien_params_compare.md` (full force-field audit).
+
+**Note on outputs (2026-07-01):** superseded run dirs (`synth_out_oldribo/`, `synth_out_softEV/`,
+`synth_out_optB/`, `synth_out_optA_noseed/` and their P0CX28 twins) were deleted to stay under the
+disk quota — all their metrics are preserved in the `.md` records above and they are regenerable via
+the INIs.
+
 ## Code touched (outside this folder)
 - `topo/csp/ribosome.py` — `load_obrien_ribosome`, `load_ribosome_auto`, `anchor_coord`,
   `OBRIEN_SC_RMIN2_NM`, full O'Brien tRNA tether, O'Brien 12-10-6 NC↔ribosome EV.
