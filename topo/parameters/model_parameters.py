@@ -22,7 +22,10 @@ parameters = {
     "topo": {
         "bond_length_protein": 0.381,
         "bond_length_nucleic": 0.5,  # RNA
-        "bond_force_constant": 20920.0,  # kj/mol/nm^2, converted from 50kcal/mol/A^2
+        "bond_force_constant": 41840.0,  # kJ/mol/nm^2 = 50 kcal/mol/A^2 * 4.184 * 100 * 2.
+        # The *2 converts CHARMM's Kb(r-r0)^2 to OpenMM HarmonicBondForce's 1/2*k(r-r0)^2
+        # (matches O'Brien's parse_cg_prm.py). Was 20920 (missing the *2 -> 2x too soft);
+        # moot under AllBonds constraints (bonds are rigid) but corrects flexible-bond runs.
         "bonded_exclusions_index": 2,
         "ALA": {
             "mass": 71.00,

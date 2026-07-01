@@ -21,7 +21,7 @@ energy ×4.184 (kcal→kJ), length ÷10 (Å→nm), angle ×π/180 (deg→rad); b
 
 | Term | Functional form | Constants/parameters | Verdict |
 |------|-----------------|----------------------|---------|
-| Bond | identical (`½k(r−r₀)²`, both via `HarmonicBondForce`) | **k differs ×2** (topo 20920 vs O'Brien 41840) — topo missing the CHARMM→OpenMM ×2 | ⚠️ likely latent bug (moot under `AllBonds`) |
+| Bond | identical (`½k(r−r₀)²`, both via `HarmonicBondForce`) | **FIXED**: topo k 20920→**41840** (added the missing CHARMM→OpenMM ×2); now matches O'Brien | ✅ (2026-06-30) |
 | Angle | identical (dual-basin log-sum-exp) | identical (106.4/91.7/26.3/130/0.1/4.3) | ✅ |
 | Dihedral | identical (Σ₁⁴ periodic) | identical (topo's ×0.756 reconstructs the prm — verified ratio 1.000) | ✅ |
 | Improper | none (Cα model) in both | — | ✅ |
@@ -48,15 +48,14 @@ $$U_\text{bond}(r) = \tfrac{1}{2}\,k\,(r-r_0)^2$$
 | effective Kb | **50 kcal/mol/Å²** (= CHARMM) | **25 kcal/mol/Å²** |
 | E at +1 Å stretch | **209.2 kJ/mol** | **104.6 kJ/mol** (empirically evaluated) |
 
-⚠️ **Both** use OpenMM `HarmonicBondForce`, so the **½ is present in both** — it is not the
-source of the gap. The gap is in `k`: `parse_cg_prm.py` multiplies CHARMM's `Kb` by **2** so
-that `½k = Kb·conv` reproduces CHARMM's `Kb(r−r₀)²`; **topo's `20920 = 50·4.184·100` is the
-CHARMM Kb converted *without* that ×2** — i.e. the value appropriate for a *no-½* energy form,
-dropped into a *½*-form. As implemented topo's bonds are therefore **2× softer** (25 vs
-50 kcal/mol/Å²; verified: 104.6 vs 209.2 kJ/mol at a 1 Å stretch). This looks like a **latent
-unit-conversion bug** — to match O'Brien, `bond_force_constant` should be **41840**. **Moot on
-the tut-15 default path** (rigid `constraints="AllBonds"` → bonds are holonomic constraints, k
-unused), but it softens any flexible-bond run (e.g. the legacy 12/13 path).
+✅ **FIXED (2026-06-30):** `model_parameters['topo']['bond_force_constant']` changed **20920 →
+41840**. Both codes use OpenMM `HarmonicBondForce` (the ½ is in both); the gap was in `k` —
+`parse_cg_prm.py` multiplies CHARMM's `Kb` by **2** so `½k = Kb·conv` reproduces `Kb(r−r₀)²`,
+whereas topo's old `20920 = 50·4.184·100` omitted that ×2 (the value for a *no-½* form dropped
+into a *½*-form → 2× too soft). Now `41840` gives **E = 209.20 kJ/mol at a 1 Å stretch =
+O'Brien/CHARMM** (was 104.6). Moot on tut-15's `AllBonds` path (bonds are rigid constraints, so
+`HarmonicBondForce` isn't even created), but it corrects any flexible-bond run (legacy 12/13,
+package default `buildCoarseGrainModel`).
 
 ## 2. Backbone angles
 
@@ -205,10 +204,9 @@ Not part of the base force field; reproduced for the tether feature: bond `½k(r
 The topo CG force field is a **faithful port** of the O'Brien model: the **angle**,
 **dihedral**, **electrostatic**, and **contact (12-10-6 Gō)** functional forms **and** their
 constants match exactly (dihedrals verified numerically, ratio 1.000), as do charges and masses.
-The substantive differences are: (1) the harmonic-**bond k** is 2× softer in topo — both use
-`HarmonicBondForce` (the ½ is in both), but topo's `20920` is the CHARMM Kb converted *without*
-the ×2 that the ½-form needs (a likely latent unit bug; should be `41840`) — irrelevant under
-`AllBonds` where bonds are constraints, but it softens flexible-bond runs; (2) **non-native excluded-volume radii** use a
+The substantive differences are: (1) the harmonic-**bond k** was 2× soft in topo (`20920`,
+missing the CHARMM→OpenMM ×2) — **now fixed to `41840`** to match O'Brien (moot under `AllBonds`,
+corrects flexible-bond runs); (2) **non-native excluded-volume radii** use a
 different source (per-AA-type table vs per-position prm) and combination rule (½(σ_i+σ_j) vs
 Rmin/2_i+Rmin/2_j) — a weak repulsion either way given ε≈5.5×10⁻⁴ kJ/mol; and (3)
 native-contact ε/R are **recomputed** by topo from structure+STRIDE+`domain.yaml` rather than
