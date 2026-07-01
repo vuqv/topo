@@ -36,7 +36,7 @@ mechanics are in [`STAGES.md`](STAGES.md), and a post-mortem on why the earlier
 ### Prepared inputs for `topo-csp`
 | File | Role | Provenance |
 |------|------|-----------|
-| `domain.yaml` | 3-domain map + contact strength for the topo CG build. | Mapped from `protein_cg_model/domain_def.dat` (see header in the file). |
+| `domain.yaml` | 3-domain map + contact nscale for the topo CG build. | Mapped from `protein_cg_model/domain_def.dat` (see header in the file). |
 | `4c5c_mrna.txt` | mRNA, one codon/residue (+stop). | **Identical** to `continuous_synthesis/input/setup/4c5c_mrna_sequence_fast.txt`. |
 | `trans_times.txt` | Codon → mean in-vivo time (s). | Fluitt *E. coli* table (= `setup/Fluitt_ecoli_trans_time_310K_avg_16.5.txt`). |
 | `4c5c_model_clean_stride.dat` | Precomputed STRIDE (skips running STRIDE). | From the all-atom PDB. |

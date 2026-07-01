@@ -29,9 +29,10 @@ HERE = Path(__file__).resolve().parent
 OUT = HERE / "synth_out"
 # Tutorial 15 reuses the O'Brien reference RUN from Tutorial 12 (there is no copy here --
 # the reference data is read-only and lives under ../12_auto/). The reference covers L=1->10.
-REF = HERE.parent / "12_auto" / "continuous_synthesis" / "output"
-# Ribosome: O'Brien's authentic truncated CG ribosome (.cor + sibling .psf/.prm), the same
-# one the run used. Loaded so the wall plane + clash check match the run exactly.
+REF = HERE.parent / "tutorials" / "12_auto" / "continuous_synthesis" / "output"
+# Ribosome: topo's STANDALONE CG truncated PDB (the same one the run used) -- loaded via
+# load_ribosome from model_parameters, no O'Brien .cor/.psf/.prm. Loaded so the wall plane
+# + clash check match the run exactly.
 from topo.csp.core import optimal_ptc_targets
 from topo.csp.ribosome import load_ribosome, anchor_coord
 RIBO = load_ribosome(str(HERE / "ribosome_trunc.pdb"))
@@ -263,8 +264,45 @@ def ref_nascent_rg():
     return rg(nas.positions)
 
 
+def analyze_threading():
+    """Final full-length chain: threads the tunnel (corr idx vs x), no leak, no clash."""
+    print()
+    print("=" * 70)
+    print("Chain topology (final full-length nascent structure)")
+    print("=" * 70)
+    import glob as _glob
+    Ls = sorted(int(p.split("L_")[1]) for p in _glob.glob(str(OUT / "L_*")))
+    if not Ls:
+        print("  no L dirs -- SKIP"); return None
+    Lmax = Ls[-1]
+    final = OUT / f"L_{Lmax:03d}" / "stage_3" / "traj_final.pdb"
+    if not final.is_file():
+        # stage_3 may be absent for the last residue; fall back to any stage
+        cands = sorted(_glob.glob(str(OUT / f"L_{Lmax:03d}" / "stage_*" / "traj_final.pdb")))
+        if not cands:
+            print(f"  no final structure for L={Lmax} -- SKIP"); return None
+        final = Path(cands[-1])
+    nas = read_pdb_coords(final, names=None)   # (Lmax,3) Angstrom
+    idx = np.arange(len(nas))
+    corr = float(np.corrcoef(idx, nas[:, 0])[0, 1])
+    min_x = float(nas[:, 0].min())
+    d2 = ((nas[:, None, :] - RIBO_COORDS_A[None, :, :]) ** 2).sum(axis=2)
+    min_d = float(np.sqrt(d2.min()))
+    x0_A = TUNNEL_WALL_X0_NM * 10.0
+    print(f"  final length L = {Lmax}  ({len(nas)} beads)  file {final.name}")
+    print(f"  corr(residue index, x) = {corr:+.3f}   "
+          f"(strongly negative => N-term extruded +x, C-term at PTC)")
+    print(f"  x range: {nas[:,0].min():.1f} .. {nas[:,0].max():.1f} A   Rg = {rg(nas):.3f} nm")
+    print(f"  min nascent x = {min_x:.2f} A  (tunnel wall x0 = {x0_A:.2f} A) -> "
+          f"leak {'NONE' if min_x >= -1.0 else 'LEAK<0'}, wall {'OK' if min_x >= x0_A-1.0 else 'PENETRATED'}")
+    print(f"  min nascent-ribosome distance = {min_d:.2f} A  "
+          f"({'no hard clash' if min_d >= 2.0 else 'CLASH'})")
+    return dict(L=Lmax, corr=corr, min_x=min_x, min_d=min_d, rg=rg(nas))
+
+
 if __name__ == "__main__":
     d5 = scan_energies()
+    dth = analyze_threading()
     d5b = analyze_ejection()
     d6 = analyze_quantitative()
     print()

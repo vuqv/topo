@@ -31,7 +31,7 @@ from openmm import unit
 from topo.csp.protocol import read_csp_config
 from topo.csp.core import (precompute_contacts, run_length,
                            optimal_ptc_targets, TUNNEL_AXIS)
-from topo.csp.ribosome import load_ribosome_auto, anchor_coord, TRNA_TETHER_BOND_NM
+from topo.csp.ribosome import load_ribosome, anchor_coord, TRNA_TETHER_BOND_NM
 
 
 def _final_nascent_nm(out_root: Path, L: int) -> np.ndarray:
@@ -65,7 +65,7 @@ def main() -> None:
         ep.device = args.device
 
     out_root = Path(cfg.outdir)
-    R_full, eps_full, rmin2_full = precompute_contacts(cfg.pdb_file, cfg.domain_def,
+    R_full, eps_full, rmin_2_full = precompute_contacts(cfg.pdb_file, cfg.domain_def,
                                                        cfg.stride_output_file)
     N_full = R_full.shape[0]
     L = args.L or (cfg.L_max or N_full)
@@ -73,8 +73,7 @@ def main() -> None:
     if final_nm.shape[0] != L:
         raise ValueError(f"final structure has {final_nm.shape[0]} residues but L={L}.")
 
-    ribo = load_ribosome_auto(cfg.ribosome, psf=cfg.ribosome_psf,
-                              prm=cfg.ribosome_prm, model="topo")
+    ribo = load_ribosome(cfg.ribosome, model="topo")
     p_anchor = anchor_coord(ribo, "PtR", 76, "R")
     a_anchor = anchor_coord(ribo, "AtR", 76, "R")
 
@@ -95,7 +94,7 @@ def main() -> None:
     run_length(L, full_pdb=cfg.pdb_file, R_full=R_full, eps_full=eps_full,
                p_anchor=p_target, a_anchor=a_anchor, prev_final=None,
                seed_override=final_nm, out_root=out_root, params=ep, ribo=ribo,
-               restrain=False, out_subdir="ejection_long", nascent_rmin2=rmin2_full,
+               restrain=False, out_subdir="ejection_long", nascent_rmin_2=rmin_2_full,
                n_steps_override=args.steps, label=f"Extended ejection (L={L})")
 
     # Quick directional summary from the written trajectory.

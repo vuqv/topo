@@ -42,7 +42,7 @@ CHARMM (the known gap in `10_csp_obrien/TASK.md`), so — as Goal §2 permits �
 topo-native CG build from the all-atom PDB plus a topo-ready truncated ribosome:
 
 - **Protein:** `4c5c_model_clean.pdb` (306 CA) built by topo's contact builder, with
-  `domain.yaml` carrying the 3-domain map + Go-scale strengths mapped from
+  `domain.yaml` carrying the 3-domain map + Go-scale nscales mapped from
   `protein_cg_model/domain_def.dat` (4 cg_simtk segments → 3 structural domains; the
   collapse is information-preserving — see the header of `domain.yaml`).
 - **Ribosome:** `ribosome_trunc.pdb` (4,576 CG beads, X-aligned) — the topo-ready

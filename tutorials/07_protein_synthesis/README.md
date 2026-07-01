@@ -44,7 +44,7 @@ PTC) while the **N-terminus extrudes** down the tunnel and folds outside.
 | File | Role |
 |------|------|
 | `P0CX28_clean.pdb` | The target protein (106-residue single domain) = the nascent chain. |
-| `domain.yaml` | Domain definition + calibrated contact strength (same as Tutorial 1). |
+| `domain.yaml` | Domain definition + calibrated contact nscale (same as Tutorial 1). |
 | `P0CX28_clean_stride.dat` | Precomputed STRIDE (backbone H-bonds); skips running STRIDE. |
 | `ribosome_trunc.pdb` | **Truncated coarse-grained 50S ribosome** (4,576 beads) — the exit-tunnel shell + tRNAs, X-aligned. Source of the P-/A-anchors and (in v2) the rigid scenery. |
 | `elongate.ini` | The control file — everything below is configured here. |

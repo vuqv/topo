@@ -296,7 +296,7 @@ integration (96 dt-halving recoveries, higher transient energies, still finite).
 
 ## 2026-06-30 — D8 P0CX28 (L=1→106) complete
 
-Full claude-fix run on P0CX28 (106 res, strength 2.5044). **D5 PASS** (worst 241 kJ/mol), **0
+Full claude-fix run on P0CX28 (106 res, nscale 2.5044). **D5 PASS** (worst 241 kJ/mol), **0
 dt-halving**, seed bond 3.810 Å. **D5b wall PASS**; threads tunnel corr −0.740, **no leak** (0
 beads x<0); R_g 1.345 nm (0.64× the 2.111 nm native — tunnel-confined, more compact than native,
 as expected). D6 N/A (no O'Brien reference). Egress: the 106-mer is still entirely inside the

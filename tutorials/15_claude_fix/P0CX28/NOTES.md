@@ -1,6 +1,6 @@
 # NOTES.md — Tutorial 15 / P0CX28 (D8)
 
-P0CX28 (106 residues, single-domain, contact strength 2.5044) on the **claude-fix path**
+P0CX28 (106 residues, single-domain, contact nscale 2.5044) on the **claude-fix path**
 (equilibrium-PTC + rigid `AllBonds`). Reproduce: `topo-csp -f csp.ini` (debug) →
 `topo-csp -f csp_val.ini` (full, L=1→106) → `python eject_demo.py -f csp_val.ini --steps
 500000 --device GPU` → `python analyze_validation.py`.

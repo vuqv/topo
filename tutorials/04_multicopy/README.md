@@ -39,7 +39,7 @@ A direct check confirms it: the potential energy of `N` copies equals exactly
 | File | Role |
 |------|------|
 | `P0CX28_clean.pdb` | Single-chain input structure (106 residues). |
-| `domain.yaml` | Calibrated single-domain strength (2.5044), as in Tutorial 1. |
+| `domain.yaml` | Calibrated single-domain nscale (2.5044), as in Tutorial 1. |
 | `md.ini` | Config; note the **`n_copies`** and `copy_shift` options. |
 | `run_simulation.py` | The standard runner — replicates automatically when `n_copies > 1`. |
 | `split_chains.py` | Post-process: split the multi-chain DCD into per-chain DCDs. |

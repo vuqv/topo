@@ -11,11 +11,11 @@ folded protein with the coarse-grained model, and **(B)** co-translational
 synthesis (growing the chain on the ribosome). Work through them in order; Part B
 builds on Part A.
 
-### Part A — Coarse-grained protein simulation
+## Part A — Coarse-grained protein simulation
 
 Model a folded protein as a one-bead-per-residue structure-based (Gō-like) model
 and run / analyze its dynamics: the basic workflow, multidomain scaling, restarts
-and outputs, many copies at once, contact-strength optimization, and temperature
+and outputs, many copies at once, contact-nscale optimization, and temperature
 protocols.
 
 | # | Tutorial | What you learn |
@@ -24,10 +24,10 @@ protocols.
 | 2 | [Multidomain & domain scaling](https://vuqv.github.io/topo/tutorials/02_multidomain.html) | Multidomain proteins: per-domain contact scaling via `domain.yaml`, including a discontiguous domain. |
 | 3 | [Restart & outputs](https://vuqv.github.io/topo/tutorials/03_restart.html) | Continuing a run from a checkpoint, and a tour of every output file. |
 | 4 | [Many copies in one run](https://vuqv.github.io/topo/tutorials/04_multicopy.html) | Run N non-interacting chains at once to fill the GPU, then split into per-chain trajectories. |
-| 5 | [Optimizing the contact strength](https://vuqv.github.io/topo/tutorials/05_opt_nscal.html) | Automatically search the per-domain/interface `strength` (*n*<sub>scale</sub>) that keeps each domain folded, instead of hard-coding it. |
+| 5 | [Optimizing the contact nscale](https://vuqv.github.io/topo/tutorials/05_opt_nscal.html) | Automatically search the per-domain/interface `nscale` (*n*<sub>scale</sub>) that keeps each domain folded, instead of hard-coding it. |
 | 6 | [Temperature annealing & quenching](https://vuqv.github.io/topo/tutorials/06_anneal.html) | Run a temperature protocol — hold the protein hot to unfold it, then T-jump (or slow-cool) back to `ref_t` to study refolding. |
 
-### Part B — Translation (co-translational synthesis)
+## Part B — Translation (co-translational synthesis)
 
 Grow the nascent chain **residue by residue** on (or through) the ribosome, so it
 can fold *as it is synthesized*. These build on the Part A model and add the
@@ -77,7 +77,7 @@ The force field has these terms:
   residues.
 - **Structure-based non-bonded (contacts)** — the heart of the model. Native
   contacts (pairs of residues close together in the folded structure) get an
-  attractive well; everything else is repulsive. Contact strengths come from
+  attractive well; everything else is repulsive. Contact nscales come from
   hydrogen bonds (via **STRIDE**), backbone–sidechain and sidechain–sidechain
   geometry, and optional **per-domain scaling** (Tutorial 2).
 

@@ -278,7 +278,7 @@ def run_elongation(full_pdb: str, *, L0: int, L_max: Optional[int] = None,
     out_root : str
         Root output directory; each length writes to ``<out_root>/L_<L>/``.
     domain_def, stride_output_file : str, optional
-        Passed to the one-time contact precompute (n_scale / STRIDE).
+        Passed to the one-time contact precompute (nscale / STRIDE).
     params : CylinderParams, optional
         Per-length run parameters + tunnel geometry.
     """
@@ -304,7 +304,7 @@ def run_elongation(full_pdb: str, *, L0: int, L_max: Optional[int] = None,
           f"(k = {params.restraint_k} kJ/mol/nm^2; no tRNA tether).")
 
     # Build-once-subset contacts on the full native structure (STRIDE at most once).
-    R_full, eps_full, _rmin2_full = precompute_contacts(full_pdb, domain_def, stride_output_file)
+    R_full, eps_full, _rmin_2_full = precompute_contacts(full_pdb, domain_def, stride_output_file)
     N_full = R_full.shape[0]
     if L_max is None:
         L_max = N_full
@@ -378,7 +378,7 @@ def read_elongate_config(config_file: str, verbose: bool = True) -> CylinderConf
     - ``pdb_file`` -- full native PDB of the target protein (the nascent chain).
     - ``L0`` / ``L_max`` -- start / final nascent length (blank L_max -> full).
     - ``outdir`` -- root output directory (per-length subfolders ``L_<L>/``).
-    - ``domain_def`` -- domain YAML for contact ``n_scale`` (one-time precompute).
+    - ``domain_def`` -- domain YAML for contact ``nscale`` (one-time precompute).
     - ``stride_output_file`` -- precomputed STRIDE (else STRIDE runs once if on PATH).
     - ``n_steps``, ``dt``, ``ref_t``, ``tau_t``, ``nstout`` -- schedule / integrator.
     - ``device`` ('CPU'/'GPU'), ``ppn`` (CPU threads), ``minimize`` (yes/no).

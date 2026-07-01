@@ -179,14 +179,14 @@ Background on the fix: Tutorial 14's
 ├── 4c5c_mrna.txt             # one codon / residue
 ├── trans_times.txt           # Fluitt E. coli codon-time table
 ├── ribosome_trunc.pdb        # truncated CG 50S + tRNAs (X-aligned); P-/A-anchors
-├── domain.yaml               # 4c5c 3-domain map + Go-scale strengths
+├── domain.yaml               # 4c5c 3-domain map + Go-scale nscales
 ├── analyze_validation.py     # D5 energy scan + D5b ejection check [copy from tut 12/13]
 ├── csp.ini                   # DEBUG profile (short L, large scale_factor) -> synth_out_debug/
 ├── csp_val.ini               # FULL-LENGTH profile (L=1->306)            -> synth_out/
 ├── synth_out_debug/  synth_out/        # OUTPUTS ONLY — safe to regenerate
 └── P0CX28/                   # the second target, run ONLY after 4c5c passes
     ├── P0CX28_clean.pdb  P0CX28_clean_stride.dat  P0CX28_mrna.txt
-    ├── trans_times.txt  ribosome_trunc.pdb  domain.yaml  (single-domain, strength 2.5044)
+    ├── trans_times.txt  ribosome_trunc.pdb  domain.yaml  (single-domain, nscale 2.5044)
     ├── csp.ini  csp_val.ini        (L_max = 106)
     └── synth_out*/                 # OUTPUTS ONLY
 ```

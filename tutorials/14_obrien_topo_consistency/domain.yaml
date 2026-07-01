@@ -18,14 +18,14 @@
 # self-consistent: D2-D3 = 1.1556 = the intra value, and D1-D2 = D1-D3 = 2.1670,
 # D2-D4 = D3-D4 = 2.1670, so the 3-domain mapping below loses no information.
 #
-# `strength` multiplies the sidechain-sidechain native-contact energies (topo's
+# `nscale` multiplies the sidechain-sidechain native-contact energies (topo's
 # Go scaling), the same role nscal plays in the O'Brien/cg_simtk `bt` model.
 
 n_residues: 306
 intra_domains:
-  A: { residues: [1-84],          strength: 1.1556 }
-  B: { residues: [85-110, 184-306], strength: 1.1556 }
-  C: { residues: [111-183],       strength: 1.1556 }
+  A: { residues: [1-84],          nscale: 1.1556 }
+  B: { residues: [85-110, 184-306], nscale: 1.1556 }
+  C: { residues: [111-183],       nscale: 1.1556 }
 inter_domains:
   A-B: 2.1670
   A-C: 1.2747

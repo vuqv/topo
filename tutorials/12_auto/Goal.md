@@ -106,7 +106,7 @@ don't assume it.
 - [ ] **D8 — Post-mortem on Tutorial 10.** *On success of D0–D7*, write
       `tutorials/12_auto/WHY_10_FAILS.md` explaining **why the original `tutorials/10_csp_obrien`
       does not work**: contrast what 12_auto did to succeed against 10's setup, name the concrete
-      root cause(s) (e.g. CG model/strength mismatch, missing CHARMM ingest, seed-placement
+      root cause(s) (e.g. CG model/nscale mismatch, missing CHARMM ingest, seed-placement
       blow-up in `OBSERVATIONS.md` #1, config-mapping error), and give the minimal fix that
       would make Tutorial 10 work. Back claims with evidence (logs, energies, diffs), not guesses.
 

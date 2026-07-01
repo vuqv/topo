@@ -13,7 +13,7 @@ simplest possible configuration.
 | File | Role |
 |------|------|
 | `P0CX28_clean.pdb` | Input structure (all-atom PDB; TOPO keeps only the CA atoms). |
-| `domain.yaml` | Defines the single domain and its **calibrated** contact strength. |
+| `domain.yaml` | Defines the single domain and its **calibrated** contact nscale. |
 | `md.ini` | Simulation configuration (steps, temperature, I/O, hardware). |
 | `run_simulation.py` | The runner script (reads `md.ini`, builds the model, runs MD). |
 
@@ -23,13 +23,13 @@ simplest possible configuration.
   residue** at the alpha-carbon position. A 106-residue protein → 106 particles.
 - **Structure-based force field.** The native contacts in `P0CX28_clean.pdb`
   define the attractive interactions.
-- **Contact strength is a calibration parameter.** Even for a single domain,
-  `domain.yaml` carries a `strength` — the global scale factor on the
+- **Contact nscale is a calibration parameter.** Even for a single domain,
+  `domain.yaml` carries a `nscale` — the global scale factor on the
   sidechain–sidechain contact energies. It is tuned so the model reproduces a
   target property (here, realistic stability at 300 K); for `P0CX28` the
   calibrated value is **2.5044**. The raw, unscaled value (1.0) would leave the
   protein under-stabilized and only marginally folded. Tutorial 2 generalizes
-  this to *different* strengths per domain and across domain interfaces.
+  this to *different* nscales per domain and across domain interfaces.
 - **STRIDE.** On the first run TOPO calls `stride` on the PDB to find backbone
   hydrogen bonds and writes `P0CX28_clean_stride.dat`. You don't manage this file
   by hand.
@@ -57,7 +57,7 @@ md_steps = 5000          # how long to run (short, for a demo)
 ref_t = 300              # temperature in Kelvin
 pbc = no                 # no periodic box (single protein, no solvent)
 pdb_file = P0CX28_clean.pdb
-domain_def = domain.yaml # single domain with the calibrated contact strength (2.5044)
+domain_def = domain.yaml # single domain with the calibrated contact nscale (2.5044)
 device = CPU             # runs anywhere; switch to GPU if you have CUDA
 minimize = no            # native structure is already the energy minimum
 ```

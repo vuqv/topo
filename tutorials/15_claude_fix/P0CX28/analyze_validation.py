@@ -26,8 +26,8 @@ HERE = Path(__file__).resolve().parent
 OUT = HERE / "synth_out"
 # O'Brien's authentic truncated CG ribosome (.cor + sibling .psf/.prm), as the run used.
 from topo.csp.core import optimal_ptc_targets
-from topo.csp.ribosome import load_ribosome_auto, anchor_coord
-RIBO = load_ribosome_auto(str(HERE / "ribosome_obrien.cor"))
+from topo.csp.ribosome import load_ribosome, anchor_coord
+RIBO = load_ribosome(str(HERE / "ribosome_trunc.pdb"))
 RIBO_COORDS_A = RIBO.coords_nm * 10.0
 # Tunnel wall plane: same equil-PTC rule the runner uses (min of the two PTC target x).
 _at, _pt = optimal_ptc_targets(RIBO)

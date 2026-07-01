@@ -1,4 +1,4 @@
-# Strength optimization — design / tracking note
+# Nscale optimization — design / tracking note
 
 **Status:** production. The per-domain / per-interface *Q* scorer
 ([`topo.analysis.native_contacts`](../../topo/analysis/native_contacts.py)) and
@@ -10,10 +10,10 @@ trajectory next to its DCD (`round_N/traj/Q_<k>.csv`, paired with `traj_<k>.dcd`
 columns `frame, Q_<unit>...`) for inspection. The only remaining open item is
 optimization-level restart/resume (below). This note remains the design reference.
 
-The goal: automatically choose the per-domain and per-interface `strength`
+The goal: automatically choose the per-domain and per-interface `nscale`
 (*n*<sub>scale</sub>) in `domain.yaml` — the smallest value on a discrete ladder
 that keeps each domain/interface folded across many independent trajectories —
-instead of hard-coding `strength` by hand.
+instead of hard-coding `nscale` by hand.
 
 The *Q* method (how the fraction of native contacts is computed) and its
 implementation both live in
@@ -33,7 +33,7 @@ logic and *calls* the existing tools as sub-steps — it does **not** extend
 
 ```
 optimization.py  (the orchestrator — this is what the user runs)
-   ├─ owns the strength LADDER and the per-unit level state
+   ├─ owns the nscale LADDER and the per-unit level state
    ├─ each round: writes domain.yaml, then INVOKES run_simulation.py (multi-copy MD)
    ├─ after each round: scores Q per domain / per interface (topo.analysis.native_contacts)
    ├─ makes the decision: stable? climb ladder? converged? fallback?
@@ -50,7 +50,7 @@ entry points it uses).
 |-----------|------------------|
 | **`optimization.py`** (implemented) | **Top-level driver:** reads `optimize.ini`; owns ladder, per-unit levels, per-round Q, stability decision, convergence/fallback, final `domain.yaml`. |
 | **`optimize.ini`** | Minimal user config (essentials + optimizer controls); the driver fills implicit defaults and expands it into each `round_N/md.ini`. |
-| `domain.yaml` | Initial domains: `residues` + `class`. The driver writes a fresh `round_N/domain.yaml` with the current `strength` each round. |
+| `domain.yaml` | Initial domains: `residues` + `class`. The driver writes a fresh `round_N/domain.yaml` with the current `nscale` each round. |
 | `run_simulation.py` | The MD engine, **invoked by `optimization.py`** each round with the generated `round_N/md.ini`. **`n_copies = ntraj`** gives the N independent trajectories in **one** run (Tutorial 4). |
 | **`topo.split_chains`** (package) | Splits the combined multi-copy DCD into N per-copy DCDs (`traj_<k>.dcd`). Memory-bounded chunked streaming (handles DCDs too large for memory); `optimization.py` calls it in-process. Also a `python -m topo.utils.multichain` CLI. |
 | **`topo.analysis.native_contacts`** (package module) | Per-domain / per-interface *Q* from `domain.yaml` + reference PDB + CG PSF/DCD. `optimization.py` imports it in-process (builds native contacts once, reuses each round); also a `python -m topo.analysis.native_contacts` CLI. Generalized from an earlier AK-specific `calc_OP.py` template (since removed). |
@@ -70,19 +70,19 @@ naming, ...) comes from the optimizer's **implicit protocol defaults**
 
 Each round the driver expands `optimize.ini` into a complete `round_N/md.ini`
 (implicit defaults ← `optimize.ini` ← per-round values) and writes
-`round_N/domain.yaml` with the current strengths.
+`round_N/domain.yaml` with the current nscales.
 
 ```
 optimize.ini             # MINIMAL config (see above); the only user input
   pdb_file               #   all-atom reference (native contacts + geometry)
-  domain_def             #   initial domains: residues + class (strength optimized)
-LADDER                   # class -> list of strength levels (Table 1, below)
+  domain_def             #   initial domains: residues + class (nscale optimized)
+LADDER                   # class -> list of nscale levels (Table 1, below)
 ntraj          = 10      # independent trajectories per round (= n_copies)
 Q_THRESHOLD    = 0.6688  # a frame is "folded" for a unit if Q > this
 FRAME_FRACTION = 0.98    # a traj is "stable" if >= 98% of frames are folded
 ```
 
-The strength ladder, keyed by structural class (last value = median/level-3
+The nscale ladder, keyed by structural class (last value = median/level-3
 fallback, used only when level 5 still fails):
 
 ```
@@ -108,17 +108,17 @@ MAX_LEVEL = 5
 # ---- iterate rounds ----
 for round in 1 .. MAX_LEVEL+1:
 
-    # 1. assign current strength to every unit from its class ladder
+    # 1. assign current nscale to every unit from its class ladder
     for u in units:
         if round <= MAX_LEVEL:
-            strength[u] = LADDER[class(u)][ level[u] ]
+            nscale[u] = LADDER[class(u)][ level[u] ]
         else:
-            strength[u] = LADDER[class(u)].fallback   # could-not-stabilize case
+            nscale[u] = LADDER[class(u)].fallback   # could-not-stabilize case
 
-    # 2. write a domain.yaml carrying these strengths
+    # 2. write a domain.yaml carrying these nscales
     write_domain_yaml(round_dir/domain.yaml,
-                      intra = {D: strength[D]      for D in domains},
-                      inter = {pair: strength[pair] for pair in interfaces})
+                      intra = {D: nscale[D]      for D in domains},
+                      inter = {pair: nscale[pair] for pair in interfaces})
 
     # 3. run ntraj INDEPENDENT trajectories in ONE simulation (multi-copy).
     #    Set n_copies = ntraj in md.ini -> run_simulation.py replicates the chain
@@ -144,7 +144,7 @@ for round in 1 .. MAX_LEVEL+1:
     all_stable = true
     for u in units:
         if is_stable(u):
-            keep level[u] (and its strength)        # stable: frozen at this level
+            keep level[u] (and its nscale)        # stable: frozen at this level
         else:
             all_stable = false
             level[u] = level[u] + 1                 # unstable: climb ladder next round
@@ -154,8 +154,8 @@ for round in 1 .. MAX_LEVEL+1:
         break
 
 # ---- result ----
-write_domain_yaml(final/domain.yaml, strength)      # the calibrated model
-log "## Final strengths:", strength
+write_domain_yaml(final/domain.yaml, nscale)      # the calibrated model
+log "## Final nscales:", nscale
 ```
 
 ## Stability sub-routine
@@ -176,14 +176,14 @@ function is_stable(unit u):
 - **Per-unit, not global.** Each domain and interface climbs its ladder
   *independently*: if round N finds domain A unstable but B stable, only A's level
   increments; B stays put. Hence `level[]` is per-unit.
-- **Monotonic climb.** Strengths only ever increase — we search for the
-  *smallest* strength that stabilizes each unit.
+- **Monotonic climb.** Nscales only ever increase — we search for the
+  *smallest* nscale that stabilizes each unit.
 - **Two stop conditions.** (a) all units stable → done; or (b) a unit still
-  unstable after level 5 → pinned to the median (level-3) strength and accepted.
-- **`class` drives the choice; input `strength` is a placeholder** overwritten
+  unstable after level 5 → pinned to the median (level-3) nscale and accepted.
+- **`class` drives the choice; input `nscale` is a placeholder** overwritten
   every round.
 
-## Table 1 — strength levels
+## Table 1 — nscale levels
 
 | Structural Class | Level 1 | Level 2 | Level 3 | Level 4 | Level 5 |
 | ------ | ------ | ------ | ------ | ------ | ------ |
@@ -206,8 +206,8 @@ function is_stable(unit u):
    `ref_t`), invokes `run_simulation.py`, then splits in-process with
    `topo.split_chains`. Copy independence is guaranteed by the
    multi-copy primitive (Tutorial 4).
-3. ~~**`strength` is required by the parser**~~ **Not an issue.** The parser reads
-   `strength` with a hard lookup ([nonbonded.py:649](../../topo/utils/nonbonded.py#L649)),
+3. ~~**`nscale` is required by the parser**~~ **Not an issue.** The parser reads
+   `nscale` with a hard lookup ([nonbonded.py:649](../../topo/utils/nonbonded.py#L649)),
    but step 2 always writes a concrete value for every domain and interface from
    the current ladder decision, so the key is never missing.
 4. **Restart / resume — still open.** Long scans should be resumable

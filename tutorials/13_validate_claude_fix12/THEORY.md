@@ -294,7 +294,7 @@ where the earlier unguarded full-length run failed.
 
 - **Protein:** 4c5c, **306 residues**, three domains (from `domain.yaml`, mapped from the
   O'Brien CG model): **A** = 1–84, **B** = 85–110 + 184–306 (discontiguous), **C** = 111–183,
-  with per-domain and per-interface Gō-contact strength scaling (the structure-based analog of
+  with per-domain and per-interface Gō-contact nscale scaling (the structure-based analog of
   O'Brien's `nscal`).
 - **mRNA:** `4c5c_mrna.txt` — one codon per residue (+ stop), **byte-identical** to the O'Brien
   reference fast mRNA, so the codon schedule is exactly the reference's.

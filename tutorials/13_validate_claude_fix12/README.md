@@ -54,7 +54,7 @@ quantitative dwell-time / R_g comparison against the reference.
 | File | Role |
 |------|------|
 | `4c5c_model_clean.pdb`, `4c5c_model_clean_stride.dat` | 4c5c structure (306 aa) + precomputed STRIDE. |
-| `domain.yaml` | 3-domain map + Go-scale strengths (as in Tutorial 12). |
+| `domain.yaml` | 3-domain map + Go-scale nscales (as in Tutorial 12). |
 | `4c5c_mrna.txt`, `trans_times.txt` | mRNA (one codon/residue) + Fluitt *E. coli* codon-time table. |
 | `ribosome_trunc.pdb` | Truncated CG 50S + tRNAs (X-aligned); P-/A-anchors + rigid scenery. |
 | `csp.ini` | **Debug** profile (L = 1 → 20) → `synth_out_debug/`. |

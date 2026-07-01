@@ -80,7 +80,7 @@ Independent of the bug, Tutorial 10 cannot be a *reproduction* of O'Brien:
 | mRNA | synthetic back-translation of the PDB sequence | **byte-identical** to `setup/4c5c_mrna_sequence_fast.txt` |
 | kinetics timescale | demo `scale_factor` + `max_steps_per_stage = 667` clamp | production `scale_factor = 4331293`, cap only as a tractability bound |
 | validation | none | quantitative vs `continuous_synthesis/output/` (length, dwell, Rg) |
-| CG model | demo domain/strengths | mapped from `protein_cg_model/domain_def.dat` |
+| CG model | demo domain/nscales | mapped from `protein_cg_model/domain_def.dat` |
 
 Tutorial 10's own README is explicit that it is a clamped, illustrative demo ("do
 **not** read folding pathways off the demo"; "the synthetic mRNA is representative, not

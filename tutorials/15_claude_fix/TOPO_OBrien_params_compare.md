@@ -136,11 +136,11 @@ pair); topo evaluates the factored form directly with per-pair `eps_table`/`R_ta
 | HB | 0.75 kcal/H-bond (cap 1.5) | **0.75** kcal/mol (cap 1.5) ✅ |
 | BS | 0.37 kcal/mol | **0.37** kcal/mol ✅ |
 | SS | Betancourt–Thirumalai (`go_bt`), shift 0.6 | **BT**, `bt_shift` 0.6 ✅ |
-| domain scale | `nscal` (=1 here; baked into NBFIX) | per-domain `strength` (`domain.yaml`) |
+| domain scale | `nscal` (=1 here; baked into NBFIX) | per-domain `nscale` (`domain.yaml`) |
 
 ✅ Same energy scheme (HB/BS/BT constants match). ⚠️ **Different provenance**: O'Brien ships
 the final per-pair ε/R in the `.prm` `NBFIX`; topo **recomputes** them at run time from the
-structure + STRIDE + `domain.yaml`. (The tut-15 `strength` in `domain.yaml` is topo's analog
+structure + STRIDE + `domain.yaml`. (The tut-15 `nscale` in `domain.yaml` is topo's analog
 of O'Brien's `nscal`.)
 
 **Non-native pairs** (soft excluded volume — tiny ε, repulsion-dominated):

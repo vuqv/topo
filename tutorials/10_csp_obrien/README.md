@@ -51,7 +51,7 @@ wall, build-once-subset contacts — is **reused verbatim** from `topo.translati
 | File | Role |
 |------|------|
 | `P0CX28_clean.pdb` | The target protein (106-residue single domain) = the nascent chain. |
-| `domain.yaml` | Domain definition + calibrated contact strength (same as Tutorial 1/7). |
+| `domain.yaml` | Domain definition + calibrated contact nscale (same as Tutorial 1/7). |
 | `P0CX28_clean_stride.dat` | Precomputed STRIDE (backbone H-bonds); skips running STRIDE. |
 | `ribosome_trunc.pdb` | Truncated CG 50S ribosome (4,576 beads) — exit-tunnel shell + tRNAs, X-aligned. Source of the P-/A-anchors and the rigid scenery. |
 | `trans_times.txt` | **Codon → mean in-vivo translation time (s)** — the Fluitt *E. coli* table (310 K), copied from the O'Brien example. Generic genetic-code table, reusable for any protein. |

@@ -1,6 +1,6 @@
 # Tutorial 2 — Multidomain proteins & per-domain contact scaling
 
-**Goal:** simulate a multidomain protein and control the contact-energy strength
+**Goal:** simulate a multidomain protein and control the contact-energy nscale
 **within** each domain and **across** domain interfaces using a `domain.yaml`
 file. We use **adenylate kinase** (`1AKE` chain A, 214 residues), a textbook
 multidomain enzyme.
@@ -23,13 +23,13 @@ multidomain enzyme.
 ## Why domains matter
 
 In a structure-based model, every native contact gets an attractive well. By
-default all wells have the same relative strength. But a multidomain protein
+default all wells have the same relative nscale. But a multidomain protein
 often needs **different stabilities** for each domain and for the interface
 between them (e.g. to reproduce experimental melting temperatures, or to study
 domain-wise unfolding). `domain.yaml` lets you set a **scale factor** on the
 sidechain–sidechain contact energy:
 
-- **within** each domain (`intra_domains[...].strength`), and
+- **within** each domain (`intra_domains[...].nscale`), and
 - **between** domains (`inter_domains`).
 
 ## The key idea: discontiguous domains
@@ -45,10 +45,10 @@ n_residues: 214
 intra_domains:
   A:
     residues: [1-117, 166-214]   # ONE domain, TWO sequence segments
-    strength: 1.1556
+    nscale: 1.1556
   B:
     residues: [118-165]
-    strength: 1.6871
+    nscale: 1.6871
 inter_domains:
   A-B: 1.8611
 ```
@@ -93,9 +93,9 @@ Same set as Tutorial 1, in the `traj/` run folder:
 1. Decide how many domains and which residues belong to each (a discontiguous
    domain just gets several ranges in its `residues` list).
 2. Set `n_residues` to the true residue count (must cover all residues; any
-   residue you forget is auto-assigned to a fallback domain `X` with strength 1.0).
-3. Give every domain a numeric `strength` (a blank value errors).
-4. Add an `inter_domains` entry only for interfaces whose strength you want to
+   residue you forget is auto-assigned to a fallback domain `X` with nscale 1.0).
+3. Give every domain a numeric `nscale` (a blank value errors).
+4. Add an `inter_domains` entry only for interfaces whose nscale you want to
    change from the default of 1.0 (set `0.0` to remove an interface; omitted
    pairs stay at 1.0).
 
@@ -105,7 +105,7 @@ discontiguous, decoupled, 3+ domains, partial assignment):
 
 ## Try next
 
-- Make domain B much weaker (e.g. `strength: 0.5`), run, and watch B unfold
+- Make domain B much weaker (e.g. `nscale: 0.5`), run, and watch B unfold
   first at elevated temperature while A stays folded.
 - Set `inter_domains: A-B: 0.0` to decouple the domains and observe them moving
   independently.

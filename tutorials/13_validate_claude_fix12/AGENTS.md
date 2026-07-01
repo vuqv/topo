@@ -60,7 +60,7 @@ The protocol is already ported into the package. Use it; don't rewrite it.
 | File / dir | Role |
 |------------|------|
 | `4c5c_model_clean.pdb`, `4c5c_model_clean_stride.dat` | 4c5c all-atom structure (306 aa) + precomputed STRIDE. **Raw input — do not overwrite.** |
-| `domain.yaml` | 3-domain map + per-domain Go-scale strengths. |
+| `domain.yaml` | 3-domain map + per-domain Go-scale nscales. |
 | `4c5c_mrna.txt`, `trans_times.txt` | mRNA (one codon/residue) + Fluitt *E. coli* codon-time table. **Raw input.** |
 | `ribosome_trunc.pdb` | Truncated CG 50S + tRNAs (X-aligned); P-/A-anchors + rigid scenery. **Raw input.** |
 | `csp.ini` | **Debug** profile (short L) → `synth_out_debug/`. |

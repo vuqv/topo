@@ -1,20 +1,20 @@
-# Tutorial 5 — Optimizing the contact strength (*n*<sub>scale</sub>)
+# Tutorial 5 — Optimizing the contact nscale (*n*<sub>scale</sub>)
 
 **Goal:** instead of *hard-coding* the per-domain and per-interface contact
-strengths in `domain.yaml` (as in [Tutorial 2](https://vuqv.github.io/topo/tutorials/02_multidomain.html)),
+nscales in `domain.yaml` (as in [Tutorial 2](https://vuqv.github.io/topo/tutorials/02_multidomain.html)),
 this tutorial **searches** for them automatically, so the force field is just
 strong enough to keep the native structure of every domain and interface folded.
 
-> **The one thing to remember:** the quantity being optimized is the `strength`
+> **The one thing to remember:** the quantity being optimized is the `nscale`
 > field in `domain.yaml` (*n*<sub>scale</sub> in the literature). The optimizer
-> *chooses* those values for you — `intra_domains[...].strength` for each domain
+> *chooses* those values for you — `intra_domains[...].nscale` for each domain
 > and `inter_domains` for each interface.
 
 **Time:** minutes on a GPU (10 copies × short MD × up to 6 rounds); longer for a
 production-length protocol.
 
 **Prerequisites:** [Tutorial 2](https://vuqv.github.io/topo/tutorials/02_multidomain.html)
-(what `strength` does) and [Tutorial 4](https://vuqv.github.io/topo/tutorials/04_multicopy.html)
+(what `nscale` does) and [Tutorial 4](https://vuqv.github.io/topo/tutorials/04_multicopy.html)
 (the multi-copy runs the optimizer uses to collect independent trajectories).
 
 ---
@@ -24,7 +24,7 @@ production-length protocol.
 | File | Role |
 |------|------|
 | `P0A6E6.pdb` | All-atom reference structure (139 residues, two domains). |
-| `domain.yaml` | Initial domains: residue ranges + structural **`class`**. The `strength` here is a placeholder the optimizer overwrites. |
+| `domain.yaml` | Initial domains: residue ranges + structural **`class`**. The `nscale` here is a placeholder the optimizer overwrites. |
 | `optimize.ini` | **Minimal** config for the optimizer (the new ingredient). |
 | `optimization.py` | Thin shim to `topo.optimize` (the optimizer; same as `topo-optimize`). |
 | `run_simulation.py` | Thin shim to `topo.mdrun` (the per-round MD engine). |
@@ -32,19 +32,19 @@ production-length protocol.
 
 ## 1. The problem
 
-A single contact strength rarely fits a whole protein. Too low and a domain
+A single contact nscale rarely fits a whole protein. Too low and a domain
 unfolds during the simulation; too high and you over-stabilize the fold and wash
 out the dynamics you want to study. A multidomain protein needs a **separate**
-strength for every domain *and* every domain–domain interface — tedious and not
+nscale for every domain *and* every domain–domain interface — tedious and not
 reproducible to choose by hand. The optimizer searches for the **smallest**
-strength, drawn from a small discrete ladder, at which each domain and interface
+nscale, drawn from a small discrete ladder, at which each domain and interface
 stays folded across many independent trajectories.
 
 ## 2. Basic theory
 
 The native contact interactions are divided into groups by the **domains**
 (e.g. from the [CATH database](https://www.cathdb.info/)). Each domain starts at
-the **level-1** strength for its structural class (α, β, α/β, or *interface*;
+the **level-1** nscale for its structural class (α, β, α/β, or *interface*;
 Table 1).
 
 Then **`ntraj` independent MD trajectories at 310 K** are run for the current CG
@@ -53,13 +53,13 @@ interface is monitored. A domain/interface is **stable** when **all** `ntraj`
 trajectories keep its *Q* above the threshold **Q = 0.6688** for **≥ 98 %** of the
 frames.
 
-Any unit that fails has its `strength` raised to the **next level**, while the
+Any unit that fails has its `nscale` raised to the **next level**, while the
 already-stable ones keep their current value; a new model is generated and the
 test repeated until everything is stable. If a unit still cannot be stabilized at
-the highest level, the **median** strength of its class (level 3) is used for the
+the highest level, the **median** nscale of its class (level 3) is used for the
 final model regardless of stability.
 
-**Table 1.** `strength` (*n*<sub>scale</sub>) levels per structural class.
+**Table 1.** `nscale` (*n*<sub>scale</sub>) levels per structural class.
 
 | Structural Class | Level 1 | Level 2 | Level 3 | Level 4 | Level 5 |
 | ------ | ------ | ------ | ------ | ------ | ------ |
@@ -72,9 +72,9 @@ final model regardless of stability.
 
 ## 3. The search algorithm (per round)
 
-Each **round** is one set of strengths tested. For each round the optimizer:
+Each **round** is one set of nscales tested. For each round the optimizer:
 
-1. **Writes** `round_N/domain.yaml` with the current strengths.
+1. **Writes** `round_N/domain.yaml` with the current nscales.
 2. **Runs** one multi-copy MD (`topo.mdrun` with `n_copies = ntraj`) → `ntraj`
    independent chains in a single run, and **splits** the combined trajectory
    into per-copy DCDs (`topo.split_chains`).
@@ -120,7 +120,7 @@ optimizer's built-in protocol defaults, so you don't repeat a full `md.ini`.
 [OPTIONS]
 # inputs + simulation parameters (passed through to each round's md.ini)
 pdb_file   = P0A6E6.pdb        ; all-atom reference (native contacts + geometry)
-domain_def = domain.yaml       ; initial domains + class; strengths get optimized
+domain_def = domain.yaml       ; initial domains + class; nscales get optimized
 md_steps   = 100000            ; steps per trajectory
 nstxout    = 100               ; trajectory output frequency (frames feed Q)
 nstlog     = 100
@@ -157,11 +157,11 @@ intra_domains:
   A:
     residues: [1-90]
     class: beta            # alpha | beta | alpha-beta  (selects the ladder)
-    strength: 1.1556       # placeholder — overwritten each round
+    nscale: 1.1556       # placeholder — overwritten each round
   B:
     residues: [91-139]
     class: alpha
-    strength: 1.6871
+    nscale: 1.6871
 inter_domains:
   A-B: 1.8611              # placeholder too
 ```
@@ -176,7 +176,7 @@ Under the `-o` directory:
 
 | Path | Contents |
 |------|----------|
-| `optimization.log` | The report: native-contact counts, and per round the chosen strengths + per-unit stability, ending in the **final** strengths (or a WARNING). |
+| `optimization.log` | The report: native-contact counts, and per round the chosen nscales + per-unit stability, ending in the **final** nscales (or a WARNING). |
 | `round_N/domain.yaml`, `round_N/md.ini` | The exact inputs used that round. |
 | `round_N/traj/` | The MD outputs (`traj.dcd`, `traj.psf`, …), the per-copy DCDs `traj_<k>.dcd`, and one **`Q_<k>.csv`** per trajectory (`frame, Q_<domain>…, Q_<interface>…`). |
 | **`domain_optimized.yaml`** | The calibrated model — the result. |
