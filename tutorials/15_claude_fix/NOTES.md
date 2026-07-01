@@ -291,6 +291,8 @@ integration (96 dt-halving recoveries, higher transient energies, still finite).
 | P0CX28 full | equil-PTC + AllBonds | 1→106 | 216564650 | 241 | 3.810 | none | 2.29 (eject) | N/A (no ref) | R_g 1.345 nm (0.64× native) | D8: D5 PASS, wall PASS, threads −0.740, no leak; chain still in tunnel (egress N/A) |
 | 4c5c (O'Brien ribo) | equil-PTC + AllBonds | 1→306 | 216564650 | 1.54e3 | 3.810 | none | 1.71 (eject) | 1.01× | **0.96×** | corrected ribosome; D5/D6 PASS, wall+egress PASS, clash deeper (weaker EV) |
 | P0CX28 (O'Brien ribo) | equil-PTC + AllBonds | 1→106 | 216564650 | 381 | 3.810 | none | 1.74 (eject) | N/A | R_g 1.307 nm | corrected ribosome; D5/D5b PASS, no leak, threads −0.64 |
+| 4c5c (NC-EV 12-10-6) | equil-PTC + AllBonds + O'Brien NC-EV | 1→306 | 216564650 | 1.9e6 | 3.810 | 96 (recovered) | 3.08→PASS | 1.01× | 0.96× | **clash RESOLVED** (36→0 hard); extrusion x→179; D5b all PASS |
+| P0CX28 (NC-EV 12-10-6) | equil-PTC + AllBonds + O'Brien NC-EV | 1→106 | 216564650 | 2.75e3 | 3.810 | 22 (recovered) | 3.18→PASS | N/A | R_g 2.306 nm (1.09× native) | **clash RESOLVED** (18→0); extrusion x→98; threads −0.969; D5b all PASS |
 
 ## 2026-06-30 — D8 P0CX28 (L=1→106) complete
 

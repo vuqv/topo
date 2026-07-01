@@ -66,7 +66,12 @@ Stable continuous synthesis: (1) full length (4c5c 1→306, then P0CX28 1→106)
       surface penetration shallower, no leak; clash persists (weaker EV) → y-z wall confirmed needed.
 - [x] **R3** Force-field comparison `TOPO_OBrien_params_compare.md` (angles/dihedrals/electrostatics/
       12-10-6 Gō match exactly; bond k 2× soft = latent unit bug; ribosome fixed).
-- [ ] **R4 (proposed, awaiting go-ahead)** y-z lumen tunnel-wall — a real lumen (~2–6 Å) now exists
-      with O'Brien radii; needs a curved/tabulated centerline. Targets FINAL GOAL #2 (no clash).
+- [x] **R4→superseded** y-z lumen wall NOT needed — the root cause was the NC↔ribosome nonbonded
+      interaction (see R5).
+- [x] **R5 NC↔ribosome EV fix (user-directed, all 4 points)** — `append_ribosome` now O'Brien-
+      consistent: 12-10-6 form, sum rule R=Rmin/2_i+Rmin/2_j, matched ε, nascent per-AA `SA..SY`
+      Rmin/2 (Option B); dt-halving guard made NaN-robust. **RESOLVES the clash on both proteins:**
+      4c5c hard clashes 36→0 (D5b all PASS, extrusion x→179); P0CX28 18→0 (D5b all PASS, threads
+      −0.969, R_g 2.306≈native, x→98). FINAL GOAL met. Docs: `TOPO_OBrien_NCribosome_nonbonded_compare.md`.
 
 ## Stop conditions (pause + ask): see AGENTS.md §8.

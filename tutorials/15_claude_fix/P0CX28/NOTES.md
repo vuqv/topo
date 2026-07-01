@@ -60,3 +60,23 @@ finite energy, no leak) but the residual soft-EV clash/lateral order is not reso
 the need for an explicit y-z tunnel-wall (a real lumen, ~2–6 Å, now exists with the correct radii).
 The 106-mer remains entirely inside the ~100 Å tunnel (x 10–35 Å), so full egress is not
 observable at this length (no leak/collapse).
+
+## 2026-06-30 — NC↔ribosome EV fix (12-10-6 + sum rule) RESOLVES it for P0CX28 too
+
+Re-ran P0CX28 L=1→106 with the O'Brien-consistent NC↔ribosome EV (old soft-EV run preserved as
+`synth_out_softEV/`). 22 blow-ups auto-recovered (47 dt-halving retries). **D5 PASS** (worst 2.75e3
+kJ/mol), **D5b all PASS (wall/clash/egress)**, no leak. The effect is even bigger than for 4c5c:
+
+| metric | SOFT-EV | NEW 12-10-6 + sum |
+|--------|---------|-------------------|
+| # hard clashes (<3 Å) | 18 | **0** ✅ |
+| min nascent–ribosome center-dist | 2.61 Å | **3.91 Å** |
+| threading corr(res,x) | −0.643 | **−0.969** |
+| extrusion x-range | 10..40 Å | **10..98 Å** |
+| R_g | 1.307 nm (0.62× native) | **2.306 nm (1.09× native 2.111)** |
+| ejection: CoM-x net / min NC dist | ~0 / 1.74 Å | **+15.7 Å / 3.18 Å** |
+
+The soft EV left the 106-mer **bunched** in the proximal tunnel (over-compact, not extruding); the
+correct stiff EV **extrudes it out toward the exit** (x→98 Å), threads it cleanly (corr −0.969),
+gives a **near-native R_g** (2.306 vs 2.111 nm), eliminates hard clashes, and produces real egress
+on release. Consistent with the 4c5c result — the NC↔ribosome EV was the root cause.
