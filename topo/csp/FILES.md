@@ -179,7 +179,7 @@ already retains the functional attachment/placement points. If you want the
 
 - **Reuse from TOPO:** the whole force field (bonds, angles, torsions, Yukawa,
   native 12-10-6 contacts, non-native `(σ/r)¹²` excluded volume, BT potential,
-  `n_scale`) and the P/R/BR RNA bead parameters — already present.
+  `nscale`) and the P/R/BR RNA bead parameters — already present.
 - **Implement here:**
   1. **Coarse-grain the ribosome** from `structures/` (Cα protein beads + P/R/BR
      RNA beads) and hold it **rigid**.

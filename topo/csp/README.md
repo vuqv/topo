@@ -69,7 +69,7 @@ run_continuous_synthesis(cfg.pdb_file, cfg.ribosome, L0=cfg.L0, L_max=cfg.L_max,
 ## Control file (`csp.ini`)
 
 A single `[OPTIONS]` section. Required: `pdb_file`, `ribosome`, `domain_def` (the
-protein's contact-strength definition). `L0` (default `1`) and `L_max` (default = full
+protein's contact-nscale definition). `L0` (default `1`) and `L_max` (default = full
 length) are optional. Per-codon timing also requires `mrna` (`trans_times` is optional --
 defaults to the bundled E. coli 310 K table).
 

@@ -152,7 +152,7 @@ because the chain does not change mid-run. The synthesis-specific handling is al
   at `ref_t` each step (a short re-equilibration at the start of each step).
 - **C-terminal tether.** The C-terminal bead is restrained near the PTC (it is
   covalently attached to the P-site tRNA); see §2.2.
-- Domain scaling (`n_scale`) unchanged from `domain.yaml` (restricted to the
+- Domain scaling (`nscale`) unchanged from `domain.yaml` (restricted to the
   residues present).
 
 **Decisions (AGREED):**
@@ -284,7 +284,7 @@ force** from the nascent-chain contacts (see the ordering/force invariant below)
 | Native well depths | ∝ Betancourt–Thirumalai | BT potential | ✅ same source |
 | Non-native `ε` | 0.000132 kcal/mol | 0.000132 kcal/mol | ✅ identical |
 | Native contact def. | side-chain heavy atoms < 4.5 Å | 4.5 Å (SS/BS) | ✅ same |
-| LJ stability scaling | `λ_BT` (≈1.475–1.5) | `n_scale` / `strength` (+ optimizer) | ✅ same concept |
+| LJ stability scaling | `λ_BT` (≈1.475–1.5) | `nscale` (+ optimizer) | ✅ same concept |
 | RNA beads | P (q=−1), R, BR (3/4 sites) | `P`, `R`, `BR` already defined (q_P=−1, radii 0.71 nm) | ✅ already present |
 
 Native well position `R_ij` = the native Cα–Cα distance (the 12-10-6 minimum sits
@@ -293,7 +293,7 @@ at the crystal distance), consistent with both TOPO and the reference model.
 ### 3.4 What actually needs building (vs. reused)
 
 - **Reuse unchanged:** bonds, angles, torsions, Yukawa electrostatics, native
-  12-10-6 contacts, non-native excluded volume, BT potential, `n_scale`, and the
+  12-10-6 contacts, non-native excluded volume, BT potential, `nscale`, and the
   P/R/BR RNA parameters — all already in TOPO.
 - **Add:** (1) the **build-once-subset** nascent-chain nonbonded (§3.5); (2) a
   **rigid ribosome** (load RNA P/R/BR + ribosomal-protein beads as fixed,
@@ -309,7 +309,7 @@ native reference (`pdb_file`, all `N_full` residues) and **subset** to the curre
 length each step.
 
 1. **Once at startup:** run the contact builder on the **full** native structure
-   → `R_full`, `eps_full` (`N_full × N_full`), with STRIDE and `n_scale` applied;
+   → `R_full`, `eps_full` (`N_full × N_full`), with STRIDE and `nscale` applied;
    cache (including the STRIDE output).
 2. **Per length L:** use the top-left block `R_full[:L, :L]`, `eps_full[:L, :L]`
    for the `L×L` tabulated `CustomNonbondedForce` (particle `i` → `id = i` =
