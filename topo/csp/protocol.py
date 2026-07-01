@@ -262,7 +262,7 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
               f"(auto: lower C-terminus hold plane).")
 
     # --- build-once-subset contacts on the full native structure ------------
-    R_full, eps_full = precompute_contacts(full_pdb, domain_def, stride_output_file)
+    R_full, eps_full, rmin2_full = precompute_contacts(full_pdb, domain_def, stride_output_file)
     N_full = R_full.shape[0]
     if L_max is None:
         L_max = N_full
@@ -361,7 +361,7 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
                         ribo=ribo, restrain=True,
                         out_subdir=f"{ldir}/stage_1", n_steps_override=s1,
                         seed_point=seed_point, tether_segid=stage1_segid,
-                        tether_prev_segid=stage1_prev_segid,
+                        tether_prev_segid=stage1_prev_segid, nascent_rmin2=rmin2_full,
                         label=f"L={L} stage 1 (peptidyl transfer) {s1} steps")
 
         # Stage 2: continue from stage 1, still held at the A-site.
@@ -370,7 +370,7 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
                         prev_final=None, seed_override=f1, out_root=out_path,
                         params=ep, ribo=ribo, restrain=True,
                         out_subdir=f"{ldir}/stage_2", n_steps_override=s2,
-                        tether_segid=stage1_segid,
+                        tether_segid=stage1_segid, nascent_rmin2=rmin2_full,
                         label=f"L={L} stage 2 (translocation) {s2} steps")
 
         # Stage 3: translocate A->P (restrain the C-terminus to the P-anchor).
@@ -379,7 +379,7 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
                         prev_final=None, seed_override=f2, out_root=out_path,
                         params=ep, ribo=ribo, restrain=True,
                         out_subdir=f"{ldir}/stage_3", n_steps_override=s3,
-                        tether_segid="PtR",
+                        tether_segid="PtR", nascent_rmin2=rmin2_full,
                         label=f"L={L} stage 3 (tRNA binding) {s3} steps")
         prev_final = f3
 
@@ -398,7 +398,7 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
             p_anchor=p_target, a_anchor=a_anchor, prev_final=None,
             seed_override=prev_final, out_root=out_path, params=ep, ribo=ribo,
             restrain=False, out_subdir="ejection",
-            n_steps_override=params.ejection_steps,
+            n_steps_override=params.ejection_steps, nascent_rmin2=rmin2_full,
             label=f"Ejection (L = {L_max})")
 
     if params.dissociation_steps > 0:
@@ -410,7 +410,7 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
             p_anchor=p_target, a_anchor=a_anchor, prev_final=None,
             seed_override=prev_final, out_root=out_path, params=ep, ribo=ribo,
             restrain=False, out_subdir="dissociation",
-            n_steps_override=params.dissociation_steps,
+            n_steps_override=params.dissociation_steps, nascent_rmin2=rmin2_full,
             label=f"Dissociation (L = {L_max})")
 
 

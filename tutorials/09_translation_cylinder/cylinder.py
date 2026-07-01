@@ -304,7 +304,7 @@ def run_elongation(full_pdb: str, *, L0: int, L_max: Optional[int] = None,
           f"(k = {params.restraint_k} kJ/mol/nm^2; no tRNA tether).")
 
     # Build-once-subset contacts on the full native structure (STRIDE at most once).
-    R_full, eps_full = precompute_contacts(full_pdb, domain_def, stride_output_file)
+    R_full, eps_full, _rmin2_full = precompute_contacts(full_pdb, domain_def, stride_output_file)
     N_full = R_full.shape[0]
     if L_max is None:
         L_max = N_full

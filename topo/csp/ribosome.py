@@ -339,7 +339,9 @@ def load_ribosome_auto(path: str, psf: Optional[str] = None,
     return load_ribosome(path, model=model)
 
 
-def append_ribosome(nascent_model, ribo: Ribosome) -> Tuple[List[int], List[int]]:
+def append_ribosome(nascent_model, ribo: Ribosome,
+                    nascent_rmin2: Optional[np.ndarray] = None
+                    ) -> Tuple[List[int], List[int]]:
     """Append the rigid ribosome to a built nascent model (system + topology).
 
     Mutates ``nascent_model`` in place (its ``.system`` and ``.topology``):
@@ -391,13 +393,25 @@ def append_ribosome(nascent_model, ribo: Ribosome) -> Tuple[List[int], List[int]
     nc = mm.CustomNonbondedForce(_NC_126_ENERGY)
     nc.addGlobalParameter("eps", RIBO_NC_EPS_KJ)
     nc.addPerParticleParameter("rm")    # per-bead Rmin/2 (nm); pair R = rm1 + rm2
+    # Nascent per-bead Rmin/2:
+    #  - Option A (default when nascent_rmin2 given): O'Brien's structure-derived per-residue
+    #    Karanicolas-Brooks collision radius (A1..An in his .prm) -- this is what O'Brien's
+    #    nascent chain actually uses for the nascent<->ribosome excluded volume.
+    #  - Option B (fallback): per-AA sidechain radii OBRIEN_SC_RMIN2_NM (his ribosomal-protein
+    #    S<aa1> values); kept for reference / when the K-B array is unavailable.
     nascent_atoms = list(topology.atoms())[:L]   # nascent CA beads (ribosome not appended yet)
-    for atom in nascent_atoms:                    # nascent: O'Brien per-AA sidechain Rmin/2 (nm)
-        rn = atom.residue.name
-        if rn not in OBRIEN_SC_RMIN2_NM:
-            raise ValueError(f"NC-ribosome EV: residue {rn!r} has no O'Brien Rmin/2 "
-                             f"(OBRIEN_SC_RMIN2_NM); cannot set the nascent excluded-volume radius.")
-        nc.addParticle((OBRIEN_SC_RMIN2_NM[rn],))
+    if nascent_rmin2 is not None:
+        if len(nascent_rmin2) != L:
+            raise ValueError(f"nascent_rmin2 has {len(nascent_rmin2)} entries but L={L}.")
+        for rm in nascent_rmin2:                  # Option A: per-residue K-B Rmin/2 (nm)
+            nc.addParticle((float(rm),))
+    else:
+        for atom in nascent_atoms:                # Option B: per-AA sidechain Rmin/2 (nm)
+            rn = atom.residue.name
+            if rn not in OBRIEN_SC_RMIN2_NM:
+                raise ValueError(f"NC-ribosome EV: residue {rn!r} has no O'Brien Rmin/2 "
+                                 f"(OBRIEN_SC_RMIN2_NM); cannot set the nascent excluded-volume radius.")
+            nc.addParticle((OBRIEN_SC_RMIN2_NM[rn],))
     for s in ribo.radii_nm:                       # ribosome: O'Brien per-type Rmin/2 (nm)
         nc.addParticle((s,))
     nc.setNonbondedMethod(mm.CustomNonbondedForce.CutoffNonPeriodic)

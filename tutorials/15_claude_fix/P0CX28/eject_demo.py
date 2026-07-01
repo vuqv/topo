@@ -65,8 +65,8 @@ def main() -> None:
         ep.device = args.device
 
     out_root = Path(cfg.outdir)
-    R_full, eps_full = precompute_contacts(cfg.pdb_file, cfg.domain_def,
-                                           cfg.stride_output_file)
+    R_full, eps_full, rmin2_full = precompute_contacts(cfg.pdb_file, cfg.domain_def,
+                                                       cfg.stride_output_file)
     N_full = R_full.shape[0]
     L = args.L or (cfg.L_max or N_full)
     final_nm = _final_nascent_nm(out_root, L)
@@ -95,7 +95,7 @@ def main() -> None:
     run_length(L, full_pdb=cfg.pdb_file, R_full=R_full, eps_full=eps_full,
                p_anchor=p_target, a_anchor=a_anchor, prev_final=None,
                seed_override=final_nm, out_root=out_root, params=ep, ribo=ribo,
-               restrain=False, out_subdir="ejection_long",
+               restrain=False, out_subdir="ejection_long", nascent_rmin2=rmin2_full,
                n_steps_override=args.steps, label=f"Extended ejection (L={L})")
 
     # Quick directional summary from the written trajectory.

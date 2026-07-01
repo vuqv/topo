@@ -276,23 +276,26 @@ def read_anchor(pdb_file: str, segid: str, resid: int = 76,
 def precompute_contacts(full_pdb: str,
                         domain_def: Optional[str] = None,
                         stride_output_file: Optional[str] = None
-                        ) -> Tuple[np.ndarray, np.ndarray]:
+                        ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Run TOPO's contact builder once on the full native PDB (DESIGN §3.5).
 
-    Returns ``(R_full, eps_full)`` -- the ``N_full x N_full`` well-position
-    (nm) and well-depth (kJ/mol) matrices. STRIDE is run at most once here (and
-    cached by :func:`build_nonbonded_interaction`); each length later reuses the
-    top-left ``L x L`` block, so neither STRIDE nor the heavy-atom analysis is
-    ever re-run per length.
+    Returns ``(R_full, eps_full, rmin2_full)`` -- the ``N_full x N_full`` well-position
+    (nm) and well-depth (kJ/mol) matrices, plus the per-residue Karanicolas-Brooks
+    collision radius ``Rmin/2`` (nm, shape ``(N_full,)``) that O'Brien uses as the
+    nascent excluded-volume radius (the structure-derived ``A_i`` values). STRIDE is
+    run at most once here (and cached by :func:`build_nonbonded_interaction`); each
+    length later reuses the top-left ``L x L`` block (and ``rmin2_full[:L]``), so
+    neither STRIDE nor the heavy-atom analysis is ever re-run per length.
     """
     print("=" * 66)
     print("[ Precompute contacts (build-once-subset) ]")
     print("=" * 66)
     print(f"Running TOPO contact builder on full native structure: {full_pdb}")
-    R_full, eps_full = build_nonbonded_interaction(full_pdb, domain_def,
-                                                   stride_output_file)
-    print(f"  full contact matrices: {R_full.shape}")
-    return R_full, eps_full
+    R_full, eps_full, rmin2_full = build_nonbonded_interaction(
+        full_pdb, domain_def, stride_output_file, return_rmin2=True)
+    print(f"  full contact matrices: {R_full.shape}; "
+          f"K-B Rmin/2 range {rmin2_full.min():.3f}-{rmin2_full.max():.3f} nm")
+    return R_full, eps_full, rmin2_full
 
 
 # --------------------------------------------------------------------------
@@ -844,6 +847,7 @@ def run_length(L: int, *, full_pdb: str, R_full: np.ndarray, eps_full: np.ndarra
                seed_point: Optional[np.ndarray] = None,
                tether_segid: str = "PtR",
                tether_prev_segid: Optional[str] = None,
+               nascent_rmin2: Optional[np.ndarray] = None,
                label: Optional[str] = None) -> np.ndarray:
     """Build, seed, (restrain,) minimize and run one length-``L`` system.
 
@@ -911,8 +915,12 @@ def run_length(L: int, *, full_pdb: str, R_full: np.ndarray, eps_full: np.ndarra
         cgModel.dumpTopology(str(out_dir / "traj.psf"))
 
     # 3b. v2: append the rigid ribosome (mass-0 scenery + cross-interactions).
+    # nascent_rmin2 (per-residue Karanicolas-Brooks Rmin/2, full-structure array) gives the
+    # nascent side of the NC<->ribosome excluded volume O'Brien's way (Option A); slice to the
+    # current length. If None, append_ribosome falls back to the per-AA table (Option B).
     if ribo is not None:
-        append_ribosome(cgModel, ribo)
+        nasc_rm = None if nascent_rmin2 is None else np.asarray(nascent_rmin2)[:L]
+        append_ribosome(cgModel, ribo, nascent_rmin2=nasc_rm)
         positions = np.vstack([nascent_pos, ribo.coords_nm])
     else:
         positions = nascent_pos

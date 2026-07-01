@@ -779,7 +779,8 @@ def build_nonbonded_interaction(
     pdb_file: str,
     domain_def: Optional[str] = None,
     stride_output_file: Optional[str] = None,
-) -> Tuple[np.ndarray, np.ndarray]:
+    return_rmin2: bool = False,
+):
     """
     Build distance and energy matrices for TOPO non-bonded (native + repulsive) contacts.
 
@@ -935,6 +936,15 @@ def build_nonbonded_interaction(
     n_non_native = n_pairs - n_native
     print(f"  native contacts: {n_native}  |  non-native pairs: {n_non_native}  "
           f"(of {n_pairs} residue pairs)")
+    if return_rmin2:
+        # Per-residue Karanicolas-Brooks collision radius Rmin/2 (nm), O'Brien's nascent
+        # excluded-volume radius: sigma[i] = 2^(1/6) * (min non-native, non-local CA-CA
+        # distance) is the full collision *diameter* Rmin, so Rmin/2 = sigma[i]/2. This is
+        # the structure-derived per-residue radius O'Brien uses (A1..An in his .prm) for the
+        # nascent side of the NC<->ribosome excluded volume (see tutorials/15_claude_fix/
+        # TOPO_OBrien_NCribosome_nonbonded_compare.md). sigma is in Angstrom here.
+        rmin2 = np.asarray(sigma, dtype=float) / 2.0 / DISTANCE_TO_NM   # -> nm
+        return distance_matrix, eps_ij, rmin2
     return distance_matrix, eps_ij
 
 # Main execution
