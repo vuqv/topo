@@ -13,12 +13,13 @@ name: Deploy docs to Pages
 
 on:
   push:
-    # Deploy only from the default branch: the github-pages environment is
-    # protected to allow deployments from `main` only, and each run rebuilds the
-    # WHOLE multi-version site anyway (poly.py enumerates main + translation + dev
-    # from their branches). To publish updated translation/dev docs, merge/push to
-    # main or trigger this workflow manually (workflow_dispatch below).
-    branches: ["main"]
+    # Any branch may trigger a deploy; every run rebuilds the WHOLE multi-version
+    # site (poly.py enumerates every branch), so each branch is published as its
+    # own version subfolder.
+    # REQUIRED repo setting: Settings -> Environments -> github-pages ->
+    # "Deployment branches and tags" must be set to "No restriction", otherwise
+    # non-default branches are rejected with an environment-protection error.
+    branches: ["**"]
     tags: ["*"]
   workflow_dispatch:
 

@@ -31,8 +31,11 @@ from sphinx_polyversion.git import Git, GitRef, GitRefType, file_predicate
 from sphinx_polyversion.sphinx import SphinxBuilder
 
 # -- Configuration (each overridable from the CLI via -o KEY=VALUE) -----------
-#: Branches to publish (full-match regex). Add branches here as needed.
-BRANCH_REGEX = r"^(main|translation|dev)$"
+#: Branches to publish (full-match regex). Publish every branch so each one owns
+#: its own version subfolder. Branches without a docs/ dir are skipped
+#: automatically (see file_predicate below). Narrow this if you want to curate
+#: which branches appear, e.g. r"^(main|translation|dev)$".
+BRANCH_REGEX = r".*"
 #: Tags to publish (none by default; use r".*" to publish every tag).
 TAG_REGEX = r"^$"
 #: Which git remote the branches live on. Left empty so we enumerate *local*
