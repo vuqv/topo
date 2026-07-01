@@ -21,11 +21,11 @@ Quick reference
       A:
         residues: [1-117, 166-214]       # list of ranges ("a-b", inclusive) and/or ints
         class: alpha-beta                # OPTIONAL: structural class (optimizer only)
-        strength: 1.1556                 # SS-contact scale factor WITHIN domain A
+        nscale: 1.1556                 # SS-contact scale factor WITHIN domain A
       B:
         residues: [118-165]
         class: alpha
-        strength: 1.6871
+        nscale: 1.6871
     inter_domains:                       # OPTIONAL: scale factor BETWEEN domains
       A-B: 1.8611                         # key is "<domain1>-<domain2>"
 
@@ -41,18 +41,26 @@ How it is interpreted
   several ranges (see the multi-segment scenario below). The contact matrix is
   ordered by sorted residue number internally, so the segments do not need to be
   contiguous or in order.
-* ``strength`` is the multiplicative scale factor applied to the SS contact
-  **energy** for native contacts whose two residues are in that domain.
+* ``nscale`` is the multiplicative scale factor applied to the SS contact
+  **energy** for native contacts whose two residues are in that domain. It is a
+  *scaling factor*, not an absolute energy — at ``nscale = 1.0`` the contacts keep
+  their unscaled sidechain–sidechain well depths.
+
+  .. note::
+
+     ``nscale`` was previously called ``strength``. The old key is still accepted
+     as a **deprecated alias** (the reader prints a one-time notice and keeps
+     working), but new ``domain.yaml`` files should use ``nscale``.
 * ``inter_domains`` gives the scale factor for native contacts whose two
   residues are in **different** domains. The key ``"A-B"`` is split on ``-`` and
   stored symmetrically, so ``A-B`` also covers ``B-A``.
 * Only the **SS** part of the contact energy is scaled. The hydrogen-bond and
   backbone–sidechain contributions are not affected by these factors.
 * ``class`` is an **optional** per-domain field (``alpha``, ``beta`` or
-  ``alpha-beta``; ``a``/``b``/``c`` accepted). It is used **only** by the strength
+  ``alpha-beta``; ``a``/``b``/``c`` accepted). It is used **only** by the nscale
   optimizer (:doc:`../tutorials/05_opt_nscal`) to pick which *n*\ :sub:`scale`
   ladder a domain climbs, and is **ignored** by the runner — the YAML reader only
-  reads ``residues`` and ``strength``. Include it on domains you intend to
+  reads ``residues`` and ``nscale``. Include it on domains you intend to
   optimize; omit it otherwise.
 
 .. important::
@@ -60,7 +68,7 @@ How it is interpreted
    **If an inter-domain pair is not listed in ``inter_domains``, its scale
    factor defaults to 1.0** (the identity — no scaling). The scaling matrix only
    *modulates* contacts that already exist in the native contact map, so an
-   unspecified interface leaves those native contacts at full strength rather
+   unspecified interface leaves those native contacts at full nscale rather
    than removing them. To intentionally **decouple** two domains (remove their
    inter-domain native contacts), set the pair explicitly to ``0.0``.
 
@@ -68,7 +76,7 @@ How it is interpreted
 
    **Unassigned residues** (any residue in ``1..n_residues`` not listed in a
    domain) are automatically collected into a domain named ``'X'`` with intra
-   strength ``1.0`` and inter strength ``1.0`` to every other domain. This is a
+   nscale ``1.0`` and inter nscale ``1.0`` to every other domain. This is a
    convenience fallback; for reproducible runs it is best to assign every
    residue explicitly so no residue silently lands in ``X``.
 
@@ -88,7 +96,7 @@ domain covering the whole chain with the desired uniform factor:
     intra_domains:
       A:
         residues: [1-106]
-        strength: 2.5044
+        nscale: 2.5044
 
 No ``inter_domains`` block is needed because there is only one domain.
 
@@ -102,10 +110,10 @@ No ``inter_domains`` block is needed because there is only one domain.
     intra_domains:
       A:
         residues: [1-164]
-        strength: 1.114
+        nscale: 1.114
       B:
         residues: [165-283]
-        strength: 1.114
+        nscale: 1.114
     inter_domains:
       A-B: 2.124
 
@@ -126,10 +134,10 @@ residues 1–117 **and** 166–214, with domain B (118–165) inserted between t
     intra_domains:
       A:
         residues: [1-117, 166-214]     # both segments belong to ONE domain A
-        strength: 1.1556
+        nscale: 1.1556
       B:
         residues: [118-165]
-        strength: 1.6871
+        nscale: 1.6871
     inter_domains:
       A-B: 1.8611
 
@@ -147,8 +155,8 @@ set the pair to ``0.0`` **explicitly**:
 
     n_residues: 283
     intra_domains:
-      A: { residues: [1-164],   strength: 1.0 }
-      B: { residues: [165-283], strength: 1.0 }
+      A: { residues: [1-164],   nscale: 1.0 }
+      B: { residues: [165-283], nscale: 1.0 }
     inter_domains:
       A-B: 0.0                  # explicitly remove A-B interface contacts
 
@@ -160,7 +168,7 @@ at the default scale of 1.0 (contacts kept), not remove it.
 5. Three or more domains with selective coupling
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-List each inter-domain pair whose strength you want to change from the default
+List each inter-domain pair whose nscale you want to change from the default
 of 1.0. Any pair you omit keeps its native contacts at scale 1.0; to remove an
 interface, set it to ``0.0``.
 
@@ -168,9 +176,9 @@ interface, set it to ``0.0``.
 
     n_residues: 400
     intra_domains:
-      A: { residues: [1-120],   strength: 1.20 }
-      B: { residues: [121-260], strength: 1.35 }
-      C: { residues: [261-400], strength: 1.10 }
+      A: { residues: [1-120],   nscale: 1.20 }
+      B: { residues: [121-260], nscale: 1.35 }
+      C: { residues: [261-400], nscale: 1.10 }
     inter_domains:
       A-B: 1.50
       B-C: 1.45
@@ -188,17 +196,17 @@ you want left at the default scale:
 
     n_residues: 214
     intra_domains:
-      A: { residues: [1-117, 166-214], strength: 1.1556 }
-      B: { residues: [118-160],        strength: 1.6871 }
-      # residues 161-165 are unassigned -> domain X (strength 1.0,
+      A: { residues: [1-117, 166-214], nscale: 1.1556 }
+      B: { residues: [118-160],        nscale: 1.6871 }
+      # residues 161-165 are unassigned -> domain X (nscale 1.0,
       # X-A = X-B = 1.0)
 
 
 Common pitfalls
 ---------------
 
-* **Empty / missing ``strength``** — every domain must have a numeric
-  ``strength``. A blank value parses as ``None`` and raises an error when the
+* **Empty / missing ``nscale``** — every domain must have a numeric
+  ``nscale``. A blank value parses as ``None`` and raises an error when the
   scaling matrix is built.
 * **Omitting an ``inter_domains`` pair** leaves that interface at the default
   scale of 1.0 (native contacts kept, unscaled). If you instead want to *remove*

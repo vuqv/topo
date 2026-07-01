@@ -1,4 +1,4 @@
-TOPO
+topo
 ====
 
 .. toctree::

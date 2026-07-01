@@ -9,7 +9,7 @@ TOPO ships a ready-made *Q* calculator,
 and for **every domain and domain–domain interface** declared in your
 ``domain.yaml``.
 
-It is the same scorer the strength optimizer uses internally
+It is the same scorer the nscale optimizer uses internally
 (:doc:`../tutorials/05_opt_nscal`), exposed as a standalone command and a small
 Python API.
 

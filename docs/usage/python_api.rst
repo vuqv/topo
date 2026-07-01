@@ -84,7 +84,7 @@ Useful attributes and methods of the returned object:
   into a ``Simulation``.
 * ``cg.n_atoms`` / ``cg.n_chains`` / ``cg.n_bonds`` / ``cg.n_angles`` /
   ``cg.n_torsions`` — geometry counts.
-* ``cg.distance_matrix`` / ``cg.energy_matrix`` — the contact :math:`R_{ij}` and
+* ``cg.rmin_matrix`` / ``cg.energy_matrix`` — the contact :math:`R_{ij}` and
   :math:`\varepsilon_{ij}` matrices (nm, kJ/mol).
 * ``cg.forceGroups`` — ordered map of force name → force object (one per log
   column).

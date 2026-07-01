@@ -345,7 +345,7 @@ they provide chain self-avoidance without biasing toward any non-native fold.
 
    Splitting the well depth into H-bond + backbone–sidechain + sidechain–sidechain
    parts is what makes the **per-domain scaling** (:doc:`domain_definition`) and
-   the **strength optimizer** (:doc:`../tutorials/05_opt_nscal`) possible: the
+   the **nscale optimizer** (:doc:`../tutorials/05_opt_nscal`) possible: the
    scale factor :math:`n_\mathrm{scale}` multiplies **only the sidechain–sidechain
    part**, leaving the backbone hydrogen-bond and backbone–sidechain energies
    untouched. You can therefore tune the stability of one domain or one interface
@@ -522,11 +522,11 @@ protein's melting temperature breaks native contacts (rising
 :doc:`native_contacts`), which is the basis for studying thermal stability.
 
 
-Calibrating contact strength
+Calibrating contact nscale
 ----------------------------
 
 The single most important *adjustable* quantity in the model is
-:math:`n_\mathrm{scale}` (the ``strength`` field in ``domain.yaml``), which
+:math:`n_\mathrm{scale}` (the ``nscale`` field in ``domain.yaml``), which
 multiplies the sidechain–sidechain well depths. The raw, unscaled model
 (:math:`n_\mathrm{scale} = 1`) is usually **under-stabilized** — proteins sit
 only marginally folded. Two pages cover how to set it:
@@ -534,7 +534,7 @@ only marginally folded. Two pages cover how to set it:
 * :doc:`domain_definition` — the file format, per-domain and per-interface
   scaling, discontiguous domains, and decoupling.
 * :doc:`../tutorials/05_opt_nscal` — the automatic optimizer that searches a
-  discrete strength ladder for the smallest :math:`n_\mathrm{scale}` that keeps
+  discrete nscale ladder for the smallest :math:`n_\mathrm{scale}` that keeps
   each domain and interface folded across many trajectories.
 
 

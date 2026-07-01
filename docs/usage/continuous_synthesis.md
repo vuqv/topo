@@ -320,7 +320,7 @@ kJ/mol/nm² — and **dwell times are in seconds**. Integers may use `_` digit s
 | `L_max` | no | full length | Final nascent length (omit/blank = synthesize the whole chain). |
 | `mrna` | cond. | — | mRNA file (one codon per residue). Required for per-codon timing (unless `uniform_ta = yes`). |
 | `trans_times` | no | bundled E. coli 310 K | Codon→mean-time table. Optional — defaults to the bundled Fluitt *E. coli* table; set only to override (other organism/temperature). |
-| `domain_def` | **yes** | — | `domain.yaml` — the protein's **contact-strength definition** (per-domain / per-interface Gō well-depth scaling, the structure-based analog of O'Brien's `nscal`). |
+| `domain_def` | **yes** | — | `domain.yaml` — the protein's **contact-nscale definition** (per-domain / per-interface Gō well-depth scaling, the structure-based analog of O'Brien's `nscal`). |
 | `stride_output_file` | no | — | Precomputed STRIDE file (skips re-running STRIDE). |
 | `outdir` | no | `synth_out` | Output root. |
 

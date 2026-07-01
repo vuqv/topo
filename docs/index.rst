@@ -62,6 +62,12 @@ unfolding, thermal/mechanical stability, and multidomain motions.
    modules/models
    modules/topo.reporter
 
+.. toctree::
+   :maxdepth: 2
+   :caption: Full module index
+
+   modules
+
 
 Indices and tables
 ==================

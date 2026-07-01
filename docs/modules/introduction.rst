@@ -49,8 +49,8 @@ A newcomer's map of the full feature set, with where each is documented:
    * - **Many copies in one run**
      - Pack N non-interacting chains into one (GPU-filling) simulation → N independent trajectories; split afterwards.
      - :doc:`../tutorials/04_multicopy`
-   * - **Strength (n_scale) optimization**
-     - Automatically search the contact strength that keeps each domain/interface folded, instead of guessing.
+   * - **Nscale optimization**
+     - Automatically search the contact nscale that keeps each domain/interface folded, instead of guessing.
      - :doc:`../tutorials/05_opt_nscal`
    * - **Temperature annealing / quenching**
      - Hold hot to unfold, then T-jump or slow-cool to study refolding; quench and production write separate trajectories.
@@ -99,7 +99,7 @@ The codebase is organized into focused subpackages:
    * - :mod:`topo.mdrun`
      - The simulation runner (``topo-mdrun``): build → set up → run the temperature protocol → finalize.
    * - :mod:`topo.optimize`
-     - The contact-strength optimizer (``topo-optimize``).
+     - The contact-nscale optimizer (``topo-optimize``).
    * - :mod:`topo.analysis`
      - Native-contact (*Q*) analysis.
    * - :mod:`topo.reporter`
