@@ -738,6 +738,14 @@ class ElongationParams:
     # flexible-bond + dt-halving behavior (Tutorials 12 & 13 unchanged). Enable with
     # `equil_peptide_geometry = yes` + `constraints = AllBonds` in the INI.
     equil_peptide_geometry: bool = False
+    # Nascent per-residue excluded-volume radius (Rmin/2) for the NC<->ribosome 12-10-6 force:
+    #   "kb"     -> per-residue Karanicolas-Brooks collision diameter from the native structure
+    #               (Option A; O'Brien's actual nascent A_i radii). DEFAULT.
+    #   "per_aa" -> per-amino-acid sidechain radii OBRIEN_SC_RMIN2_NM (Option B; O'Brien's
+    #               ribosomal-protein S<aa1> values). Optional fallback.
+    # See tutorials/15_claude_fix/OPTION_A_vs_B.md. The ribosome side always uses O'Brien's
+    # per-type Rmin/2 (load_obrien_ribosome), independent of this choice.
+    nascent_ev_radii: str = "kb"
     minimize: bool = True
     # NOTE: whether to append the truncated ribosome as rigid (mass-0) scenery is no
     # longer a flag here -- the CSP runner always loads the supplied ribosome PDB as

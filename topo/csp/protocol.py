@@ -263,6 +263,12 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
 
     # --- build-once-subset contacts on the full native structure ------------
     R_full, eps_full, rmin2_full = precompute_contacts(full_pdb, domain_def, stride_output_file)
+    # Nascent side of the NC<->ribosome excluded volume: per-residue Karanicolas-Brooks
+    # Rmin/2 (Option A, "kb", default) or the per-AA fallback in append_ribosome (Option B,
+    # "per_aa" -> pass None). See ElongationParams.nascent_ev_radii.
+    nascent_rmin2_arg = rmin2_full if ep.nascent_ev_radii == "kb" else None
+    print(f"NC<->ribosome nascent excluded-volume radii: "
+          f"{'per-residue Karanicolas-Brooks (Option A)' if ep.nascent_ev_radii == 'kb' else 'per-AA SA..SY (Option B)'}.")
     N_full = R_full.shape[0]
     if L_max is None:
         L_max = N_full
@@ -361,7 +367,7 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
                         ribo=ribo, restrain=True,
                         out_subdir=f"{ldir}/stage_1", n_steps_override=s1,
                         seed_point=seed_point, tether_segid=stage1_segid,
-                        tether_prev_segid=stage1_prev_segid, nascent_rmin2=rmin2_full,
+                        tether_prev_segid=stage1_prev_segid, nascent_rmin2=nascent_rmin2_arg,
                         label=f"L={L} stage 1 (peptidyl transfer) {s1} steps")
 
         # Stage 2: continue from stage 1, still held at the A-site.
@@ -370,7 +376,7 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
                         prev_final=None, seed_override=f1, out_root=out_path,
                         params=ep, ribo=ribo, restrain=True,
                         out_subdir=f"{ldir}/stage_2", n_steps_override=s2,
-                        tether_segid=stage1_segid, nascent_rmin2=rmin2_full,
+                        tether_segid=stage1_segid, nascent_rmin2=nascent_rmin2_arg,
                         label=f"L={L} stage 2 (translocation) {s2} steps")
 
         # Stage 3: translocate A->P (restrain the C-terminus to the P-anchor).
@@ -379,7 +385,7 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
                         prev_final=None, seed_override=f2, out_root=out_path,
                         params=ep, ribo=ribo, restrain=True,
                         out_subdir=f"{ldir}/stage_3", n_steps_override=s3,
-                        tether_segid="PtR", nascent_rmin2=rmin2_full,
+                        tether_segid="PtR", nascent_rmin2=nascent_rmin2_arg,
                         label=f"L={L} stage 3 (tRNA binding) {s3} steps")
         prev_final = f3
 
@@ -398,7 +404,7 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
             p_anchor=p_target, a_anchor=a_anchor, prev_final=None,
             seed_override=prev_final, out_root=out_path, params=ep, ribo=ribo,
             restrain=False, out_subdir="ejection",
-            n_steps_override=params.ejection_steps, nascent_rmin2=rmin2_full,
+            n_steps_override=params.ejection_steps, nascent_rmin2=nascent_rmin2_arg,
             label=f"Ejection (L = {L_max})")
 
     if params.dissociation_steps > 0:
@@ -410,7 +416,7 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
             p_anchor=p_target, a_anchor=a_anchor, prev_final=None,
             seed_override=prev_final, out_root=out_path, params=ep, ribo=ribo,
             restrain=False, out_subdir="dissociation",
-            n_steps_override=params.dissociation_steps, nascent_rmin2=rmin2_full,
+            n_steps_override=params.dissociation_steps, nascent_rmin2=nascent_rmin2_arg,
             label=f"Dissociation (L = {L_max})")
 
 
@@ -639,6 +645,14 @@ def read_csp_config(config_file: str, verbose: bool = True) -> CSPConfig:
         ep.buffer_nm = float(opt("buffer"))
     if opt("equil_peptide_geometry") is not None:
         ep.equil_peptide_geometry = bool(strtobool(opt("equil_peptide_geometry")))
+    # Nascent excluded-volume radii for the NC<->ribosome force: "kb" (per-residue
+    # Karanicolas-Brooks, Option A, DEFAULT) or "per_aa" (per-AA SA..SY, Option B).
+    if opt("nascent_ev_radii") is not None:
+        mode = opt("nascent_ev_radii").strip().lower()
+        if mode not in ("kb", "per_aa"):
+            raise ValueError(f"{config_file}: nascent_ev_radii must be 'kb' or 'per_aa', "
+                             f"got {mode!r}.")
+        ep.nascent_ev_radii = mode
     # C-terminus restraint mode. Default OFF = the validated position-restraint path
     # (Tutorials 12/13/14/15 baseline). `trna_tether = yes` switches to O'Brien's full
     # tRNA tether (bond + 2 angles + improper, A-site stages 1-2 / P-site stage 3).
