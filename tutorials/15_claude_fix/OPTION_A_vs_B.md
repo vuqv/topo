@@ -59,6 +59,25 @@ seeding fix the dt-halving count may rise — watch that metric.
 
 ---
 
+## Seeding-consistency fix (Option A) — big dt-halving win
+
+After adopting Option A, `optimal_ptc_targets` was changed to minimize the **same 12-10-6 sum-rule
+NC↔ribosome EV** the simulation uses (was the old soft pure-`(σ/r)¹²` average-rule metric), so the
+A/P seed is placed at the least-buried point of the *real* wall (a_target clearance 2.37 → 4.27 Å).
+4c5c L=1→306:
+
+| metric | Option A, no seeding fix (`synth_out_optA_noseed`) | Option A + seeding fix (`synth_out`) |
+|--------|-----------------------------------------------------|--------------------------------------|
+| **dt-halving (blow-ups / retries)** | 263 / 534 | **0 / 0** |
+| worst max\|PotE\| | 1.94e4 kJ/mol | **1.02e3 kJ/mol** |
+| hard clashes (<3 Å) | 0 | 0 |
+| min nascent–ribosome center-dist | 4.12 Å | **4.79 Å** (better) |
+| threading corr / x<0 (leak) | −0.852 / 0 | −0.773 / 0 |
+
+**The seeding fix eliminates all blow-ups** (seed no longer born inside the wall) → no dt-halving
+retries → faster + cleaner energies, while keeping 0 clashes and no leak (egress re-checked). This
+also removes the main downside of Option A vs B (its extra dt-halving from larger radii).
+
 ## Option A results (fill after implementation)
 
 ### 4c5c (L=1→306) — DONE
