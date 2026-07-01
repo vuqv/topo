@@ -377,6 +377,10 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
                         params=ep, ribo=ribo, restrain=True,
                         out_subdir=f"{ldir}/stage_2", n_steps_override=s2,
                         tether_segid=stage1_segid, nascent_rmin2=nascent_rmin2_arg,
+                        # Stage 2 continues from stage 1's relaxed final at the SAME (A-site)
+                        # restraint target, so the seeded structure is already minimized ->
+                        # skip the redundant minimization (low-risk speedup).
+                        minimize_override=False,
                         label=f"L={L} stage 2 (translocation) {s2} steps")
 
         # Stage 3: translocate A->P (restrain the C-terminus to the P-anchor).

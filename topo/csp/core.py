@@ -868,6 +868,7 @@ def run_length(L: int, *, full_pdb: str, R_full: np.ndarray, eps_full: np.ndarra
                tether_segid: str = "PtR",
                tether_prev_segid: Optional[str] = None,
                nascent_rmin2: Optional[np.ndarray] = None,
+               minimize_override: Optional[bool] = None,
                label: Optional[str] = None) -> np.ndarray:
     """Build, seed, (restrain,) minimize and run one length-``L`` system.
 
@@ -1021,6 +1022,12 @@ def run_length(L: int, *, full_pdb: str, R_full: np.ndarray, eps_full: np.ndarra
     base_steps = cfg.md_steps
     ctx = None
     max_pe = float("nan")
+    # Per-call minimize gate. Default = params.minimize; a caller may set minimize_override
+    # to skip an unnecessary minimization -- e.g. CSP stage 2 continues from stage 1's already
+    # relaxed final at the SAME restraint target, so re-minimizing is redundant (the seeded
+    # structure setup_simulation loads is already at a local minimum). Retries still skip it
+    # too; a diverging stage is instead stabilized by the dt-halving below.
+    do_minimize = params.minimize if minimize_override is None else bool(minimize_override)
     for attempt in range(STABILITY_MAX_ATTEMPTS):
         cfg.dt = base_dt / (2 ** attempt)
         cfg.md_steps = base_steps * (2 ** attempt)
@@ -1033,7 +1040,7 @@ def run_length(L: int, *, full_pdb: str, R_full: np.ndarray, eps_full: np.ndarra
         ctx = engine.setup_simulation(cfg, built)
         diverged = False
         max_pe = 0.0
-        if params.minimize:
+        if do_minimize:
             if attempt == 0:
                 print("Minimizing seeded structure (relax placement / new bond)...")
             try:
