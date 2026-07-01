@@ -61,18 +61,27 @@ seeding fix the dt-halving count may rise — watch that metric.
 
 ## Option A results (fill after implementation)
 
-### 4c5c (L=1→306)
+### 4c5c (L=1→306) — DONE
 | metric | Option A value | vs B |
 |--------|----------------|------|
-| hard clashes | | |
-| min center-dist (synth) | | |
-| extrusion x-range | | |
-| threading corr | | |
-| D5b (wall/clash/egress) | | |
-| dwell ratio / R_g | | |
-| worst max\|PotE\| | | |
-| dt-halving recoveries | | |
-| K–B Rmin/2 reproduces O'Brien `.prm` A-values? | | |
+| hard clashes (<3 Å) | **0** | tie (both 0) |
+| min center-dist (synth) | **4.12 Å** | better (B 3.32) — held further off ribosome |
+| extrusion x-range | 10..173 Å | ~tie (B 10..179) |
+| threading corr | −0.852 | ~tie (B −0.863) |
+| D5b (wall/clash/egress) | **PASS / PASS / PASS** | tie (both pass) |
+| ejection egress: CoM-x net / end dist-from-ribo | **+160.8 Å / 140.8 Å (fully clears)** | **A ≫ B** (B +22.5 / stayed near) |
+| ejection min NC dist | 3.88 Å | ~tie (B 3.08) |
+| dwell ratio | 1.01× | tie |
+| final R_g (L=10) vs ref | 0.849 nm = 1.13× | B closer (0.96×); both within ~15% |
+| worst max\|PotE\| | **1.94e4 kJ/mol** | **A cleaner** (B 1.9e6) |
+| dt-halving recoveries (blow-ups / retries) | **263 / 534** | **A ~2.7× worse** (B 96 / 201) |
+| K–B Rmin/2 reproduces O'Brien `.prm` A-values? | **yes** (76/306 exact, mean 0.06 nm; residual = topo native-map defn) | — |
+
+**4c5c verdict:** Option A is **more faithful** (per-position K–B = O'Brien's actual nascent radii),
+**excludes better** (4.12 vs 3.32 Å), has **cleaner per-stage energies** (1.94e4 vs 1.9e6), and shows
+a **much more complete egress** (chain fully leaves, CoM +161 Å, ends 140 Å from the ribosome, vs
+Option B's +22 Å). Both pass all D-checks. **Cost:** ~2.7× more dt-halving (larger radii ⇒ seeds sit
+deeper in the wall — the seeding-consistency fix would reduce this).
 
 ### P0CX28 (L=1→106)
 | metric | Option A value | vs B |
