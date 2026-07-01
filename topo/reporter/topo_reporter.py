@@ -79,6 +79,20 @@ class topoReporter(StateDataReporter):
         return str(v)
 
     def _format_header(self, headers):
+        """Format the header line, marked as a comment.
+
+        Parameters
+        ----------
+        headers : list of str
+            Column header names.
+
+        Returns
+        -------
+        str
+            An OpenMM-style quoted, separator-joined comment line when no width
+            is set; otherwise a right-justified fixed-width line whose leading
+            space is replaced by ``#``.
+        """
         if self._width is None:
             # OpenMM-style quoted, separator-joined comment line.
             return '#"%s"' % ('"' + self._separator + '"').join(headers)
@@ -88,6 +102,19 @@ class topoReporter(StateDataReporter):
         return ('#' + line[1:]) if line[:1] == ' ' else ('# ' + line)
 
     def _format_row(self, fields):
+        """Format one data row.
+
+        Parameters
+        ----------
+        fields : list of str
+            Pre-stringified field values for the row.
+
+        Returns
+        -------
+        str
+            The separator-joined row; right-justified to the column widths when
+            a fixed width is set, otherwise plainly joined.
+        """
         if self._width is None:
             return self._separator.join(fields)
         return self._separator.join(f.rjust(w) for f, w in zip(fields, self._col_widths))

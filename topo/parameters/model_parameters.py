@@ -3,8 +3,25 @@ Dictionary contains parameters for TOPO model (topology-based coarse-grained mod
 
 First-level key is the model name. Currently only the "topo" model is defined:
   - topo: topology-based / structure-based model for globular (folded) proteins,
-    with residue parameters (mass, radii, charge) and non-bonded
+    with residue parameters (mass, Rmin_2, charge) and non-bonded
     interaction matrices.
+
+``Rmin_2`` is the collision radius Rmin/2 (nm): half the pair distance of minimum
+non-bonded energy. Pairs combine by the sum rule R_ij = Rmin_2_i + Rmin_2_j
+(O'Brien's convention). (Field was named ``radii`` before; renamed for clarity --
+it was always an Rmin/2, never a diameter or a Lennard-Jones sigma.)
+
+IMPORTANT -- what these ``Rmin_2`` values are used for. They are the **fixed per-type**
+radii for **rigid scenery** beads: the ribosome's RNA (P/R/BR) and ribosomal-protein
+(per-AA) beads, read by :func:`topo.csp.ribosome.load_ribosome`. A **mobile protein
+chain** (the nascent chain, or a folded-protein simulation) does **not** use these:
+its excluded-volume Rmin/2 is **per-residue and structure-derived** (Karanicolas-Brooks,
+from ``build_nonbonded_interaction``), so the same residue name (e.g. ``ALA``) has a
+K-B value in a nascent chain but this fixed table value in a ribosomal protein. This
+mirrors O'Brien, who separates the two by atom type (nascent ``A_i`` vs ribosomal
+``S<aa>``) while keeping standard residue names. The protein ``Rmin_2`` below are
+O'Brien's per-AA sidechain values (his ribosome .prm ``S<aa>`` types == the topo
+``OBRIEN_SC_RMIN_2_NM`` table).
 
 Attributes
 ----------
@@ -29,102 +46,102 @@ parameters = {
         "bonded_exclusions_index": 2,
         "ALA": {
             "mass": 71.00,
-            "radii": 0.504,
+            "Rmin_2": 0.2862278,
             "charge": 0.0,
         },
         "ARG": {
             "mass": 114.00, # should be around 156.19
-            "radii": 0.656,
+            "Rmin_2": 0.3704125,
             "charge": 1.0,
         },
         "ASN": {
             "mass": 114.00,
-            "radii": 0.568,
+            "Rmin_2": 0.3199017,
             "charge": 0.0,
         },
         "ASP": {
             "mass": 114.00,
-            "radii": 0.558,
+            "Rmin_2": 0.3142894,
             "charge": -1.0,
         },
         "CYS": {
             "mass": 114.00,  # concern, this should be around 103.10
-            "radii": 0.548,
+            "Rmin_2": 0.3030648,
             "charge": 0.0,
         },
         "GLU": {
             "mass": 128.00,
-            "radii": 0.592,
+            "Rmin_2": 0.3367386,
             "charge": -1.0,
         },
         "GLN": {
             "mass": 128.00,
-            "radii": 0.602,
+            "Rmin_2": 0.3423509,
             "charge": 0.0,
         },
         "GLY": {
             "mass": 57.00,
-            "radii": 0.450,
+            "Rmin_2": 0.252554,
             "charge": 0.0,
         },
         "HIS": {
             "mass": 114.00,  # should be around 137
-            "radii": 0.608,
+            "Rmin_2": 0.3423509,
             "charge": 0.0,
         },
         "ILE": {
             "mass": 113.00,
-            "radii": 0.618,
+            "Rmin_2": 0.3423509,
             "charge": 0.0,
         },
         "LEU": {
             "mass": 113.00,
-            "radii": 0.618,
+            "Rmin_2": 0.3423509,
             "charge": 0.0,
         },
         "LYS": {
             "mass": 128.00,
-            "radii": 0.636,
+            "Rmin_2": 0.3535755,
             "charge": 1.0,
         },
         "MET": {
             "mass": 131.00,
-            "radii": 0.618,
+            "Rmin_2": 0.3423509,
             "charge": 0.0,
         },
         "PHE": {
             "mass": 147.00,
-            "radii": 0.636,
+            "Rmin_2": 0.3535755,
             "charge": 0.0,
         },
         "PRO": {
             "mass": 114.00,  # should be about 97.12
-            "radii": 0.556,
+            "Rmin_2": 0.3086771,
             "charge": 0.0,
         },
         "SER": {
             "mass": 87.00,
-            "radii": 0.518,
+            "Rmin_2": 0.2918401,
             "charge": 0.0,
         },
         "THR": {
             "mass": 101.00,
-            "radii": 0.562,
+            "Rmin_2": 0.3142894,
             "charge": 0.0,
         },
         "TRP": {
             "mass": 186.00,
-            "radii": 0.678,
+            "Rmin_2": 0.3816371,
             "charge": 0.0,
         },
         "TYR": {
             "mass": 163.00,
-            "radii": 0.646,
+            "Rmin_2": 0.3591879,
             "charge": 0.0,
         },
         "VAL": {
             "mass": 99.00,
-            "radii": 0.586,
+            "Rmin_2": 0.3311263,
             "charge": 0.0,
         },
         # Parameters for RNA.
@@ -136,19 +153,26 @@ parameters = {
         #   purine bases:     A, G (two rings) - two BR beads in the CG model.
         # Be careful with sigma_ij (only used for non-native contacts): two
         # conventions exist, sigma_ij = 0.5 * (sigma_i + sigma_j) or R_ij = R_i + R_j.
+        # RNA Rmin_2 are O'Brien's per-type Rmin/2 (his ribosome .prm NONBONDED block,
+        # combine_ribo_L24_Yang.prm): P 6.44766 A, R 5.231399 A, BR 5.342436 A (all
+        # base beads PU1/PU2/PY share the one BR type). These are used as the ribosome
+        # per-bead Rmin/2 in the NC<->ribosome 12-10-6 sum-rule EV (append_ribosome).
+        # These bead types are ribosome-only (the nascent Ca chain has no P/R/BR), so
+        # setting them here does not affect the nascent-chain model. Previously all three
+        # were a single 0.710 nm placeholder (why topo used to load O'Brien's .cor/.prm).
         "P": {
             "mass": 95.00,
-            "radii": 0.710,
+            "Rmin_2": 0.644766,
             "charge": -1.0,
         },
         "R": {
             "mass": 92.00,
-            "radii": 0.710,
+            "Rmin_2": 0.523140,
             "charge": 0.0,
         },
         "BR": {
             "mass": 64.00,
-            "radii": 0.710,
+            "Rmin_2": 0.534244,
             "charge": 0.0,
         },
         # Dihedral parameters loaded from data/dihedral_params.csv

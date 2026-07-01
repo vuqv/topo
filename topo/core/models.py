@@ -101,10 +101,13 @@ class models:
             for bond in topo_model.bonds:
                 topo_model.system.addConstraint(bond[0].index, bond[1].index, topo_model.bonds[bond][0])
 
-        # Per-residue particle properties (mass, charge, excluded-volume radius).
+        # Per-residue particle properties. Mass/charge are per-AA (model_parameters).
+        # The excluded-volume radius is the per-residue K-B Rmin/2 (structure-derived),
+        # set from the contact build below -- NOT the fixed per-AA model_parameters value
+        # (that is the rigid ribosome scenery radius). See setParticlesRadii after the
+        # build_nonbonded_interaction call.
         topo_model.setCAMassPerResidueType()
         topo_model.setCAChargePerResidueType()
-        topo_model.setCARadiusPerResidueType()
 
         # set particle interactions and add forces to system
         topo_model.setBondForceConstants()
@@ -152,10 +155,11 @@ class models:
         # energies, and no domain scaling. A failure here must be fatal rather than
         # silently swallowed, otherwise the simulation runs an incomplete force field.
         try:
-            distance_matrix, energy_matrix = build_nonbonded_interaction(
+            rmin_matrix, energy_matrix, rmin_2 = build_nonbonded_interaction(
                 structure_file,
                 domain_def,
                 stride_output_file,
+                return_rmin_2=True,
             )
         except Exception as e:
             raise RuntimeError(
@@ -163,14 +167,19 @@ class models:
                 f"(domain_def={domain_def!r}, stride_output_file={stride_output_file!r}): {e}"
             ) from e
 
-        print(f'  contact matrices: {distance_matrix.shape}')
+        print(f'  contact matrices: {rmin_matrix.shape}')
 
         # Store the matrices on the model for later use
-        topo_model.distance_matrix = distance_matrix
+        topo_model.rmin_matrix = rmin_matrix
         topo_model.energy_matrix = energy_matrix
 
+        # Excluded-volume radius = per-residue K-B Rmin/2 (structure-derived), matching the
+        # non-native contacts. rf_sigma feeds only dumpForceFieldData; this keeps that dump
+        # consistent with the actual per-residue radii rather than a fixed per-AA lookup.
+        topo_model.setParticlesRadii(list(rmin_2))
+
         # Add the custom non-bonded (contact) force to the system
-        topo_model.addCustomNonBondedForce(distance_matrix, energy_matrix, use_pbc)
+        topo_model.addCustomNonBondedForce(rmin_matrix, energy_matrix, use_pbc)
 
         # Generate the system object and add previously generated forces. The
         # bond-distance check always runs (it validates the built geometry); the

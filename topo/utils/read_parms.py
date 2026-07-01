@@ -13,6 +13,16 @@ os.path.join(...): Constructs the full path to the JSON file.
 """
 # Load dihedral parameters from JSON file
 def load_dihedral_parameters():
+    """Load the Karanicolas dihedral parameters bundled with the package.
+
+    Reads ``data/karanicolas_dihe_parm.json`` from the directory containing this
+    module.
+
+    Returns
+    -------
+    dict
+        The parsed dihedral-parameter table from the JSON file.
+    """
     json_path = os.path.join(os.path.dirname(__file__), 'data', 'karanicolas_dihe_parm.json')
     with open(json_path, 'r') as f:
         return json.load(f)

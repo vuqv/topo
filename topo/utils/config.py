@@ -239,6 +239,13 @@ def read_simulation_config(config_file: str, verbose: bool = True) -> Simulation
     - ``restart`` forces ``minimize`` off.
     """
     def log(msg: str) -> None:
+        """Print ``msg`` only when ``verbose`` is set.
+
+        Parameters
+        ----------
+        msg : str
+            Message echoing a parsed setting.
+        """
         if verbose:
             print(msg)
 

@@ -12,8 +12,10 @@ Main workflow
 2. **Backbone-sidechain (BS)** and **sidechain-sidechain (SS)** contacts: distance-based
    (default cutoff 4.5 Angstrom); BS energy 0.37 kcal/mol; SS energies from BT potential
    and domain scaling.
-3. **Domain scaling**: YAML defines intra_domains (residue lists + strength) and
-   optional inter_domains (pair strengths). Single-domain proteins can omit
+3. **Domain scaling**: YAML defines intra_domains (residue lists + nscale) and
+   optional inter_domains (pair nscales). ``nscale`` is the native-contact scaling
+   factor applied to the sidechain-sidechain well depths (not an absolute energy --
+   the contacts still interact at nscale = 1.0). Single-domain proteins can omit
    inter_domains.
 4. **Non-native contacts**: repulsive well with sigma from nearest non-contact
    CA-CA distance; energy ENERGY_PARAMS['non_native'].
@@ -21,10 +23,10 @@ Main workflow
 Typical use
 -----------
 >>> from topo.utils.nonbonded import build_nonbonded_interaction
->>> distance_matrix, energy_matrix = build_nonbonded_interaction(
+>>> rmin_matrix, energy_matrix = build_nonbonded_interaction(
 ...     "protein.pdb", "domain.yaml", "stride.dat"
 ... )
->>> # distance_matrix, energy_matrix in nm and kJ/mol for OpenMM
+>>> # rmin_matrix (well positions), energy_matrix in nm and kJ/mol for OpenMM
 """
 import os
 import shutil
@@ -581,12 +583,20 @@ def parse_residue_list(residue_items: List) -> List[int]:
 
 def read_yaml_config(filepath: str) -> Tuple[Dict, Dict, Dict]:
     """
-    Read and parse domain definition YAML (intra/inter strengths, residue lists).
+    Read and parse domain definition YAML (intra/inter nscales, residue lists).
+
+    ``nscale`` is the native-contact scaling factor applied to the sidechain-sidechain
+    contact well depths -- a multiplier, not an absolute energy (the contacts still
+    interact at ``nscale = 1.0``). Per-domain values scale intra-domain contacts;
+    per-interface values scale contacts between two domains.
 
     Required keys: ``intra_domains``, ``n_residues``. Optional: ``inter_domains``
-    (omit for single-domain proteins; then inter_strengths will be empty).
+    (omit for single-domain proteins; then inter_nscales will be empty).
     Residues not listed in any domain are assigned to domain ``'X'`` with
-    intra strength 1.0 and inter 1.0 to all other domains.
+    intra nscale 1.0 and inter 1.0 to all other domains.
+
+    The per-domain scaling key is ``nscale``. The legacy key ``strength`` is still
+    accepted as a deprecated alias (a one-time deprecation notice is printed).
 
     Parameters
     ----------
@@ -597,16 +607,18 @@ def read_yaml_config(filepath: str) -> Tuple[Dict, Dict, Dict]:
     -------
     domain_to_residues : dict
         Domain name -> list of residue numbers (1-based).
-    intra_strengths : dict
-        Domain name -> float (intra-domain contact strength).
-    inter_strengths : dict
-        (domain1, domain2) -> float (inter-domain strength); symmetric keys
+    intra_nscales : dict
+        Domain name -> float (intra-domain contact nscale).
+    inter_nscales : dict
+        (domain1, domain2) -> float (inter-domain nscale); symmetric keys
         (d1, d2) and (d2, d1) are both set.
 
     Raises
     ------
     FileNotFoundError
         If the YAML file cannot be opened.
+    KeyError
+        If a domain entry has neither an ``nscale`` nor a legacy ``strength`` value.
 
     Example
     -------
@@ -614,8 +626,8 @@ def read_yaml_config(filepath: str) -> Tuple[Dict, Dict, Dict]:
 
         n_residues: 110
         intra_domains:
-          A: { residues: [1-50], strength: 1.0 }
-          B: { residues: [51-110], strength: 1.0 }
+          A: { residues: [1-50], nscale: 1.0 }
+          B: { residues: [51-110], nscale: 1.0 }
         inter_domains:
           A-B: 0.5
 
@@ -631,55 +643,73 @@ def read_yaml_config(filepath: str) -> Tuple[Dict, Dict, Dict]:
     except FileNotFoundError:
         print(f"Domain configuration file not found: {filepath}")
         raise
-    
+
     intra = config['intra_domains']
     # inter_domains optional: single-domain proteins have no inter-domain pairs
     inter = config.get('inter_domains', {})
     n_residues = int(config['n_residues'])
-    
+
     domain_to_residues = {}
-    intra_strengths = {}
+    intra_nscales = {}
     all_residues = set()
-    
+    used_legacy_key = False
+
     # Parse intra-domain configurations
     for domain, values in intra.items():
         raw_residues = values['residues']
         residues = parse_residue_list(raw_residues)
         domain_to_residues[domain] = residues
-        intra_strengths[domain] = values['strength']
+        # `nscale` is the current key; `strength` is the deprecated alias.
+        if 'nscale' in values:
+            intra_nscales[domain] = values['nscale']
+        elif 'strength' in values:
+            intra_nscales[domain] = values['strength']
+            used_legacy_key = True
+        else:
+            raise KeyError(
+                f"domain '{domain}' in {filepath} needs an 'nscale' value "
+                f"(the native-contact scaling factor).")
         all_residues.update(residues)
-    
+
+    if used_legacy_key:
+        warnings.warn(
+            f"{filepath}: the domain.yaml key 'strength' is deprecated -- rename it to "
+            f"'nscale' (the native-contact scaling factor). 'strength' is still accepted "
+            f"for now but may be removed in a future release.",
+            DeprecationWarning, stacklevel=2)
+        print(f"[deprecation] {filepath}: 'strength' -> use 'nscale' (still works for now).")
+
     # Handle unassigned residues
     full_residues = set(range(1, n_residues + 1))
     unassigned_residues = sorted(full_residues - all_residues)
     if unassigned_residues:
         domain_to_residues['X'] = unassigned_residues
-        intra_strengths['X'] = 1.0
-    
+        intra_nscales['X'] = 1.0
+
     # Parse inter-domain configurations
-    inter_strengths = {}
-    for pair_str, strength in inter.items():
+    inter_nscales = {}
+    for pair_str, nscale in inter.items():
         d1, d2 = pair_str.strip().split('-')
-        inter_strengths[(d1, d2)] = strength
-        inter_strengths[(d2, d1)] = strength  # ensure symmetry
-    
+        inter_nscales[(d1, d2)] = nscale
+        inter_nscales[(d2, d1)] = nscale  # ensure symmetry
+
     # Add inter-domain interactions for domain X
     if 'X' in domain_to_residues:
         for other in domain_to_residues:
             if other != 'X':
-                inter_strengths[('X', other)] = 1.0
-                inter_strengths[(other, 'X')] = 1.0
-    
-    return domain_to_residues, intra_strengths, inter_strengths
+                inter_nscales[('X', other)] = 1.0
+                inter_nscales[(other, 'X')] = 1.0
+
+    return domain_to_residues, intra_nscales, inter_nscales
 
 def get_scaling_ss_matrix(domain_def: str) -> np.ndarray:
     """
     Build scaling matrix for sidechain–sidechain energies by domain.
 
     Reads domain definitions from YAML and builds an (n × n) matrix where
-    entry [i, j] is the intra-domain strength if residues i and j are in
-    the same domain, or the inter-domain strength if they are in different
-    domains (defaulting to 1.0 — no scaling — when no inter strength is
+    entry [i, j] is the intra-domain nscale if residues i and j are in
+    the same domain, or the inter-domain nscale if they are in different
+    domains (defaulting to 1.0 — no scaling — when no inter nscale is
     defined for that domain pair).
 
     Parameters
@@ -694,7 +724,7 @@ def get_scaling_ss_matrix(domain_def: str) -> np.ndarray:
         (all residues that appear in domain_to_residues). Values are floats
         (typically 0.0 to 1.0) used to scale SS contact energies.
     """
-    domain_to_residues, intra_strengths, inter_strengths = read_yaml_config(domain_def)
+    domain_to_residues, intra_nscales, inter_nscales = read_yaml_config(domain_def)
     
     # Build residue to domain mapping
     residue_to_domain = {}
@@ -718,16 +748,16 @@ def get_scaling_ss_matrix(domain_def: str) -> np.ndarray:
             dom_j = residue_to_domain[j_res]
             
             if dom_i == dom_j:
-                matrix[i_idx, j_idx] = intra_strengths[dom_i]
+                matrix[i_idx, j_idx] = intra_nscales[dom_i]
             else:
                 key = (dom_i, dom_j)
-                if key in inter_strengths:
-                    matrix[i_idx, j_idx] = inter_strengths[key]
-                elif (dom_j, dom_i) in inter_strengths:
-                    matrix[i_idx, j_idx] = inter_strengths[(dom_j, dom_i)]
+                if key in inter_nscales:
+                    matrix[i_idx, j_idx] = inter_nscales[key]
+                elif (dom_j, dom_i) in inter_nscales:
+                    matrix[i_idx, j_idx] = inter_nscales[(dom_j, dom_i)]
                 else:
                     # Default to 1.0 (identity = no scaling), not 0.0. The scaling
-                    # matrix only modulates the strength of contacts that already
+                    # matrix only modulates the nscale of contacts that already
                     # exist in the native contact map; an unspecified inter-domain
                     # pair should leave those native contacts unchanged rather than
                     # silently delete them. This matches the neutral default used
@@ -737,15 +767,18 @@ def get_scaling_ss_matrix(domain_def: str) -> np.ndarray:
     
     return matrix
 
-def calculate_sigma_values(binary_contact_matrix: np.ndarray, ca_distances: np.ndarray,
-                          n_residues: int) -> List[float]:
+def calculate_rmin_2_values(binary_contact_matrix: np.ndarray, ca_distances: np.ndarray,
+                           n_residues: int) -> List[float]:
     """
-    Compute repulsive sigma (distance) for each residue for non-native contacts.
+    Compute per-residue collision radius Rmin/2 for non-native contacts.
 
-    For residue i, sigma[i] is set to SIGMA_SCALE_FACTOR times the minimum
-    CA–CA distance to residues that are (1) not in contact with i (binary_contact_matrix[i, j] == 0)
-    and (2) not within LOCAL_SEPARATION in sequence. This defines a soft repulsion
-    distance for non-native pairs. If no such residue j exists, sigma[i] = 0.0.
+    For residue i, ``Rmin/2[i] = 0.5 * SIGMA_SCALE_FACTOR * (minimum CA-CA distance to
+    residues that are (1) not in contact with i and (2) not within LOCAL_SEPARATION in
+    sequence)``. The minimum CA-CA distance is taken as the LJ sigma (closest approach);
+    ``SIGMA_SCALE_FACTOR = 2^(1/6)`` scales it to the full collision *diameter* Rmin, and
+    the ``0.5`` gives **Rmin/2** -- the per-residue collision *radius* (structure-derived
+    Karanicolas-Brooks). If no such residue j exists, ``Rmin/2[i] = 0.0``. Non-native pairs
+    combine by the SUM rule ``Rmin_ij = Rmin/2[i] + Rmin/2[j]``.
 
     Parameters
     ----------
@@ -759,10 +792,10 @@ def calculate_sigma_values(binary_contact_matrix: np.ndarray, ca_distances: np.n
     Returns
     -------
     list of float
-        sigma[i] for each residue i. Used to set distance_matrix and repulsive
-        well for non-native contacts (e.g. 0.5 * (sigma[i] + sigma[j])).
+        ``Rmin/2[i]`` per residue i; non-native well position via the sum rule
+        ``rmin_matrix[i, j] = Rmin/2[i] + Rmin/2[j]``.
     """
-    sigma = []
+    rmin_2 = []
     for i in range(n_residues):
         not_in_contact_with_i = [
             j for j in range(n_residues) 
@@ -770,26 +803,27 @@ def calculate_sigma_values(binary_contact_matrix: np.ndarray, ca_distances: np.n
         ]
         if not_in_contact_with_i:
             distance_to_i = ca_distances[i, not_in_contact_with_i]
-            sigma.append(SIGMA_SCALE_FACTOR * np.min(distance_to_i))
+            rmin_2.append(0.5 * SIGMA_SCALE_FACTOR * np.min(distance_to_i))
         else:
-            sigma.append(0.0)  # fallback value
-    return sigma
+            rmin_2.append(0.0)  # fallback value
+    return rmin_2
 
 def build_nonbonded_interaction(
     pdb_file: str,
     domain_def: Optional[str] = None,
     stride_output_file: Optional[str] = None,
-    return_rmin2: bool = False,
+    return_rmin_2: bool = False,
 ):
     """
-    Build distance and energy matrices for TOPO non-bonded (native + repulsive) contacts.
+    Build the well-position (Rmin) and energy matrices for TOPO non-bonded contacts.
 
     Combines hydrogen bonds (STRIDE), backbone–sidechain and sidechain–sidechain
-    contacts (distance cutoffs), and domain-based scaling. Native contacts get
-    CA–CA distances and energies from H-bond, BS, and scaled SS terms; non-native
-    pairs get sigma-based distances and a small repulsive energy (non_native).
-    Output matrices are (n_residues × n_residues), symmetric, in nm and kJ/mol
-    for use with OpenMM.
+    contacts (distance cutoffs), and domain-based scaling. Native contacts get their
+    well at the measured CA–CA distance with energies from H-bond, BS, and scaled SS
+    terms; non-native pairs get their well at the sum-rule collision distance
+    ``Rmin/2_i + Rmin/2_j`` and a small repulsive energy (non_native). Output matrices
+    are (n_residues × n_residues), symmetric, in nm and kJ/mol for use with OpenMM.
+    With ``return_rmin_2=True`` also returns the per-residue Rmin/2 array (nm).
 
     Parameters
     ----------
@@ -809,8 +843,9 @@ def build_nonbonded_interaction(
 
     Returns
     -------
-    distance_matrix : np.ndarray, shape (n_residues, n_residues)
-        Pairwise distance in nm. Native: CA–CA distance; non-native: 0.5 * (sigma_i + sigma_j).
+    rmin_matrix : np.ndarray, shape (n_residues, n_residues)
+        Pairwise well position Rmin (nm). Native: CA–CA distance; non-native:
+        Rmin/2_i + Rmin/2_j (sum rule).
     energy_matrix : np.ndarray, shape (n_residues, n_residues)
         Pairwise well depth in kJ/mol. Native: sum of H-bond (0.75/1.5 kcal/mol),
         backbone–sidechain (0.37 kcal/mol), and scaled SS; non-native: ENERGY_PARAMS['non_native'].
@@ -906,27 +941,26 @@ def build_nonbonded_interaction(
     contact_matrix = hb_contact_matrix + bs_contact_matrix + ss_contact_matrix
     binary_contact_matrix = (contact_matrix > 0).astype(int)
     
-    # Calculate distance matrix
+    # Build the per-pair well-position (Rmin) matrix: native distance for contacts,
+    # sum-rule collision distance for non-native pairs.
     ca_atoms = u.select_atoms('protein and name CA')
     ca_distances = distance_array(ca_atoms, ca_atoms)
-    distance_matrix = np.zeros_like(ca_distances)
-    
-    # Set distances for native contacts
+    rmin_matrix = np.zeros_like(ca_distances)
+
+    # Native contacts: well position = the measured native CA-CA distance (Go).
     contact_mask = binary_contact_matrix == 1
-    distance_matrix[contact_mask] = ca_distances[contact_mask]
-    
-    # Calculate sigma values for non-native contacts
-    sigma = calculate_sigma_values(binary_contact_matrix, ca_distances, n_residues)
-    
-    # Set distances and energies for non-native contacts
+    rmin_matrix[contact_mask] = ca_distances[contact_mask]
+
+    # Non-native pairs: per-residue Rmin/2 (structure-derived), combined by the SUM rule.
+    rmin_2 = calculate_rmin_2_values(binary_contact_matrix, ca_distances, n_residues)
     for i in range(n_residues):
         for j in range(n_residues):
             if binary_contact_matrix[i, j] == 0:
-                distance_matrix[i, j] = 0.5 * (sigma[i] + sigma[j])
+                rmin_matrix[i, j] = rmin_2[i] + rmin_2[j]        # sum rule
                 eps_ij[i, j] = ENERGY_PARAMS['non_native']
-    
+
     # Convert to nm for OpenMM compatibility
-    distance_matrix /= DISTANCE_TO_NM
+    rmin_matrix /= DISTANCE_TO_NM
     
     # Report contact statistics over unique residue pairs (upper triangle, i < j).
     # Native contacts are residue pairs flagged in the binary contact matrix;
@@ -936,16 +970,15 @@ def build_nonbonded_interaction(
     n_non_native = n_pairs - n_native
     print(f"  native contacts: {n_native}  |  non-native pairs: {n_non_native}  "
           f"(of {n_pairs} residue pairs)")
-    if return_rmin2:
-        # Per-residue Karanicolas-Brooks collision radius Rmin/2 (nm), O'Brien's nascent
-        # excluded-volume radius: sigma[i] = 2^(1/6) * (min non-native, non-local CA-CA
-        # distance) is the full collision *diameter* Rmin, so Rmin/2 = sigma[i]/2. This is
-        # the structure-derived per-residue radius O'Brien uses (A1..An in his .prm) for the
-        # nascent side of the NC<->ribosome excluded volume (see tutorials/15_claude_fix/
-        # TOPO_OBrien_NCribosome_nonbonded_compare.md). sigma is in Angstrom here.
-        rmin2 = np.asarray(sigma, dtype=float) / 2.0 / DISTANCE_TO_NM   # -> nm
-        return distance_matrix, eps_ij, rmin2
-    return distance_matrix, eps_ij
+    if return_rmin_2:
+        # Per-residue Karanicolas-Brooks collision radius Rmin/2 (nm) -- O'Brien's nascent
+        # excluded-volume radius (the A1..An values in his .prm), used for the nascent side
+        # of the NC<->ribosome excluded volume (see tutorials/15_claude_fix/
+        # TOPO_OBrien_NCribosome_nonbonded_compare.md). calculate_rmin_2_values already
+        # returns Rmin/2 (Angstrom); just convert to nm.
+        rmin_2_nm = np.asarray(rmin_2, dtype=float) / DISTANCE_TO_NM   # Angstrom -> nm
+        return rmin_matrix, eps_ij, rmin_2_nm
+    return rmin_matrix, eps_ij
 
 # Main execution
 if __name__ == "__main__":

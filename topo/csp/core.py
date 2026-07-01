@@ -108,7 +108,7 @@ def _ptc_bead_index(ribo, segid: str, resid: int, name: str) -> int:
     raise ValueError(f"ribosome bead {segid}:{resid}@{name} not found.")
 
 
-def optimal_ptc_targets(ribo, *, aa_rmin2_nm: float = 0.5,
+def optimal_ptc_targets(ribo, *, aa_rmin_2_nm: float = 0.5,
                         n_starts: int = 60
                         ) -> Tuple[np.ndarray, np.ndarray]:
     """Optimal A-site / P-site C-terminus restraint **target points** (nm).
@@ -146,9 +146,9 @@ def optimal_ptc_targets(ribo, *, aa_rmin2_nm: float = 0.5,
     ribo : Ribosome
         The parsed rigid CG ribosome (supplies the AtR/PtR 76 R/P/BR2 beads, all bead
         coordinates and the excluded-volume radii).
-    aa_rmin2_nm : float, optional
+    aa_rmin_2_nm : float, optional
         Nascent-bead Rmin/2 (nm) used in the seed excluded-volume term, combined with the
-        ribosome per-bead Rmin/2 by O'Brien's SUM rule (R = aa_rmin2_nm + Rmin/2_ribo) --
+        ribosome per-bead Rmin/2 by O'Brien's SUM rule (R = aa_rmin_2_nm + Rmin/2_ribo) --
         the SAME EV the simulation applies. Default 0.5 (a conservative value ~ the largest
         per-residue Karanicolas-Brooks radius, so the seed clears the wall for essentially
         every residue -> fewer dt-halving blow-ups).
@@ -163,7 +163,7 @@ def optimal_ptc_targets(ribo, *, aa_rmin2_nm: float = 0.5,
     from scipy.optimize import minimize  # lazy: only needed for this geometry mode
 
     RB = ribo.coords_nm                                     # all bead coords (nm)
-    RBr = np.asarray(ribo.radii_nm)                         # bead radii (nm)
+    RBr = np.asarray(ribo.Rmin_2_nm)                        # bead Rmin/2 (nm)
     iRA = _ptc_bead_index(ribo, "AtR", 76, "R"); RA = RB[iRA]
     iRP = _ptc_bead_index(ribo, "PtR", 76, "R"); RP = RB[iRP]
     PA = RB[_ptc_bead_index(ribo, "AtR", 76, "P")]
@@ -173,26 +173,66 @@ def optimal_ptc_targets(ribo, *, aa_rmin2_nm: float = 0.5,
 
     # Pair contact distance for the seed EV, CONSISTENT with the simulation's NC<->ribosome
     # force (topo.csp.ribosome.append_ribosome): O'Brien's SUM rule R_ij = Rmin/2_nascent +
-    # Rmin/2_ribo (NOT the average 0.5*(sig_i+sig_j)). aa_rmin2_nm is the nascent bead's Rmin/2
+    # Rmin/2_ribo (NOT the average 0.5*(sig_i+sig_j)). aa_rmin_2_nm is the nascent bead's Rmin/2
     # (a conservative value ~ the max per-residue Karanicolas-Brooks radius, so the seed is
     # placed clear of the wall for essentially every residue -> fewer dt-halving blow-ups).
-    R_pair = aa_rmin2_nm + RBr                              # pair contact dist (nm), sum rule
+    R_pair = aa_rmin_2_nm + RBr                              # pair contact dist (nm), sum rule
     mA = np.ones(ribo.n, bool); mA[iRA] = False             # O'Brien exclusions
     mP = np.ones(ribo.n, bool); mP[iRP] = False
     ka, eps = _PTC_ANGLE_K_KJ, RIBO_NC_EPS_KJ               # kJ/mol/rad^2 , kJ/mol
     kb = RESTRAINT_K_KJ                                      # tRNA bond k (kJ/mol/nm^2; O'Brien 200 kcal/mol/A^2)
 
     def _ang(p, q, r):
+        """Bond angle p-q-r (rad), the angle at vertex ``q``.
+
+        Parameters
+        ----------
+        p, q, r : numpy.ndarray
+            ``(3,)`` coordinates; ``q`` is the central (vertex) point.
+
+        Returns
+        -------
+        float
+            Angle in radians, in ``[0, pi]``.
+        """
         u = p - q; v = r - q
         return np.arccos(np.clip(u.dot(v) / np.linalg.norm(u) / np.linalg.norm(v), -1, 1))
 
     def _dih(p, q, r, s):
+        """Dihedral (torsion) angle p-q-r-s (rad).
+
+        Parameters
+        ----------
+        p, q, r, s : numpy.ndarray
+            The four ``(3,)`` coordinates defining the torsion.
+
+        Returns
+        -------
+        float
+            Signed dihedral angle in radians, in ``(-pi, pi]``.
+        """
         b1, b2, b3 = q - p, r - q, s - r
         n1, n2 = np.cross(b1, b2), np.cross(b2, b3)
         m = np.cross(n1, b2 / np.linalg.norm(b2))
         return np.arctan2(m.dot(n2), n1.dot(n2))
 
     def _ev(pt, mask):                                      # excluded volume (kJ/mol)
+        """O'Brien 12-10-6 excluded-volume energy of one seed point vs. the ribosome.
+
+        Parameters
+        ----------
+        pt : numpy.ndarray
+            ``(3,)`` seed coordinate (nm) whose burial is scored.
+        mask : numpy.ndarray
+            Boolean mask over ribosome beads to sum over (the point's own tRNA R
+            bead is excluded, per O'Brien).
+
+        Returns
+        -------
+        float
+            Summed excluded-volume energy (kJ/mol); minimizing it places the seed
+            at the least-buried point of the actual wall.
+        """
         # O'Brien 12-10-6 (same form as the simulation NC<->ribosome force), summed over
         # ribosome beads. Minimizing it places the seed at the least-buried point of the
         # actual wall (the -18/+4 terms give a negligible eps-deep attractive tail).
@@ -216,6 +256,23 @@ def optimal_ptc_targets(ribo, *, aa_rmin2_nm: float = 0.5,
             {"type": "ineq", "fun": lambda x: x[3] - RP[0]}]   # P.x >= P-tRNA.x (exit side)
 
     def _obj(x):                                            # kJ/mol
+        """Total restraint energy to minimize for the A/P seed geometry.
+
+        Sums the soft A-tRNA and P-tRNA bond penalties, the orienting
+        angle/dihedral penalties about each tRNA, and the ribosome excluded
+        volume of both seed points.
+
+        Parameters
+        ----------
+        x : numpy.ndarray
+            ``(6,)`` state vector: the A-site point ``x[:3]`` and the P-site
+            point ``x[3:]`` (nm).
+
+        Returns
+        -------
+        float
+            Total energy (kJ/mol).
+        """
         A, P = x[:3], x[3:]
         E = kb * (np.linalg.norm(A - RA) - _PTC_D_A_NM) ** 2     # soft A-tRNA bond
         E += kb * (np.linalg.norm(P - RP) - _PTC_D_P_NM) ** 2    # soft P-tRNA bond
@@ -291,23 +348,23 @@ def precompute_contacts(full_pdb: str,
                         ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Run TOPO's contact builder once on the full native PDB (DESIGN §3.5).
 
-    Returns ``(R_full, eps_full, rmin2_full)`` -- the ``N_full x N_full`` well-position
+    Returns ``(R_full, eps_full, rmin_2_full)`` -- the ``N_full x N_full`` well-position
     (nm) and well-depth (kJ/mol) matrices, plus the per-residue Karanicolas-Brooks
     collision radius ``Rmin/2`` (nm, shape ``(N_full,)``) that O'Brien uses as the
     nascent excluded-volume radius (the structure-derived ``A_i`` values). STRIDE is
     run at most once here (and cached by :func:`build_nonbonded_interaction`); each
-    length later reuses the top-left ``L x L`` block (and ``rmin2_full[:L]``), so
+    length later reuses the top-left ``L x L`` block (and ``rmin_2_full[:L]``), so
     neither STRIDE nor the heavy-atom analysis is ever re-run per length.
     """
     print("=" * 66)
     print("[ Precompute contacts (build-once-subset) ]")
     print("=" * 66)
     print(f"Running TOPO contact builder on full native structure: {full_pdb}")
-    R_full, eps_full, rmin2_full = build_nonbonded_interaction(
-        full_pdb, domain_def, stride_output_file, return_rmin2=True)
+    R_full, eps_full, rmin_2_full = build_nonbonded_interaction(
+        full_pdb, domain_def, stride_output_file, return_rmin_2=True)
     print(f"  full contact matrices: {R_full.shape}; "
-          f"K-B Rmin/2 range {rmin2_full.min():.3f}-{rmin2_full.max():.3f} nm")
-    return R_full, eps_full, rmin2_full
+          f"K-B Rmin/2 range {rmin_2_full.min():.3f}-{rmin_2_full.max():.3f} nm")
+    return R_full, eps_full, rmin_2_full
 
 
 # --------------------------------------------------------------------------
@@ -355,7 +412,8 @@ def write_subset_structure(full_pdb: str, L: int, out_pdb: str) -> None:
 # Length-L model build (dedicated build-once-subset path)
 # --------------------------------------------------------------------------
 def build_length_model(sub_pdb: str, R_L: np.ndarray, eps_L: np.ndarray,
-                       constraints="AllBonds", model: str = "topo"):
+                       constraints="AllBonds", model: str = "topo",
+                       nascent_rmin_2: Optional[np.ndarray] = None):
     """Build a length-``L`` TOPO model, injecting the ``L x L`` contact subset.
 
     This is the dedicated "build-once-subset" path the design anticipates
@@ -378,6 +436,13 @@ def build_length_model(sub_pdb: str, R_L: np.ndarray, eps_L: np.ndarray,
     constraints : str or None
         ``'AllBonds'`` (rigid, default) or ``None`` (flexible harmonic bonds) --
         same semantics as :meth:`buildCoarseGrainModel`.
+    nascent_rmin_2 : numpy.ndarray or None
+        Per-residue collision radius Rmin/2 (nm), length ``L``, for the nascent chain
+        -- the structure-derived Karanicolas-Brooks values (Option A). Used as the
+        particle excluded-volume radius (``rf_sigma``). This is deliberately **not**
+        taken from ``model_parameters`` (whose fixed per-AA protein Rmin_2 is the rigid
+        *ribosome* scenery value, not the mobile chain's). ``rf_sigma`` only feeds
+        ``dumpForceFieldData``, so ``None`` is harmless (the radius is left unset).
 
     Returns
     -------
@@ -420,10 +485,14 @@ def build_length_model(sub_pdb: str, R_L: np.ndarray, eps_L: np.ndarray,
             topo_model.system.addConstraint(bond[0].index, bond[1].index,
                                             topo_model.bonds[bond][0])
 
-    # Per-residue particle properties.
+    # Per-residue particle properties. Mass/charge are per-AA (from model_parameters).
+    # The nascent excluded-volume radius is the per-residue K-B Rmin/2 (structure-derived,
+    # Option A), NOT the fixed per-AA model_parameters value (that is the rigid ribosome
+    # scenery radius). rf_sigma only feeds dumpForceFieldData, so None is harmless.
     topo_model.setCAMassPerResidueType()
     topo_model.setCAChargePerResidueType()
-    topo_model.setCARadiusPerResidueType()
+    if nascent_rmin_2 is not None:
+        topo_model.setParticlesRadii(list(np.asarray(nascent_rmin_2, dtype=float)))
 
     # Bonded terms.
     topo_model.setBondForceConstants()
@@ -437,7 +506,7 @@ def build_length_model(sub_pdb: str, R_L: np.ndarray, eps_L: np.ndarray,
     topo_model.addYukawaForces(use_pbc=False)
 
     # Structure-based contacts: the injected L x L subset (not recomputed).
-    topo_model.distance_matrix = R_L
+    topo_model.rmin_matrix = R_L
     topo_model.energy_matrix = eps_L
     topo_model.addCustomNonBondedForce(R_L, eps_L, use_pbc=False)
 
@@ -753,10 +822,10 @@ class ElongationParams:
     # Nascent per-residue excluded-volume radius (Rmin/2) for the NC<->ribosome 12-10-6 force:
     #   "kb"     -> per-residue Karanicolas-Brooks collision diameter from the native structure
     #               (Option A; O'Brien's actual nascent A_i radii). DEFAULT.
-    #   "per_aa" -> per-amino-acid sidechain radii OBRIEN_SC_RMIN2_NM (Option B; O'Brien's
+    #   "per_aa" -> per-amino-acid sidechain radii OBRIEN_SC_RMIN_2_NM (Option B; O'Brien's
     #               ribosomal-protein S<aa1> values). Optional fallback.
     # See tutorials/15_claude_fix/OPTION_A_vs_B.md. The ribosome side always uses O'Brien's
-    # per-type Rmin/2 (load_obrien_ribosome), independent of this choice.
+    # Rmin/2 from model_parameters (via load_ribosome), independent of this choice.
     nascent_ev_radii: str = "kb"
     minimize: bool = True
     # NOTE: whether to append the truncated ribosome as rigid (mass-0) scenery is no
@@ -867,7 +936,7 @@ def run_length(L: int, *, full_pdb: str, R_full: np.ndarray, eps_full: np.ndarra
                seed_point: Optional[np.ndarray] = None,
                tether_segid: str = "PtR",
                tether_prev_segid: Optional[str] = None,
-               nascent_rmin2: Optional[np.ndarray] = None,
+               nascent_rmin_2: Optional[np.ndarray] = None,
                minimize_override: Optional[bool] = None,
                label: Optional[str] = None) -> np.ndarray:
     """Build, seed, (restrain,) minimize and run one length-``L`` system.
@@ -908,7 +977,12 @@ def run_length(L: int, *, full_pdb: str, R_full: np.ndarray, eps_full: np.ndarra
     # 2. inject the L x L contact subset (build-once-subset) -----------------
     R_L = np.ascontiguousarray(R_full[:L, :L])
     eps_L = np.ascontiguousarray(eps_full[:L, :L])
-    cgModel = build_length_model(sub_pdb, R_L, eps_L, constraints=params.constraints)
+    # Nascent per-residue K-B Rmin/2 (Option A), sliced to length L. Used both for the
+    # nascent particle excluded-volume radius (in build_length_model) and for the nascent
+    # side of the NC<->ribosome EV (append_ribosome below).
+    nasc_rm = None if nascent_rmin_2 is None else np.asarray(nascent_rmin_2)[:L]
+    cgModel = build_length_model(sub_pdb, R_L, eps_L, constraints=params.constraints,
+                                 nascent_rmin_2=nasc_rm)
 
     # 3. seed nascent coordinates --------------------------------------------
     if seed_override is not None:   # post-synthesis: use the given structure as-is
@@ -936,12 +1010,11 @@ def run_length(L: int, *, full_pdb: str, R_full: np.ndarray, eps_full: np.ndarra
         cgModel.dumpTopology(str(out_dir / "traj.psf"))
 
     # 3b. v2: append the rigid ribosome (mass-0 scenery + cross-interactions).
-    # nascent_rmin2 (per-residue Karanicolas-Brooks Rmin/2, full-structure array) gives the
+    # nascent_rmin_2 (per-residue Karanicolas-Brooks Rmin/2, full-structure array) gives the
     # nascent side of the NC<->ribosome excluded volume O'Brien's way (Option A); slice to the
     # current length. If None, append_ribosome falls back to the per-AA table (Option B).
     if ribo is not None:
-        nasc_rm = None if nascent_rmin2 is None else np.asarray(nascent_rmin2)[:L]
-        append_ribosome(cgModel, ribo, nascent_rmin2=nasc_rm)
+        append_ribosome(cgModel, ribo, nascent_rmin_2=nasc_rm)
         positions = np.vstack([nascent_pos, ribo.coords_nm])
     else:
         positions = nascent_pos

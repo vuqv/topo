@@ -20,7 +20,7 @@ Method
    instantaneous Cα–Cα distance satisfies d_CG(i, j) <= tolerance * d_native(i, j)
    (tolerance = 1.2). Q is the fraction of that group's native contacts formed.
 
-Use as a library (e.g. from the strength optimizer) by importing the functions,
+Use as a library (e.g. from the nscale optimizer) by importing the functions,
 or as a CLI:
 
     python -m topo.analysis.native_contacts -d domain.yaml -r ref.pdb \\
@@ -219,6 +219,15 @@ def fraction_native_contacts(ca_positions, pairs, native_dist, tolerance):
 # CLI / driver
 # --------------------------------------------------------------------------- #
 def parse_args():
+    """Parse command-line arguments for the native-contacts (Q) driver.
+
+    Returns
+    -------
+    argparse.Namespace
+        Parsed arguments: ``domain``, ``reference``, ``psf``, ``dcd``,
+        ``output`` paths plus the ``cutoff``, ``local_separation``,
+        ``tolerance``, ``start_frame`` and ``end_frame`` scoring options.
+    """
     p = argparse.ArgumentParser(
         prog="python -m topo.analysis.native_contacts",
         description="Per-domain and per-interface fraction of native contacts (Q) "
@@ -245,6 +254,21 @@ def parse_args():
 
 
 def main():
+    """Score per-domain and per-interface native contacts for a CG trajectory.
+
+    Builds the native-contact lists once from the all-atom reference (whole
+    protein, each domain, and each domain pair interface), then computes the
+    fraction of native contacts (Q) for every frame of the CG DCD trajectory and
+    writes the per-frame results to the output CSV.
+
+    Raises
+    ------
+    FileNotFoundError
+        If any of the reference, PSF, DCD or domain input files is missing.
+    ValueError
+        If the domain definition or CG bead count does not match the reference
+        protein's residue count.
+    """
     args = parse_args()
 
     for label, path in (("reference", args.reference), ("psf", args.psf),

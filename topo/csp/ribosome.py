@@ -16,7 +16,8 @@ scenery** and wires the two ribosome <-> nascent-chain interactions, following
    O'Brien's NC<->ribosome interaction -- the **12-10-6** form
    ``ε[13(R/r)¹² − 18(R/r)¹⁰ + 4(R/r)⁶]`` (``ε = 0.000132 kcal/mol``) with the **sum**
    combination rule ``R_ij = Rmin/2_i + Rmin/2_j`` (O'Brien's convention; nascent Rmin/2 =
-   per-AA ``OBRIEN_SC_RMIN2_NM``, ribosome Rmin/2 from ``load_obrien_ribosome``), cutoff
+   per-residue K-B (Option A) or per-AA ``OBRIEN_SC_RMIN_2_NM``, ribosome Rmin/2 from
+   ``model_parameters`` via ``load_ribosome``), cutoff
    2.0 nm / switch 1.8 nm, interaction group ``{nascent}×{ribosome}``. (Earlier topo used a
    pure ``ε(σ/r)¹²`` + average rule that was ~1000× too soft -- see
    ``tutorials/15_claude_fix/TOPO_OBrien_NCribosome_nonbonded_compare.md``.)
@@ -69,19 +70,17 @@ _IMPROPER_ENERGY = ("k*min(dtheta, 2*pi-dtheta)^2; dtheta = abs(theta-theta0); "
                     "pi = 3.1415926535")
 
 # O'Brien per-amino-acid sidechain-bead Rmin/2 (nm), the S<aa1> NONBONDED types from his
-# CG protein/ribosome .prm (combine_ribo_L24_Yang.prm). These are O'Brien's per-AA
-# excluded-volume radii (used for the ribosomal-protein beads). Tutorial 15 (user decision,
-# "Option B") uses them as the NASCENT-chain per-residue Rmin/2 in the NC<->ribosome
-# excluded-volume force, so both sides of every NC<->ribosome pair use O'Brien's Rmin/2
-# convention with his SUM combination rule (R_ij = Rmin/2_i + Rmin/2_j). HSD/HSE/HSP alias HIS.
-OBRIEN_SC_RMIN2_NM = {
-    "ALA": 0.2862278, "ARG": 0.3704125, "ASN": 0.3199017, "ASP": 0.3142894,
-    "CYS": 0.3030648, "GLN": 0.3423509, "GLU": 0.3367386, "GLY": 0.2525540,
-    "HIS": 0.3423509, "ILE": 0.3423509, "LEU": 0.3423509, "LYS": 0.3535755,
-    "MET": 0.3423509, "PHE": 0.3535755, "PRO": 0.3086771, "SER": 0.2918401,
-    "THR": 0.3142894, "TRP": 0.3816371, "TYR": 0.3591879, "VAL": 0.3311263,
-    "HSD": 0.3423509, "HSE": 0.3423509, "HSP": 0.3423509,
-}
+# CG protein/ribosome .prm (combine_ribo_L24_Yang.prm). These are the fixed per-AA
+# excluded-volume radii used for the ribosomal-protein beads. The authoritative values
+# now live in model_parameters[...] (the protein Rmin_2 entries, == these S<aa> values),
+# so this table is derived from there to keep a single source; the HSD/HSE/HSP histidine
+# tautomers alias HIS. Retained as a named table for the Option-B nascent fallback in
+# :func:`append_ribosome` (nascent per-AA Rmin/2 when the per-residue K-B array is absent).
+_MP_TOPO = MODEL_PARAMS["topo"]
+_AA20 = ("ALA", "ARG", "ASN", "ASP", "CYS", "GLN", "GLU", "GLY", "HIS", "ILE",
+         "LEU", "LYS", "MET", "PHE", "PRO", "SER", "THR", "TRP", "TYR", "VAL")
+OBRIEN_SC_RMIN_2_NM = {aa: _MP_TOPO[aa]["Rmin_2"] for aa in _AA20}
+OBRIEN_SC_RMIN_2_NM.update({t: OBRIEN_SC_RMIN_2_NM["HIS"] for t in ("HSD", "HSE", "HSP")})
 # O'Brien's 12-10-6 Go/excluded-volume leading coefficients (U = eps[13(R/r)^12 -
 # 18(R/r)^10 + 4(R/r)^6]); well minimum -eps at r=R. Same form parse_cg_prm.py emits.
 _NC_126_ENERGY = ("eps*(13*(R/r)^12 - 18*(R/r)^10 + 4*(R/r)^6); R = rm1 + rm2")
@@ -100,7 +99,7 @@ TUNNEL_WALL_K = 8368.0         # kJ/mol/nm^2 (= 20 kcal/mol/A^2)
 class Ribosome:
     """Parsed rigid CG ribosome: per-bead coordinates (nm) and force parameters."""
     coords_nm: np.ndarray       # (M, 3)
-    radii_nm: List[float]       # excluded-volume sigma per bead (model_parameters)
+    Rmin_2_nm: List[float]      # per-bead collision radius Rmin/2 (nm; sum-rule EV)
     charges: List[float]
     names: List[str]
     resnames: List[str]
@@ -114,9 +113,9 @@ class Ribosome:
         Returns
         -------
         int
-            The bead count, taken as the length of ``radii_nm``.
+            The bead count, taken as the length of ``Rmin_2_nm``.
         """
-        return len(self.radii_nm)
+        return len(self.Rmin_2_nm)
 
 
 def _bead_type(name: str, resname: str) -> str:
@@ -147,8 +146,14 @@ def load_ribosome(pdb_file: str, model: str = "topo") -> Ribosome:
     """Parse a (truncated) CG ribosome PDB into a :class:`Ribosome`.
 
     Reads each ATOM/HETATM record, derives its bead type (:func:`_bead_type`), and
-    looks up the excluded-volume radius (σ) and charge from
-    ``model_parameters[model]``. Coordinates are converted from angstrom to nm.
+    looks up its collision radius Rmin/2 and charge from ``model_parameters[model]``
+    -- the fixed per-type scenery table: **RNA beads** (P/R/BR) by O'Brien's per-type
+    Rmin/2, **protein Cα beads** by O'Brien's per-AA sidechain Rmin/2 (his ribosome
+    ``S<aa>`` values; the one structure-based Go protein L24 is treated the same
+    per-AA way -- his per-residue B-type values are not reproduced). Coordinates are
+    converted from angstrom to nm. This reproduces O'Brien's ribosome excluded volume
+    from topo's own CG PDB -- no .cor/.psf/.prm needed. The mobile nascent chain uses
+    its own per-residue K-B Rmin/2 (Option A), never this table (see model_parameters).
 
     Parameters
     ----------
@@ -187,8 +192,12 @@ def load_ribosome(pdb_file: str, model: str = "topo") -> Ribosome:
                 raise ValueError(
                     f"ribosome bead type {btype!r} (atom {name!r}, residue "
                     f"{resname!r}) is not defined in model_parameters[{model!r}].")
+            # Rmin/2 (collision radius, nm) and charge from model_parameters -- the fixed
+            # per-type scenery table: RNA P/R/BR per-type, ribosomal protein per-AA
+            # (O'Brien's S<aa> values). Correct for the *rigid* ribosome; the mobile
+            # nascent chain uses its own per-residue K-B Rmin/2 (Option A), never this.
             coords.append((x / 10.0, y / 10.0, z / 10.0))
-            radii.append(params[btype]["radii"])
+            radii.append(params[btype]["Rmin_2"])
             charges.append(params[btype]["charge"])
             names.append(name); resnames.append(resname)
             resids.append(resid); segids.append(seg)
@@ -198,160 +207,38 @@ def load_ribosome(pdb_file: str, model: str = "topo") -> Ribosome:
                     names, resnames, resids, segids)
 
 
-# O'Brien CG bead-name map (his RNA atom names -> topo convention used by the geometry
-# lookups optimal_ptc_targets / add_trna_tether / bead_system_index). PU1/PU2 are the two
-# purine base beads (-> BR1/BR2); PY the single pyrimidine base bead (-> BR1). Protein beads
-# (atom name 'B' or 'S<aa1>') become 'CA' (their identity is carried by radii/charge, read
-# from O'Brien's own .psf/.prm -- not by name).
-_OBRIEN_RNA_NAME = {"P": "P", "R": "R", "PU1": "BR1", "PU2": "BR2", "PY": "BR1"}
-
-
-def _parse_prm_radii(prm_path: str) -> dict:
-    """Parse a CHARMM .prm NONBONDED block -> {atom type: Rmin/2 in nm}.
-
-    O'Brien's excluded volume uses the per-type Rmin/2 as the bead collision radius
-    (column 4 of each NONBONDED line; column 3 is eps = -0.000132 kcal/mol for all).
-    """
-    radii: dict = {}
-    in_nb = False
-    for ln in open(prm_path):
-        s = ln.strip()
-        if s.startswith("NONBONDED"):
-            in_nb = True
-            continue
-        if in_nb and (s.startswith(("NBFIX", "HBOND", "END")) or s.startswith("BONDS")):
-            break
-        if not in_nb or not s or s.startswith("!"):
-            continue
-        p = s.split()
-        # type  polarizability  eps  Rmin/2   (skip CUTNB/header continuations)
-        if len(p) >= 4 and p[0] not in ("CUTNB", "CTOFNB", "CTONNB", "EPS", "E14FAC", "WMIN"):
-            try:
-                radii[p[0]] = float(p[3]) / 10.0   # angstrom -> nm
-            except ValueError:
-                continue
-    return radii
-
-
-def load_obrien_ribosome(cor_path: str, psf_path: str, prm_path: str,
-                         model: str = "topo") -> Ribosome:
-    """Load O'Brien's truncated CG ribosome from his own .cor/.psf/.prm files.
-
-    topo's :func:`load_ribosome` builds a :class:`Ribosome` from a PDB and derives radii
-    /charge from ``model_parameters`` by bead name -- but topo's home-built CG ribosome
-    placed the **ribose (R) bead** differently from O'Brien (who uses the **C5'** atom),
-    shifting the tRNA anchors (PtR:76 R by ~3.6 A) and the whole PTC/tunnel geometry, and
-    it used a single 0.71 nm radius for every RNA bead instead of O'Brien's per-type
-    Rmin/2 (P 0.645, R 0.523, base 0.534 nm). This loader instead reads **O'Brien's own**
-    truncated ribosome verbatim so the geometry and excluded volume match the reference:
-
-    - **positions** from the ``.cor`` (his C5'-based R beads, in angstrom -> nm);
-    - **radii** = per-type Rmin/2 from the ``.prm`` NONBONDED block (his soft EV);
-    - **charges** from the ``.psf`` (rRNA phosphate -1, charged protein residues +/-1);
-    - **bead names** mapped to topo's convention (RNA P/R/BR1/BR2; protein -> CA) so the
-      PTC/tether lookups (which search 'R'/'P'/'BR2' on AtR/PtR:76) work unchanged.
-
-    The three files must list atoms in the same order (they do -- both 4577 atoms).
-
-    Parameters
-    ----------
-    cor_path, psf_path, prm_path : str
-        O'Brien's truncated-ribosome CHARMM coordinate / topology / parameter files.
-    model : str, optional
-        Unused (kept for signature parity with :func:`load_ribosome`); O'Brien's own
-        parameters are used, not ``model_parameters[model]``.
-
-    Returns
-    -------
-    Ribosome
-        The ribosome with O'Brien's exact coordinates, radii and charges.
-
-    Raises
-    ------
-    ValueError
-        If the .cor / .psf atom counts disagree, or an atom type is missing from the .prm.
-    """
-    prm_radii = _parse_prm_radii(prm_path)
-
-    # --- .psf NATOM: ordered (segid, resid, resname, atomname, atomtype, charge) ------
-    psf_rows = []
-    in_atoms = False
-    for ln in open(psf_path):
-        if "!NATOM" in ln:
-            in_atoms = True
-            continue
-        if in_atoms:
-            if ln.strip() == "" or "!N" in ln:
-                break
-            p = ln.split()
-            if len(p) < 8 or not p[0].isdigit():
-                continue
-            # id segid resid resname atomname atomtype charge mass
-            psf_rows.append((p[1], int(p[2]), p[3], p[4], p[5], float(p[6])))
-
-    # --- .cor: ordered coordinates (CHARMM EXT) --------------------------------------
-    cor_xyz = []
-    for ln in open(cor_path):
-        if ln.startswith("*"):
-            continue
-        p = ln.split()
-        if len(p) < 10 or not p[0].isdigit():
-            continue
-        cor_xyz.append((float(p[4]), float(p[5]), float(p[6])))
-
-    if len(psf_rows) != len(cor_xyz):
-        raise ValueError(f"O'Brien ribosome: .psf has {len(psf_rows)} atoms but .cor has "
-                         f"{len(cor_xyz)} -- they must match.")
-
-    coords, radii, charges, names, resnames, resids, segids = [], [], [], [], [], [], []
-    for (segid, resid, resname, atomname, atomtype, charge), (x, y, z) in zip(psf_rows, cor_xyz):
-        if atomtype not in prm_radii:
-            raise ValueError(f"O'Brien ribosome: atom type {atomtype!r} (atom {atomname!r}, "
-                             f"residue {resname!r}) missing from {prm_path} NONBONDED.")
-        # bead name in topo convention (RNA mapped; protein -> CA)
-        name = _OBRIEN_RNA_NAME.get(atomname, "CA")
-        coords.append((x / 10.0, y / 10.0, z / 10.0))
-        radii.append(prm_radii[atomtype])
-        charges.append(charge)
-        names.append(name)
-        resnames.append(resname)
-        resids.append(resid)
-        segids.append(segid)
-    return Ribosome(np.asarray(coords, dtype=float), radii, charges,
-                    names, resnames, resids, segids)
-
-
-def load_ribosome_auto(path: str, psf: Optional[str] = None,
-                       prm: Optional[str] = None, model: str = "topo") -> Ribosome:
-    """Load a ribosome, dispatching on file type.
-
-    - ``path`` ending in ``.cor`` -> :func:`load_obrien_ribosome` (O'Brien's authentic
-      truncated CG ribosome). ``psf`` / ``prm`` default to the same-stem siblings
-      (``foo.cor`` -> ``foo.psf`` / ``foo.prm``) when not given explicitly.
-    - otherwise -> :func:`load_ribosome` (a topo PDB, params from ``model_parameters``).
-    """
-    import os
-    if str(path).lower().endswith(".cor"):
-        stem = os.path.splitext(path)[0]
-        psf = psf or (stem + ".psf")
-        prm = prm or (stem + ".prm")
-        return load_obrien_ribosome(path, psf, prm, model=model)
-    return load_ribosome(path, model=model)
-
-
 def append_ribosome(nascent_model, ribo: Ribosome,
-                    nascent_rmin2: Optional[np.ndarray] = None
+                    nascent_rmin_2: Optional[np.ndarray] = None
                     ) -> Tuple[List[int], List[int]]:
     """Append the rigid ribosome to a built nascent model (system + topology).
 
     Mutates ``nascent_model`` in place (its ``.system`` and ``.topology``):
-    appends mass-0 ribosome particles; extends the contact and Yukawa forces with
-    ribosome entries and the appropriate interaction groups; adds the ribosome-NC
-    ``(σ/r)¹²`` force; and extends the topology with a ribosome chain per segID.
+    appends mass-0 (fixed) ribosome particles; extends the contact and Yukawa
+    forces with ribosome entries and restricts their interaction groups; adds the
+    O'Brien-consistent ribosome-NC excluded-volume force (the 12-10-6 form
+    ``U = eps[13(R/r)¹² - 18(R/r)¹⁰ + 4(R/r)⁶]`` with the *sum* combination rule
+    ``R = rm_i + rm_j``, acting on {nascent}×{ribosome} only); and extends the
+    topology with one ribosome chain per segID.
 
     Must be called **after** :func:`topo.csp.core.build_length_model`
-    (the nascent forces must already exist). Returns ``(nascent_indices,
-    ribosome_indices)``.
+    (the nascent forces must already exist).
+
+    Parameters
+    ----------
+    nascent_model
+        The built nascent model whose ``.system`` and ``.topology`` are mutated.
+    ribo : Ribosome
+        The parsed rigid ribosome (coords, per-bead Rmin/2, charges, topology).
+    nascent_rmin_2 : np.ndarray, optional
+        Per-nascent-bead Rmin/2 (nm) for the NC-ribosome excluded volume. When
+        given (length must equal the nascent atom count), these are O'Brien's
+        structure-derived per-residue Karanicolas-Brooks collision radii
+        ("Option A"). When ``None``, falls back to per-AA sidechain radii
+        ``OBRIEN_SC_RMIN_2_NM`` ("Option B").
+
+    Returns
+    -------
+    (nascent_indices, ribosome_indices) : Tuple[List[int], List[int]]
     """
     system = nascent_model.system
     topology = nascent_model.topology
@@ -387,32 +274,32 @@ def append_ribosome(nascent_model, ribo: Ribosome,
     #    with the SUM combination rule R_ij = Rmin/2_i + Rmin/2_j (NOT the average 0.5*(s1+s2)),
     #    same eps (RIBO_NC_EPS_KJ = 0.000132 kcal/mol). Per TOPO_OBrien_NCribosome_nonbonded_
     #    compare.md, the old pure (sigma/r)^12 + average rule was ~1000x too soft. Nascent
-    #    per-bead Rmin/2 uses O'Brien's per-AA sidechain values (OBRIEN_SC_RMIN2_NM, "Option B");
-    #    ribosome per-bead Rmin/2 are O'Brien's per-type values (ribo.radii_nm, via
-    #    load_obrien_ribosome). Both sides are thus on O'Brien's Rmin/2 convention.
+    #    per-bead Rmin/2 uses O'Brien's per-AA sidechain values (OBRIEN_SC_RMIN_2_NM, "Option B");
+    #    ribosome per-bead Rmin/2 are O'Brien's values (ribo.Rmin_2_nm: RNA per-type,
+    #    protein per-AA). Both sides are thus on O'Brien's Rmin/2 convention.
     nc = mm.CustomNonbondedForce(_NC_126_ENERGY)
     nc.addGlobalParameter("eps", RIBO_NC_EPS_KJ)
     nc.addPerParticleParameter("rm")    # per-bead Rmin/2 (nm); pair R = rm1 + rm2
     # Nascent per-bead Rmin/2:
-    #  - Option A (default when nascent_rmin2 given): O'Brien's structure-derived per-residue
+    #  - Option A (default when nascent_rmin_2 given): O'Brien's structure-derived per-residue
     #    Karanicolas-Brooks collision radius (A1..An in his .prm) -- this is what O'Brien's
     #    nascent chain actually uses for the nascent<->ribosome excluded volume.
-    #  - Option B (fallback): per-AA sidechain radii OBRIEN_SC_RMIN2_NM (his ribosomal-protein
+    #  - Option B (fallback): per-AA sidechain radii OBRIEN_SC_RMIN_2_NM (his ribosomal-protein
     #    S<aa1> values); kept for reference / when the K-B array is unavailable.
     nascent_atoms = list(topology.atoms())[:L]   # nascent CA beads (ribosome not appended yet)
-    if nascent_rmin2 is not None:
-        if len(nascent_rmin2) != L:
-            raise ValueError(f"nascent_rmin2 has {len(nascent_rmin2)} entries but L={L}.")
-        for rm in nascent_rmin2:                  # Option A: per-residue K-B Rmin/2 (nm)
+    if nascent_rmin_2 is not None:
+        if len(nascent_rmin_2) != L:
+            raise ValueError(f"nascent_rmin_2 has {len(nascent_rmin_2)} entries but L={L}.")
+        for rm in nascent_rmin_2:                  # Option A: per-residue K-B Rmin/2 (nm)
             nc.addParticle((float(rm),))
     else:
         for atom in nascent_atoms:                # Option B: per-AA sidechain Rmin/2 (nm)
             rn = atom.residue.name
-            if rn not in OBRIEN_SC_RMIN2_NM:
+            if rn not in OBRIEN_SC_RMIN_2_NM:
                 raise ValueError(f"NC-ribosome EV: residue {rn!r} has no O'Brien Rmin/2 "
-                                 f"(OBRIEN_SC_RMIN2_NM); cannot set the nascent excluded-volume radius.")
-            nc.addParticle((OBRIEN_SC_RMIN2_NM[rn],))
-    for s in ribo.radii_nm:                       # ribosome: O'Brien per-type Rmin/2 (nm)
+                                 f"(OBRIEN_SC_RMIN_2_NM); cannot set the nascent excluded-volume radius.")
+            nc.addParticle((OBRIEN_SC_RMIN_2_NM[rn],))
+    for s in ribo.Rmin_2_nm:                      # ribosome: O'Brien Rmin/2 (nm)
         nc.addParticle((s,))
     nc.setNonbondedMethod(mm.CustomNonbondedForce.CutoffNonPeriodic)
     nc.setUseSwitchingFunction(True)
@@ -476,8 +363,8 @@ def anchor_coord(ribo: Ribosome, segid: str, resid: int = 76,
 
     The :class:`Ribosome`-object analog of :func:`topo.csp.core.read_anchor` (which parses
     a PDB): used to pick the P-/A-anchors (``segid='PtR'/'AtR'``, resid 76, ``R`` bead)
-    when the ribosome was loaded from O'Brien's .cor (no PDB to re-parse). Raises if the
-    bead is absent or non-unique.
+    directly from the loaded :class:`Ribosome` arrays. Raises if the bead is absent or
+    non-unique.
     """
     matches = [i for i in range(ribo.n)
                if ribo.segids[i] == segid and ribo.resids[i] == resid

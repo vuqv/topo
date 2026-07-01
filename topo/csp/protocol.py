@@ -59,7 +59,7 @@ from topo.csp.core import (ElongationParams, TUNNEL_AXIS,
                                        precompute_contacts,
                                        run_length, optimal_ptc_targets,
                                        TRNA_TETHER_BOND_NM)
-from topo.csp.ribosome import (load_ribosome_auto, anchor_coord)
+from topo.csp.ribosome import (load_ribosome, anchor_coord)
 from topo.utils.config import strtobool
 from topo.csp import kinetics
 
@@ -140,8 +140,6 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
                              trans_times: Optional[str] = None,
                              domain_def: Optional[str] = None,
                              stride_output_file: Optional[str] = None,
-                             ribosome_psf: Optional[str] = None,
-                             ribosome_prm: Optional[str] = None,
                              params: Optional[CSPParams] = None) -> None:
     """Run the full O'Brien continuous synthesis ``L = L0 .. L_max``.
 
@@ -166,7 +164,7 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
         (organism-universal; see :func:`topo.csp.kinetics.default_trans_times_path`).
     domain_def : str
         Domain-definition file (``domain.yaml``) defining the protein's **native-contact
-        strengths** -- per-domain and per-interface Gō well-depth scaling (the
+        nscales** -- per-domain and per-interface Gō well-depth scaling factors (the
         structure-based analog of O'Brien's ``nscal``). Required via the INI.
     stride_output_file : str, optional
         Precomputed STRIDE file for the contact build (skips re-running STRIDE).
@@ -208,12 +206,10 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
     out_path.mkdir(parents=True, exist_ok=True)
 
     # --- rigid ribosome (always: the supplied file is rigid scenery) --------
-    # Loaded once; identical at every length. A '.cor' path loads O'Brien's authentic
-    # truncated CG ribosome (his C5'-based R beads + per-type radii from the sibling
-    # .psf/.prm); any other path is a topo PDB. Loaded before the anchors/targets
-    # because both are derived from its beads.
-    ribo = load_ribosome_auto(ribosome_pdb, psf=ribosome_psf, prm=ribosome_prm,
-                              model="topo")
+    # Loaded once; identical at every length. A topo CG ribosome PDB (built by
+    # topo.csp.cg_ribosome + truncate_ribosome); radii/charge from model_parameters.
+    # Loaded before the anchors/targets because both are derived from its beads.
+    ribo = load_ribosome(ribosome_pdb, model="topo")
     print(f"Rigid ribosome: {ribo.n} beads from {ribosome_pdb} "
           f"(mass-0 scenery; ribosome<->nascent forces on).")
 
@@ -262,11 +258,11 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
               f"(auto: lower C-terminus hold plane).")
 
     # --- build-once-subset contacts on the full native structure ------------
-    R_full, eps_full, rmin2_full = precompute_contacts(full_pdb, domain_def, stride_output_file)
+    R_full, eps_full, rmin_2_full = precompute_contacts(full_pdb, domain_def, stride_output_file)
     # Nascent side of the NC<->ribosome excluded volume: per-residue Karanicolas-Brooks
     # Rmin/2 (Option A, "kb", default) or the per-AA fallback in append_ribosome (Option B,
     # "per_aa" -> pass None). See ElongationParams.nascent_ev_radii.
-    nascent_rmin2_arg = rmin2_full if ep.nascent_ev_radii == "kb" else None
+    nascent_rmin_2_arg = rmin_2_full if ep.nascent_ev_radii == "kb" else None
     print(f"NC<->ribosome nascent excluded-volume radii: "
           f"{'per-residue Karanicolas-Brooks (Option A)' if ep.nascent_ev_radii == 'kb' else 'per-AA SA..SY (Option B)'}.")
     N_full = R_full.shape[0]
@@ -367,7 +363,7 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
                         ribo=ribo, restrain=True,
                         out_subdir=f"{ldir}/stage_1", n_steps_override=s1,
                         seed_point=seed_point, tether_segid=stage1_segid,
-                        tether_prev_segid=stage1_prev_segid, nascent_rmin2=nascent_rmin2_arg,
+                        tether_prev_segid=stage1_prev_segid, nascent_rmin_2=nascent_rmin_2_arg,
                         label=f"L={L} stage 1 (peptidyl transfer) {s1} steps")
 
         # Stage 2: continue from stage 1, still held at the A-site.
@@ -376,7 +372,7 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
                         prev_final=None, seed_override=f1, out_root=out_path,
                         params=ep, ribo=ribo, restrain=True,
                         out_subdir=f"{ldir}/stage_2", n_steps_override=s2,
-                        tether_segid=stage1_segid, nascent_rmin2=nascent_rmin2_arg,
+                        tether_segid=stage1_segid, nascent_rmin_2=nascent_rmin_2_arg,
                         # Stage 2 continues from stage 1's relaxed final at the SAME (A-site)
                         # restraint target, so the seeded structure is already minimized ->
                         # skip the redundant minimization (low-risk speedup).
@@ -389,7 +385,7 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
                         prev_final=None, seed_override=f2, out_root=out_path,
                         params=ep, ribo=ribo, restrain=True,
                         out_subdir=f"{ldir}/stage_3", n_steps_override=s3,
-                        tether_segid="PtR", nascent_rmin2=nascent_rmin2_arg,
+                        tether_segid="PtR", nascent_rmin_2=nascent_rmin_2_arg,
                         label=f"L={L} stage 3 (tRNA binding) {s3} steps")
         prev_final = f3
 
@@ -408,7 +404,7 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
             p_anchor=p_target, a_anchor=a_anchor, prev_final=None,
             seed_override=prev_final, out_root=out_path, params=ep, ribo=ribo,
             restrain=False, out_subdir="ejection",
-            n_steps_override=params.ejection_steps, nascent_rmin2=nascent_rmin2_arg,
+            n_steps_override=params.ejection_steps, nascent_rmin_2=nascent_rmin_2_arg,
             label=f"Ejection (L = {L_max})")
 
     if params.dissociation_steps > 0:
@@ -420,7 +416,7 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
             p_anchor=p_target, a_anchor=a_anchor, prev_final=None,
             seed_override=prev_final, out_root=out_path, params=ep, ribo=ribo,
             restrain=False, out_subdir="dissociation",
-            n_steps_override=params.dissociation_steps, nascent_rmin2=nascent_rmin2_arg,
+            n_steps_override=params.dissociation_steps, nascent_rmin_2=nascent_rmin_2_arg,
             label=f"Dissociation (L = {L_max})")
 
 
@@ -452,7 +448,7 @@ class CSPConfig:
         mRNA sequence file and per-codon time table (required unless
         ``params.uniform_ta``).
     domain_def : str
-        Domain-definition file (contact-strength scaling); required via the INI.
+        Domain-definition file (contact-nscale scaling); required via the INI.
     stride_output_file : str or None
         Precomputed STRIDE file for the one-time contact build (optional).
     params : CSPParams
@@ -469,8 +465,6 @@ class CSPConfig:
     trans_times: Optional[str] = None
     domain_def: Optional[str] = None
     stride_output_file: Optional[str] = None
-    ribosome_psf: Optional[str] = None
-    ribosome_prm: Optional[str] = None
     params: CSPParams = field(default_factory=CSPParams)
     config_file: Optional[str] = None
 
@@ -481,7 +475,7 @@ def read_csp_config(config_file: str, verbose: bool = True) -> CSPConfig:
     The structure / MD / ribosome keys configure the shared
     :class:`topo.csp.core.ElongationParams` machinery; the O'Brien **kinetic keys**
     are added on top. Required: ``pdb_file``, ``ribosome``, ``domain_def`` (the protein's
-    domain/contact-strength definition). ``L0`` (default ``1``) and ``L_max`` (default =
+    domain/contact-nscale definition). ``L0`` (default ``1``) and ``L_max`` (default =
     full residue count) are optional. Per-codon timing additionally requires ``mrna``
     (``trans_times`` is optional).
 
@@ -621,11 +615,8 @@ def read_csp_config(config_file: str, verbose: bool = True) -> CSPConfig:
     outdir = opt("outdir") or "synth_out"
     mrna = opt("mrna")
     trans_times = opt("trans_times")
-    domain_def = req("domain_def")   # required: defines the protein's contact strengths
+    domain_def = req("domain_def")   # required: defines the protein's contact nscales
     stride_output_file = opt("stride_output_file")
-    # O'Brien ribosome (.cor) optional sibling files; default to same-stem .psf/.prm.
-    ribosome_psf = opt("ribosome_psf")
-    ribosome_prm = opt("ribosome_prm")
 
     # --- MD / ribosome knobs (reused ElongationParams) ----------------------
     ep = ElongationParams()
@@ -733,7 +724,6 @@ def read_csp_config(config_file: str, verbose: bool = True) -> CSPConfig:
     return CSPConfig(pdb_file=pdb_file, ribosome=ribosome, L0=L0, L_max=L_max,
                      outdir=outdir, mrna=mrna, trans_times=trans_times,
                      domain_def=domain_def, stride_output_file=stride_output_file,
-                     ribosome_psf=ribosome_psf, ribosome_prm=ribosome_prm,
                      params=p, config_file=config_file)
 
 
@@ -792,8 +782,7 @@ def csp(argv: Optional[List[str]] = None) -> None:
     run_continuous_synthesis(
         cfg.pdb_file, cfg.ribosome, L0=cfg.L0, L_max=cfg.L_max, out_root=cfg.outdir,
         mrna=cfg.mrna, trans_times=cfg.trans_times, domain_def=cfg.domain_def,
-        stride_output_file=cfg.stride_output_file, ribosome_psf=cfg.ribosome_psf,
-        ribosome_prm=cfg.ribosome_prm, params=cfg.params)
+        stride_output_file=cfg.stride_output_file, params=cfg.params)
 
 
 if __name__ == "__main__":
