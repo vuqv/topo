@@ -43,6 +43,12 @@ def mdrun():
 
     Usage: python -m topo.mdrun -f md.ini
     """
+    # Silence MDAnalysis's cosmetic UserWarnings (missing CRYST1 unit cell, absent
+    # formalcharges) for the CLI run -- a process-local filter that only fires when
+    # someone actually invokes topo-mdrun.
+    import warnings
+    warnings.filterwarnings("ignore", category=Warning, module=r"MDAnalysis")
+
     parser = argparse.ArgumentParser(
         prog="topo-mdrun",
         description="Run a TOPO coarse-grained simulation from a control file "

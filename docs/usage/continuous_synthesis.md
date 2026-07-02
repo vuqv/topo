@@ -365,11 +365,22 @@ of the clamp.
 | `minimize` | `yes` | Energy-minimize the seeded structure before each stage's MD. |
 | `tunnel_wall` | `yes` | Apply the one-sided tunnel wall (floor below the synthesis point); plane auto-placed. |
 | `ptc_offset` | auto `0.476` | C-terminus offset into the tunnel from the P-anchor bead (clears the tRNA bead). |
+| `optimize_ptc_geometry` | `no` | Optimize the PTC restraint/seed geometry: seed each new residue and place the A/P restraint targets at the equilibrium peptide-bond geometry (one 0.381 nm bond apart, clear of ribosome EV). Pair with `constraints = AllBonds` for the stable rigid-bond path; leaving it `no` keeps the far-seed + flexible-bond + dt-halving behavior. |
 
 There is **no `rigid_ribosome` key**: the `ribosome` PDB is required, and supplying it *is*
 the signal to load it as **rigid (mass-0) scenery** (excluded volume + electrostatics on) —
 so it is always treated as rigid, and the tunnel wall defaults on with it. `trna_tether` is
 **forced off** by the CSP runner — CSP needs the switchable A↔P position restraint.
+
+```{note}
+**tRNA presence / naming.** The P-/A-anchors — and `optimize_ptc_geometry`'s
+`optimal_ptc_targets` solve — read the ribosome's tRNA beads under fixed names (segids
+`PtR`/`AtR`, resid 76, beads `R`/`P`/`BR2`). A ribosome PDB with **no tRNA**, or with
+**differently-named** tRNA segments, currently fails with a generic "expected exactly one
+bead" error. Handling missing/renamed tRNA (a clear up-front error, and/or configurable
+segid/resid/bead names) is a tracked TODO (`review/TODO.md`), and `optimize_ptc_geometry`
+depends on it.
+```
 
 ---
 
@@ -391,6 +402,39 @@ so it is always treated as rigid, and the tunnel wall defaults on with it. `trna
 seconds** (`t1`/`t2`/`t3`), their nanosecond equivalents, and the integer MD step counts —
 the physical schedule, independent of any step clamp. This is the file to compare against a
 reference run for quantitative validation (Tutorial 12's D6 check).
+
+### Console progress log
+
+`topo-csp` prints one compact, column-aligned line per residue followed by one line per
+sub-stage, so a long synthesis stays readable. Each stage line reports the wall-clock time
+and the **total system potential energy of the last integrated step** (nascent chain +
+rigid ribosome + all cross-interactions), a quick per-stage health signal:
+
+```text
+L=  1    AUG  dwell   0.02757 s  steps  400/1136/2000
+  L=  1  stage 1 peptidyl-transfer     400 steps    1.19 s  PE=  +4.9674e+01 kJ/mol
+  L=  1  stage 2 translocation        1136 steps    0.42 s  PE=  +4.8717e+01 kJ/mol
+  L=  1  stage 3 tRNA-binding         2000 steps    0.59 s  PE=  +4.8365e+01 kJ/mol
+```
+
+The residue line's `steps` field and the per-stage `steps` are the **configured** step
+counts; a stage that trips the stability guard silently reruns at a halved timestep with
+double the steps (the `[stability] ...` lines above), and always prints its concise summary
+line afterwards. The post-synthesis `ejection` / `dissociation` phases print the same
+summary line.
+
+Set **`TOPO_CSP_VERBOSE=1`** to restore the full per-stage banners (build block, seeded-
+structure minimization, run-metadata path, elapsed time) — useful when debugging a single
+length:
+
+```bash
+TOPO_CSP_VERBOSE=1 topo-csp -f csp.ini
+```
+
+MDAnalysis emits cosmetic `UserWarning`s (missing `CRYST1` unit cell, absent
+`formalcharges`) each time topo slices and writes a CA-only PDB — once per stage. `topo-csp`
+(like `topo-mdrun` and `topo-optimize`) silences all MDAnalysis warnings for the run via a
+process-local filter, so they never reach the console; other warnings are unaffected.
 
 **Movie.** Each stage writes a standalone trajectory (different lengths have different bead
 counts, so they cannot be concatenated directly). `topo-csp-movie` stitches them — in

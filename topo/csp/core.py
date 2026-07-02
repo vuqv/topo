@@ -41,6 +41,7 @@ finalize are reused from :mod:`topo.engine`.
 from __future__ import annotations
 
 import math
+import os
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -58,6 +59,22 @@ from topo.csp.ribosome import (Ribosome, load_ribosome, append_ribosome,
                                        TRNA_TETHER_BOND_NM, TUNNEL_WALL_X0_NM,
                                        TUNNEL_WALL_K, RIBO_NC_EPS_KJ)
 from topo.utils.nonbonded import build_nonbonded_interaction
+
+# --- console verbosity -----------------------------------------------------
+# Continuous synthesis runs ~3 short MD stages per residue, so the per-stage
+# banners (build block, "chains=...", "Running simulation...", "[tracking]...",
+# "Minimizing...", "Wrote last...", "Finished in...") add up to tens of lines per
+# amino acid. By default we print one concise summary line per stage instead.
+# Set TOPO_CSP_VERBOSE=1 to restore the full per-stage detail (e.g. when debugging
+# a single length). Stability-guard warnings are always printed regardless.
+VERBOSE = os.environ.get("TOPO_CSP_VERBOSE", "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def _vprint(*args, **kwargs) -> None:
+    """print() only when TOPO_CSP_VERBOSE is set (see :data:`VERBOSE`)."""
+    if VERBOSE:
+        print(*args, **kwargs)
+
 
 # --- physical constants / conversions -------------------------------------
 # CG protein bond length (nm); cold-start beads are laid one bond length apart so
@@ -449,9 +466,9 @@ def build_length_model(sub_pdb: str, R_L: np.ndarray, eps_L: np.ndarray,
     topo.core.system.system
         The built model (``.system``, ``.topology``, ``.positions`` ready to use).
     """
-    print("=" * 66)
-    print(f"[ Length-L build ] {sub_pdb}  (build-once-subset contacts)")
-    print("=" * 66)
+    _vprint("=" * 66)
+    _vprint(f"[ Length-L build ] {sub_pdb}  (build-once-subset contacts)")
+    _vprint("=" * 66)
 
     topo_model = TopoSystem(sub_pdb, model)
 
@@ -476,9 +493,9 @@ def build_length_model(sub_pdb: str, R_L: np.ndarray, eps_L: np.ndarray,
     else:
         raise ValueError(f"Invalid constraints option: {constraints!r}. "
                          f"Expected 'AllBonds' or None.")
-    print(f"  chains={topo_model.n_chains}  CA atoms={n_ca}  "
-          f"bonds={topo_model.n_bonds}  angles={topo_model.n_angles}  "
-          f"bonds: {'rigid (AllBonds)' if use_constraints else 'flexible (harmonic)'}")
+    _vprint(f"  chains={topo_model.n_chains}  CA atoms={n_ca}  "
+            f"bonds={topo_model.n_bonds}  angles={topo_model.n_angles}  "
+            f"bonds: {'rigid (AllBonds)' if use_constraints else 'flexible (harmonic)'}")
 
     if use_constraints:
         for bond in topo_model.bonds:
@@ -781,10 +798,10 @@ def _finalize_nascent(cfg, ctx, nascent_topology, n_keep: int,
     pos = sim.context.getState(getPositions=True).getPositions(asNumpy=True)
     pos = pos[:n_keep].value_in_unit(unit.nanometer)
     _write_pdb(nascent_topology, pos, final_pdb)
-    print(f"Wrote last nascent conformation to {final_pdb}")
+    _vprint(f"Wrote last nascent conformation to {final_pdb}")
     topo.runinfo.write_run_end(ctx.runinfo_path, simulation=sim,
                                start_epoch=start_epoch, final_structure=final_pdb)
-    print("--- Finished in %s seconds ---" % (time.time() - start_epoch))
+    _vprint("--- Finished in %s seconds ---" % (time.time() - start_epoch))
 
 
 # --------------------------------------------------------------------------
@@ -810,15 +827,23 @@ class ElongationParams:
     constraints: object = None
     restraint_k: float = RESTRAINT_K_KJ   # kJ/mol/nm^2 (= 200 kcal/mol/A^2)
     buffer_nm: float = 0.4
-    # Equilibrium-bond PTC geometry (tutorials/14 step 2; opt-in). When True, the CSP
-    # runner seeds each new residue at the optimal A-site target point one peptide bond
-    # (0.381 nm) from the previous C-terminus (:func:`optimal_ptc_targets`), so the
-    # always-present peptide bond starts at its equilibrium length -- letting a rigid
+    # Optimize the PTC (peptidyl-transferase-center) restraint/seed geometry
+    # (tutorials/14 step 2; opt-in). When True, the CSP runner seeds each new residue at
+    # the optimal A-site target point one peptide bond (0.381 nm) from the previous
+    # C-terminus (:func:`optimal_ptc_targets`) and uses those optimized A/P points as the
+    # C-terminus restraint targets and the tunnel-wall plane, so the always-present
+    # peptide bond starts at its equilibrium length -- letting a rigid
     # `constraints='AllBonds'` build seed/minimize cleanly at 15 fs without the
     # dt-halving stability guard firing. Default False keeps the validated far-seed +
     # flexible-bond + dt-halving behavior (Tutorials 12 & 13 unchanged). Enable with
-    # `equil_peptide_geometry = yes` + `constraints = AllBonds` in the INI.
-    equil_peptide_geometry: bool = False
+    # `optimize_ptc_geometry = yes` + `constraints = AllBonds` in the INI.
+    #
+    # NOTE: this depends on the ribosome carrying tRNA beads under the expected names
+    # (segids ``AtR``/``PtR``, resid 76, beads ``R``/``P``/``BR2``); :func:`optimal_ptc_targets`
+    # reads them directly. A ribosome PDB with no tRNA -- or with differently-named tRNA
+    # segments -- makes this (and the plain anchor lookup) fail. See the tRNA-presence
+    # TODO in ``review/TODO.md``.
+    optimize_ptc_geometry: bool = False
     # Nascent per-residue excluded-volume radius (Rmin/2) for the NC<->ribosome 12-10-6 force:
     #   "kb"     -> per-residue Karanicolas-Brooks collision diameter from the native structure
     #               (Option A; O'Brien's actual nascent A_i radii). DEFAULT.
@@ -918,6 +943,9 @@ def _make_cfg(out_dir: Path, sub_pdb: str, seed_pdb: str,
     cfg.ppn = params.ppn
     cfg.restart = False
     cfg.minimize = False  # we minimize the seeded structure explicitly below
+    # CSP runs one config per stage; silence the engine's per-run platform /
+    # metadata banners unless TOPO_CSP_VERBOSE restores full detail.
+    cfg.quiet = not VERBOSE
     return cfg
 
 
@@ -957,15 +985,18 @@ def run_length(L: int, *, full_pdb: str, R_full: np.ndarray, eps_full: np.ndarra
     - ``out_subdir`` : output folder name under ``out_root`` (default
       ``L_<L>``); e.g. ``ejection`` / ``stall``.
     - ``n_steps_override`` : run this many steps instead of ``params.n_steps``.
-    - ``label`` : header text for the console banner.
+    - ``label`` : short stage tag (e.g. ``"stage 1 peptidyl-transfer"``) shown in
+      the concise per-stage summary line and, under ``TOPO_CSP_VERBOSE``, in the
+      verbose console banner.
 
     Returns the final **nascent** ``(L, 3)`` nm coordinate array.
     """
-    print()
-    print("#" * 66)
-    print("# " + (label or (f"Nascent length L = {L}"
-                            + ("  (+ rigid ribosome)" if ribo else ""))))
-    print("#" * 66)
+    _vprint()
+    _vprint("#" * 66)
+    _vprint("# " + (f"L={L}  {label}" if label else
+                    (f"Nascent length L = {L}"
+                     + ("  (+ rigid ribosome)" if ribo else ""))))
+    _vprint("#" * 66)
 
     out_dir = out_root / (out_subdir or f"L_{L:03d}")
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -1011,8 +1042,9 @@ def run_length(L: int, *, full_pdb: str, R_full: np.ndarray, eps_full: np.ndarra
 
     # 3b. v2: append the rigid ribosome (mass-0 scenery + cross-interactions).
     # nascent_rmin_2 (per-residue Karanicolas-Brooks Rmin/2, full-structure array) gives the
-    # nascent side of the NC<->ribosome excluded volume O'Brien's way (Option A); slice to the
-    # current length. If None, append_ribosome falls back to the per-AA table (Option B).
+    # nascent side of the NC<->ribosome excluded volume (Option A: structure-derived per-residue
+    # radii); slice to the current length. If None, append_ribosome falls back to the per-AA
+    # table (Option B).
     if ribo is not None:
         append_ribosome(cgModel, ribo, nascent_rmin_2=nasc_rm)
         positions = np.vstack([nascent_pos, ribo.coords_nm])
@@ -1021,18 +1053,18 @@ def run_length(L: int, *, full_pdb: str, R_full: np.ndarray, eps_full: np.ndarra
 
     # 4. tether the current C-terminus (residue L) ---------------------------
     # (skipped for an ejection run: restrain=False -> the tether is released).
-    # v2 + trna_tether: O'Brien peptidyl-tRNA linkage (bond + CA-CA-tRNA orienting
+    # v2 + trna_tether: peptidyl-tRNA linkage (bond + CA-CA-tRNA orienting
     # angle to the P-site R bead) -- aims the chain down the tunnel. Otherwise a
     # generic harmonic position restraint of residue L to the P-target point.
     if restrain:
         if ribo is not None and params.trna_tether:
-            # O'Brien tRNA tether for the current C-terminus (residue L) to this
+            # tRNA tether for the current C-terminus (residue L) to this
             # stage's site (A-site stages 1-2, P-site stage 3): bond + 2 orienting
             # angles + improper + a backbone angle aiming the chain down the tunnel.
             prev_index = (L - 2) if L >= 2 else None
             add_trna_tether(cgModel, L - 1, prev_index, ribo, L, segid=tether_segid)
             # Optionally also tether the previous residue L-1 to its site (the P-site
-            # in O'Brien stage 1, where L sits at A and L-1 rests at P) -- pins both
+            # in stage 1, where L sits at A and L-1 rests at P) -- pins both
             # ends of the new peptide bond at the equilibrium-PTC geometry (feature 3).
             if tether_prev_segid is not None and L >= 2:
                 pprev_index = (L - 3) if L >= 3 else None
@@ -1080,8 +1112,8 @@ def run_length(L: int, *, full_pdb: str, R_full: np.ndarray, eps_full: np.ndarra
     # Stability-guarded stage run. A few configurations are unstable at the
     # configured 15 fs timestep with flexible bonds: when a new native contact
     # forms a stiff Go well, the dynamics diverge (PotE -> ~1e13) and corrupt the
-    # stage's frames (OBSERVATIONS.md #1). O'Brien's reference v6 sidesteps this
-    # with rigid AllBonds constraints; topo keeps flexible bonds (needed to seed
+    # stage's frames (OBSERVATIONS.md #1). Rigid AllBonds constraints sidestep this
+    # by removing the fast bond mode; topo keeps flexible bonds (needed to seed
     # the far-placed new residue), so instead -- *only if a stage diverges* -- we
     # re-run it with a halved timestep and proportionally more steps. That keeps
     # the physical in-vivo dwell time identical (dwell = n_steps * dt) while making
@@ -1115,14 +1147,14 @@ def run_length(L: int, *, full_pdb: str, R_full: np.ndarray, eps_full: np.ndarra
         max_pe = 0.0
         if do_minimize:
             if attempt == 0:
-                print("Minimizing seeded structure (relax placement / new bond)...")
+                _vprint("Minimizing seeded structure (relax placement / new bond)...")
             try:
                 ctx.simulation.minimizeEnergy()
                 # Re-draw velocities for the relaxed structure.
                 ctx.simulation.context.setVelocitiesToTemperature(cfg.ref_t)
             except Exception as exc:
                 # A NaN during minimization (e.g. a bead seeded deep inside the stiff
-                # O'Brien ribosome 12-10-6 wall) -> treat as divergence and retry with a
+                # ribosome 12-10-6 wall) -> treat as divergence and retry with a
                 # halved timestep (the seeded geometry is the same; smaller dt + more steps
                 # lets the wall push the bead out without overshooting).
                 print(f"[stability] minimization failed ({type(exc).__name__}: "
@@ -1169,10 +1201,21 @@ def run_length(L: int, *, full_pdb: str, R_full: np.ndarray, eps_full: np.ndarra
     cfg.dt = base_dt
     cfg.md_steps = base_steps
 
+    # Potential energy of the last integrated step (informative per-stage health
+    # check; queried before finalize while the context is still current).
+    final_pe = ctx.simulation.context.getState(getEnergy=True).getPotentialEnergy(
+        ).value_in_unit(unit.kilojoule_per_mole)
+
     if nascent_only:
         _finalize_nascent(cfg, ctx, nascent_topology, L, start)
     else:
         engine.finalize_simulation(cfg, ctx, built.topology, start)
+
+    # One concise, column-aligned line per stage (verbose banners above are gated
+    # on VERBOSE). Fixed-width fields so stacked stage lines line up:
+    #   L, stage tag, steps, wall-time, final-step potential energy.
+    print(f"  L={L:>3d}  {(label or 'run'):<26s}  {base_steps:>5d} steps  "
+          f"{time.time() - start:>6.2f} s  PE={final_pe:>+13.4e} kJ/mol")
 
     # 6. final NASCENT coordinates seed the next length ----------------------
     final_pdb = cfg.output_path("_final.pdb")

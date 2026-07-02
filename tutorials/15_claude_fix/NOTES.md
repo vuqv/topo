@@ -9,11 +9,11 @@ ticked checklist and AGENTS.md for the directive.
 `topo-csp` on PATH; GPU = Tesla T4. No blockers (AGENTS.md §8 deps satisfied).
 
 **Code-state finding (important).** AGENTS.md §1 step 4 says the fix is "now the default" via a
-`protocol.csp_default_elong()` that sets `equil_peptide_geometry=True, constraints="AllBonds"`.
-**That function does not exist.** The actual code default is `ElongationParams.equil_peptide_geometry
+`protocol.csp_default_elong()` that sets `optimize_ptc_geometry=True, constraints="AllBonds"`.
+**That function does not exist.** The actual code default is `ElongationParams.optimize_ptc_geometry
 = False` (core.py:737) and `constraints` is read from the INI (default `None` if silent). So the
 fix path is **opt-in via the INI**, exactly as tut14c/14b enable it. Decision: the tut15 INIs set
-`equil_peptide_geometry = yes` + `constraints = AllBonds` **explicitly** (matching the validated
+`optimize_ptc_geometry = yes` + `constraints = AllBonds` **explicitly** (matching the validated
 tut14c `csp_4c5c.ini`). This satisfies D1 literally (no `=no`, no `=None`) and guarantees the fix
 path regardless of code defaults. Flipping the code default to ON is a possible later cleanup
 (noted, not required for the goal).
@@ -35,7 +35,7 @@ mean in-vivo dwell per codon + summed total (~2× tolerance) + final R_g range.
 
 `csp.ini` (debug): L=1→8, scale_factor=216564650 (50×), max/min steps 2000/400, nstout 200, CPU.
 `topo-csp -f csp.ini` → exit 0. Banner confirms the fix path:
-- `[equil_peptide_geometry] optimal PTC restraint targets (|A-P| = 0.3810 nm)`;
+- `[optimize_ptc_geometry] optimal PTC restraint targets (|A-P| = 0.3810 nm)`;
   A-target `[0.871,-0.165,-0.236]`, P-target `[1.007,0.115,-0.016]` nm.
 - All 24 stages built `rigid (AllBonds)` (0 "flexible (harmonic)").
 - Tunnel wall plane auto `x ≥ 0.8711 nm`. Anchors: P `[0.5705,0.298,-0.059]`, A `[0.828,-0.584,-0.137]`.
@@ -138,7 +138,7 @@ per feature:
   them be dragged by the chain with no restoring force → unphysical. O'Brien has the full ribosome FF
   (`combine_ribo_L24.prm`); topo deliberately omits it. Also, the observed clashes are with **23S rRNA**
   beads, not L24, so freeing L24 would not address them. Documented as a scenery-model limitation.
-- **✅5 Placement 10° off-axis tilt — N/A (superseded).** With `equil_peptide_geometry`, the new residue
+- **✅5 Placement 10° off-axis tilt — N/A (superseded).** With `optimize_ptc_geometry`, the new residue
   is seeded directly at the optimal A-site target (`seed_point = a_target`), which already encodes the
   optimal off-axis bearing from the full O'Brien restraint solve. The legacy tilt would only apply on
   the (unused) anchor+buffer seed path. DIFFERENCES.md itself flags it "largely superseded by optimal-PTC

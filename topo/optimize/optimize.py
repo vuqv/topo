@@ -674,6 +674,9 @@ def parse_args(argv=None):
 
 def optimize(argv=None):
     """Console entry point (``topo-optimize`` / ``python -m topo.optimize``)."""
+    # Silence MDAnalysis's cosmetic UserWarnings for the CLI run (process-local;
+    # only fires when someone actually invokes topo-optimize).
+    warnings.filterwarnings("ignore", category=Warning, module=r"MDAnalysis")
     args = parse_args(argv)
     run_optimizer(args.config, outdir=args.outdir, device=args.device,
                   md_steps=args.md_steps, python_exe=args.python)

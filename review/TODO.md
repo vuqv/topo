@@ -20,12 +20,17 @@ The package is nearly marker-free — only these:
 - [ ] [`topo/core/system.py:812`](../topo/core/system.py#L812) — `threshold=0.5` is only
   "safe" for protein systems; revisit for other systems.
 - Pointers (not tasks): [`topo/csp/kinetics.py:24`](../topo/csp/kinetics.py#L24) and
-  [`topo/csp/protocol.py:119`](../topo/csp/protocol.py#L119) both refer to
-  `topo/csp/TODO.md` (see §B).
+  [`topo/csp/protocol.py:119`](../topo/csp/protocol.py#L119) both refer to the CSP TODO
+  items, now consolidated here in §B (the former `topo/csp/TODO.md` was merged in and
+  deleted 2026-07-02).
 
 ---
 
-## B. `topo/csp/TODO.md` — CSP validation, production, extensions
+## B. CSP — validation, production, extensions
+
+*(Absorbed the former `topo/csp/TODO.md`, deleted 2026-07-02; revised against the current
+codebase — the standalone `elongate.py` runner + Tutorial 7 are gone, `run_continuous_synthesis`
+is the only synthesis path.)*
 
 ### Validation & production
 - [ ] **Validate the C-terminus tether** *(marked highest priority)* — establish whether
@@ -47,11 +52,20 @@ The package is nearly marker-free — only these:
 - [ ] **Tunnel wall → 5.8 nm in ejection phase** (short note item in the file).
 
 ### Model extensions
-- [ ] **Variable per-codon elongation schedule** — replace constant `n_steps` with a
-  per-residue exponential dwell whose mean is the codon decoding time (Fluitt–Viljoen),
-  scaled to a 12.6 ns mean. Needs a codon→dwell table + per-length `n_steps`.
-  *(Note: the 3-stage kinetics path already samples dwell; this is the single-`n_steps`
-  elongate path.)*
+- [ ] **tRNA presence / naming robustness** — the P-/A-anchors and `optimal_ptc_targets`
+  (used when `optimize_ptc_geometry = yes`) assume the ribosome PDB carries tRNA beads
+  under hardcoded names (segids `PtR`/`AtR`, resid 76, beads `R`/`P`/`BR2`); see
+  [`topo/csp/protocol.py`](../topo/csp/protocol.py) (anchor block) and
+  [`topo/csp/core.py:optimal_ptc_targets`](../topo/csp/core.py#L128). A ribosome with no
+  tRNA — or with differently-named tRNA segments — fails with a generic "expected exactly
+  one bead" `ValueError` from `anchor_coord`. Revise: (a) detect this up front and raise
+  an actionable error naming the expected segids/resid/beads, and/or (b) make the tRNA
+  segids/resid/bead names configurable (INI keys). `optimize_ptc_geometry` in particular
+  depends on tRNA presence+naming, so it must be gated/validated alongside this.
+- [x] **Variable per-codon elongation schedule** — *Obsolete.* The 3-stage CSP kinetics
+  (`kinetics.stage_steps`, driven by `run_continuous_synthesis`) already samples a
+  per-residue dwell from the codon decoding time; the single-`n_steps` `elongate.py` runner
+  this item targeted was removed (2026-06-30).
 - [ ] **Restart / resume across lengths** (DESIGN §4) — skip lengths whose
   `L_<L>/traj_final.pdb` exists; resume an interrupted length from checkpoint. *(Dup of
   §D "restart=1".)*
@@ -72,12 +86,13 @@ The package is nearly marker-free — only these:
   `CSPParams` fields, `read_csp_config` parsing, `kinetics.ribosome_traffic_times`). Also
   unhide/remove the `ribosome_traffic=off` runtime banner in `protocol.py`. *(Dup of §D
   "external ribosome_traffic binary".)*
-- [ ] **Restore rigid `AllBonds` for the elongation runner** — v1/v2 use flexible bonds
-  because the new residue is seeded far from its restraint target. Proposed: place the new
-  bead one CG bond (0.381 nm) from the restraint target so rigid `AllBonds` seeds at
-  equilibrium. *(Largely realized by `equil_peptide_geometry` + optimal PTC seeding in the
-  3-stage path; still open for the plain elongate runner and as the default — see the
-  step-2 doc TODO in §E and DIFFERENCES §"Chain chemistry".)*
+- [x] **Restore rigid `AllBonds`** — *Done for the surviving 3-stage runner.*
+  `optimize_ptc_geometry = yes` places the new bead one CG bond (0.381 nm) from its
+  restraint target (`optimal_ptc_targets`), so rigid `constraints = AllBonds` seeds at
+  equilibrium (the exact fix this item proposed). The plain `elongate.py` runner it also
+  named was removed. Whether to make it the *default* (vs. the validated flexible-bond +
+  dt-halving Tutorials 12/13 path) is a design choice, not a TODO — see the step-2 doc
+  TODO in §E for retiring the dt-halving guard, and DIFFERENCES §"Chain chemistry".
 
 ---
 

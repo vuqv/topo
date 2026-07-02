@@ -134,7 +134,7 @@ as default is intentional (A↔P migration is simpler and validated).
 | Stability at 15 fs | constraints absorb stiff Go wells | dt-halving guard (`run_length`, up to 6 halvings) | ⚪ KEEP |
 
 Deliberate (flexible bonds + guard needed to seed the far-placed new residue) and validated
-full-length. **New option** since the original: `equil_peptide_geometry = yes` +
+full-length. **New option** since the original: `optimize_ptc_geometry = yes` +
 `constraints = AllBonds` in the INI gets much closer to O'Brien — rigid constraints with the
 new equilibrium-bond seeding (0.381 nm targets) so `AllBonds` seeds cleanly with 0 dt-halving.
 Still KEEP as **default**, but the rigid path is now available.
@@ -157,7 +157,7 @@ stage-5-only fidelity is wanted.
 | Offset distance | 4.27 Å (ref lines 238-240) | 0.4 nm (4.0 Å) `buffer` +x (default), **or** optimized seed (equil mode) | 🟡 CONSIDER |
 | Off-axis tilt | **10°** in xy (`[cos10°, sin10°, 0]`) | none (pure +x default); equil mode solves 3-D least-buried point | 🟡 CONSIDER |
 
-topo's `equil_peptide_geometry` mode replaces O'Brien's fixed 4.27 Å + 10° tilt **heuristic**
+topo's `optimize_ptc_geometry` mode replaces O'Brien's fixed 4.27 Å + 10° tilt **heuristic**
 with a solved least-buried seed point on the real wall (same intent: clear excluded volume).
 The plain default still uses 0.4 nm +x with no tilt.
 
@@ -175,7 +175,7 @@ The plain default still uses 0.4 nm +x with no tilt.
 1. 🟢 **C-terminal mobility window** — the last high-value 🟢 not yet done. Optional mass-0
    freeze of all but the last *N*=15 nascent residues in `run_length`.
 2. ✅ ~~Per-stage tRNA tether with orientation~~ — **done** (`trna_tether` flag).
-3. 🟡 **Placement geometry** — largely superseded by `equil_peptide_geometry`; only add the
+3. 🟡 **Placement geometry** — largely superseded by `optimize_ptc_geometry`; only add the
    fixed 4.27 Å + 10° tilt if reproducing O'Brien's *exact* seed is required.
 4. 🟡 **Restrain previous AA in the default path** (already done in the tether path).
 5. 🟡 **Ribosome L24 free loop (42–56)** and traffic correction — only if a study needs them.

@@ -259,7 +259,7 @@ stays around the tunnel and extrudes +x):
   > dwell (1000 steps/residue) are too noisy and in the wrong regime (the PTC
   > collapse appears at long dwells) to show whether the tether improves extrusion.
   > Needs independent replicas at production-length dwell with a robust metric —
-  > see `TODO.md`.
+  > see `review/TODO.md` (§B).
 - **Tunnel wall (`tunnel_wall`, default on; `add_tunnel_wall`).** O'Brien's one-sided
   planar restraint `U = k·min(x − x0, 0)²` (`k = 8368 kJ/mol/nm²` = 20 kcal/mol/Å²)
   on every nascent bead, keeping the chain at `x ≥ x0` so it can only **extrude

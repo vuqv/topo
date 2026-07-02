@@ -21,7 +21,7 @@ The pieces (all of them straight out of v6):
 
 (An optional per-codon ribosome-traffic correction exists in the code but is
 **off by default and deferred** -- not exposed in the docs or example configs; see
-``topo/csp/TODO.md``. With it off, ``real == intrinsic`` and stage 2's mean is exactly
+``review/TODO.md`` (§B). With it off, ``real == intrinsic`` and stage 2's mean is exactly
 ``time_stage_2``.)
 
 Indexing convention (mirrors v6 exactly): the codon/mFPT lists are **0-indexed**,

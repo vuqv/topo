@@ -66,7 +66,7 @@ The original was written before the following commits landed (all `topo/csp/`):
   `run_length`/`ElongationParams` who don't go through `read_csp_config` would get the tether
   path unless they set it — a minor footgun worth a comment or a unified default.
 - The original's "placement geometry" 🟡 item is now better described as *superseded*: topo's
-  `equil_peptide_geometry` solves for a least-buried seed rather than matching O'Brien's fixed
+  `optimize_ptc_geometry` solves for a least-buried seed rather than matching O'Brien's fixed
   4.27 Å + 10° tilt. Same intent, different mechanism — so "still different" but not a
   regression to close.
 

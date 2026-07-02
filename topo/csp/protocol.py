@@ -116,7 +116,7 @@ class CSPParams:
     uniform_ta: bool = False            # ignore the mRNA; use uniform_mfpt for every codon
     uniform_mfpt: float = 0.05          # uniform mean codon time (s) when uniform_ta
     # ribosome_traffic / initiation_rate: HIDDEN/deferred (off by default; not exposed
-    # in the docs or example csp.ini -- see topo/csp/TODO.md). Still parsed if present.
+    # in the docs or example csp.ini -- see review/TODO.md §B). Still parsed if present.
     ribosome_traffic: bool = False      # apply the external traffic correction if available
     initiation_rate: float = 0.083333   # translation initiation rate (1/s), traffic only
     random_seed: Optional[int] = None   # seed for the FPT sampler (reproducibility)
@@ -214,6 +214,13 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
           f"(mass-0 scenery; ribosome<->nascent forces on).")
 
     # --- anchors (fixed points from the truncated ribosome) -----------------
+    # NOTE (tRNA presence/naming): the P-/A-anchors -- and, when optimize_ptc_geometry
+    # is on, optimal_ptc_targets -- assume the ribosome carries tRNA beads under fixed
+    # names (segids "PtR"/"AtR", resid 76, beads "R"/"P"/"BR2"). A ribosome PDB with no
+    # tRNA, or with differently-named tRNA segments, makes anchor_coord raise a generic
+    # "expected exactly one bead" error here. TODO: detect this up front and either raise
+    # an actionable error naming the expected segids/resid/beads or make them configurable.
+    # See review/TODO.md ("tRNA presence / naming").
     p_anchor = anchor_coord(ribo, "PtR", resid=76, bead="R")
     a_anchor = anchor_coord(ribo, "AtR", resid=76, bead="R")
     print(f"P-anchor (PtR 76 R): {p_anchor} nm")
@@ -226,8 +233,8 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
     if offset is None:
         offset = TRNA_TETHER_BOND_NM
     seed_point: Optional[np.ndarray] = None
-    if ep.equil_peptide_geometry:
-        # Equilibrium-bond PTC geometry (tutorials/14 step 2; opt-in via the flag).
+    if ep.optimize_ptc_geometry:
+        # Optimize the PTC restraint/seed geometry (tutorials/14 step 2; opt-in).
         # Replace the far A-anchor+buffer seed / anchor-offset targets with the optimal
         # A-site & P-site *target points* -- one peptide bond (0.381 nm) apart and clear
         # of the ribosome excluded volume. Seeding the new residue at a_target (one
@@ -236,7 +243,7 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
         # seeds/minimizes cleanly at 15 fs without the dt-halving guard firing.
         a_target, p_target = optimal_ptc_targets(ribo)
         seed_point = a_target
-        print(f"[equil_peptide_geometry] optimal PTC restraint targets "
+        print(f"[optimize_ptc_geometry] optimal PTC restraint targets "
               f"(|A-P| = {np.linalg.norm(a_target - p_target):.4f} nm; fixed points, "
               f"not bonds):")
         print(f"  A-site target (new AA seed + stage-1/2 restraint): {a_target} nm")
@@ -250,7 +257,7 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
     # hold plane so the held C-terminus still sits at (just on) the plane while the
     # chain cannot slip below the synthesis point into the truncated-50S void.
     if ep.tunnel_wall:
-        if ep.equil_peptide_geometry:
+        if ep.optimize_ptc_geometry:
             ep.tunnel_wall_x0_nm = float(min(a_target[0], p_target[0]))
         else:
             ep.tunnel_wall_x0_nm = float(min(p_anchor[0], a_anchor[0]) + offset)
@@ -325,14 +332,11 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
             min_steps_per_stage=params.min_steps_per_stage)
 
         codon = codons[L - 1] if codons is not None else "uniform"
-        print()
-        print("#" * 66)
-        print(f"# Residue L = {L}  codon {codon}  "
-              f"(total in-vivo dwell {intrinsic[L]:.4g} s)")
-        print(f"#   stage 1 peptidyl transfer : {t1:.4g} s -> {s1} steps")
-        print(f"#   stage 2 translocation     : {t2:.4g} s -> {s2} steps")
-        print(f"#   stage 3 tRNA binding/wait : {t3:.4g} s -> {s3} steps")
-        print("#" * 66)
+        # One concise, column-aligned line per residue; each stage adds its own
+        # aligned summary line via run_length. TOPO_CSP_VERBOSE=1 restores the
+        # full per-stage banners.
+        print(f"L={L:>3d}  {codon:>5s}  dwell {intrinsic[L]:>9.4g} s  "
+              f"steps {s1:>4d}/{s2:>4d}/{s3:>4d}")
 
         # Record the per-residue dwell row (in-vivo seconds + in-silico ns/steps).
         dwell_fh.write(
@@ -364,7 +368,7 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
                         out_subdir=f"{ldir}/stage_1", n_steps_override=s1,
                         seed_point=seed_point, tether_segid=stage1_segid,
                         tether_prev_segid=stage1_prev_segid, nascent_rmin_2=nascent_rmin_2_arg,
-                        label=f"L={L} stage 1 (peptidyl transfer) {s1} steps")
+                        label="stage 1 peptidyl-transfer")
 
         # Stage 2: continue from stage 1, still held at the A-site.
         f2 = run_length(L, full_pdb=full_pdb, R_full=R_full, eps_full=eps_full,
@@ -377,7 +381,7 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
                         # restraint target, so the seeded structure is already minimized ->
                         # skip the redundant minimization (low-risk speedup).
                         minimize_override=False,
-                        label=f"L={L} stage 2 (translocation) {s2} steps")
+                        label="stage 2 translocation")
 
         # Stage 3: translocate A->P (restrain the C-terminus to the P-anchor).
         f3 = run_length(L, full_pdb=full_pdb, R_full=R_full, eps_full=eps_full,
@@ -386,7 +390,7 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
                         params=ep, ribo=ribo, restrain=True,
                         out_subdir=f"{ldir}/stage_3", n_steps_override=s3,
                         tether_segid="PtR", nascent_rmin_2=nascent_rmin_2_arg,
-                        label=f"L={L} stage 3 (tRNA binding) {s3} steps")
+                        label="stage 3 tRNA-binding")
         prev_final = f3
 
     dwell_fh.close()
@@ -405,7 +409,7 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
             seed_override=prev_final, out_root=out_path, params=ep, ribo=ribo,
             restrain=False, out_subdir="ejection",
             n_steps_override=params.ejection_steps, nascent_rmin_2=nascent_rmin_2_arg,
-            label=f"Ejection (L = {L_max})")
+            label="ejection")
 
     if params.dissociation_steps > 0:
         print()
@@ -417,7 +421,7 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
             seed_override=prev_final, out_root=out_path, params=ep, ribo=ribo,
             restrain=False, out_subdir="dissociation",
             n_steps_override=params.dissociation_steps, nascent_rmin_2=nascent_rmin_2_arg,
-            label=f"Dissociation (L = {L_max})")
+            label="dissociation")
 
 
 # --------------------------------------------------------------------------
@@ -638,8 +642,8 @@ def read_csp_config(config_file: str, verbose: bool = True) -> CSPConfig:
         ep.restraint_k = float(opt("restraint_k"))
     if opt("buffer") is not None:
         ep.buffer_nm = float(opt("buffer"))
-    if opt("equil_peptide_geometry") is not None:
-        ep.equil_peptide_geometry = bool(strtobool(opt("equil_peptide_geometry")))
+    if opt("optimize_ptc_geometry") is not None:
+        ep.optimize_ptc_geometry = bool(strtobool(opt("optimize_ptc_geometry")))
     # Nascent excluded-volume radii for the NC<->ribosome force: "kb" (per-residue
     # Karanicolas-Brooks, Option A, DEFAULT) or "per_aa" (per-AA SA..SY, Option B).
     if opt("nascent_ev_radii") is not None:
@@ -749,6 +753,14 @@ def csp(argv: Optional[List[str]] = None) -> None:
         Runs the synthesis for its side effects (see
         :func:`run_continuous_synthesis`).
     """
+    # MDAnalysis emits cosmetic UserWarnings ("Unit cell dimensions not found",
+    # "Found no information for attr: 'formalcharges'") every time topo slices and
+    # writes a CA-only PDB -- once per synthesis stage, so they flood the console.
+    # Silence all MDAnalysis warnings for the CLI run (a process-local filter that
+    # only takes effect when someone actually invokes topo-csp).
+    import warnings
+    warnings.filterwarnings("ignore", category=Warning, module=r"MDAnalysis")
+
     parser = argparse.ArgumentParser(
         prog="topo-csp",
         description="O'Brien Continuous Synthesis Protocol (per-codon, 3-stage "

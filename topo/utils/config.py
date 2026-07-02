@@ -129,6 +129,12 @@ class SimulationConfig:
     # the path this config was read from (for bookkeeping)
     config_file: Optional[str] = None
 
+    # console verbosity: when True, suppress the per-run informational banners
+    # ("Running simulation on ...", "[tracking] writing run metadata ...",
+    # "Wrote last conformation ...", "--- Finished in ... ---"). Set by the CSP
+    # runner, which drives one config per stage; the plain mdrun leaves it False.
+    quiet: bool = False
+
     def build_kwargs(self) -> dict:
         """
         Keyword arguments for
@@ -201,10 +207,12 @@ class SimulationConfig:
         CPU using ``ppn`` threads.
         """
         if self.device == 'GPU':
-            print("Running simulation on GPU CUDA")
+            if not self.quiet:
+                print("Running simulation on GPU CUDA")
             return (mm.Platform.getPlatformByName('CUDA'),
                     {'CudaPrecision': 'mixed', 'DeviceIndex': '0'})
-        print(f"Running simulation on CPU using {self.ppn} cores")
+        if not self.quiet:
+            print(f"Running simulation on CPU using {self.ppn} cores")
         return (mm.Platform.getPlatformByName('CPU'), {'Threads': str(self.ppn)})
 
 

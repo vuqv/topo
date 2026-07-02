@@ -115,12 +115,12 @@ Behind a flag (default off; Tutorials 12 & 13 unchanged):
 
 ## Step 3 — IMPLEMENTED + TESTED ✅
 
-**Code.** New flag `ElongationParams.equil_peptide_geometry` (default **False**, so Tutorials
+**Code.** New flag `ElongationParams.optimize_ptc_geometry` (default **False**, so Tutorials
 12 & 13 are byte-for-byte unchanged). When on, `protocol.py` calls
 `core.optimal_ptc_targets(ribo)` for `(a_target, p_target)`, seeds residue L at `a_target`
 (new `seed_point` arg threaded `protocol → run_length → seed_positions`), restrains L→`a_target`
 (stages 1–2) / →`p_target` (stage 3), and rederives the tunnel-wall plane to
-`min(a_target.x, p_target.x)`. INI key: `equil_peptide_geometry = yes`. Files:
+`min(a_target.x, p_target.x)`. INI key: `optimize_ptc_geometry = yes`. Files:
 [`../../topo/csp/core.py`](../../topo/csp/core.py) (`optimal_ptc_targets`, `seed_positions`,
 `run_length`, `ElongationParams`), [`../../topo/csp/protocol.py`](../../topo/csp/protocol.py).
 
@@ -191,7 +191,7 @@ AllBonds run completes, dt-halving never fires, max\|PotE\| = 85 kJ/mol. Cost �
 
 The equilibrium-bond PTC geometry + `AllBonds` is now the **default** for continuous
 synthesis (`topo-csp`). Implemented via `protocol.csp_default_elong()`
-(`equil_peptide_geometry=True`, `constraints="AllBonds"`), used by `CSPParams.elong` and
+(`optimize_ptc_geometry=True`, `constraints="AllBonds"`), used by `CSPParams.elong` and
 `read_csp_config`. Key points:
 
 - The **shared** `ElongationParams` dataclass defaults are left as the old far-seed +
@@ -199,7 +199,7 @@ synthesis (`topo-csp`). Implemented via `protocol.csp_default_elong()`
   `CylinderParams`) are **unaffected**. Only the CSP layer overrides them.
 - `read_csp_config` now keeps the CSP default when `constraints` is **absent** (it used to
   force `None`); an explicit `constraints = None` still selects flexible bonds.
-- **Legacy path stays reachable**: pin `equil_peptide_geometry = no` + `constraints = None`.
+- **Legacy path stays reachable**: pin `optimize_ptc_geometry = no` + `constraints = None`.
   **Tutorials 12 & 13** (the validated O'Brien reproduction) are pinned this way and run
   exactly as before — verified: no new-geometry banner, `flexible (harmonic)` bonds.
 - `scipy` added to `pyproject.toml` dependencies (the default path now needs it for the

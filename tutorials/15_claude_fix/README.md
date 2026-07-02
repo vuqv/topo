@@ -3,7 +3,7 @@
 Validates **"the claude fix"** — the **equilibrium-bond PTC geometry + rigid `AllBonds`**
 elongation path (Tutorial 14, steps 2–4) — by reproducing O'Brien's continuous-synthesis
 results on **4c5c** (then extending to **P0CX28**), on the *unpinned* fix path (no
-`equil_peptide_geometry = no`, no `constraints = None`), and closing the O'Brien-consistency
+`optimize_ptc_geometry = no`, no `constraints = None`), and closing the O'Brien-consistency
 gaps selected in [`AGENTS.md`](AGENTS.md) §1b.
 
 See [`AGENTS.md`](AGENTS.md) for the full directive, [`NOTES.md`](NOTES.md) for the decision
@@ -25,7 +25,7 @@ From this folder (env: `bioenv` — OpenMM 8.2, scipy, MDAnalysis; a CUDA GPU fo
 ```bash
 # 1. Debug smoke test (L=1->8, CPU, ~1 min): confirms the fix path is ACTIVE + stable.
 topo-csp -f csp.ini                 # -> synth_out_debug/
-#    expect: "[equil_peptide_geometry] optimal PTC restraint targets (|A-P| = 0.3810 nm)",
+#    expect: "[optimize_ptc_geometry] optimal PTC restraint targets (|A-P| = 0.3810 nm)",
 #            all stages "rigid (AllBonds)", seed peptide bond 3.810 A, ZERO "[stability]" lines.
 
 # 2. Full-length validation (L=1->306, GPU, ~30 min) + post-synthesis ejection.

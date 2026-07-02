@@ -78,7 +78,7 @@ def main() -> None:
     a_anchor = anchor_coord(ribo, "AtR", 76, "R")
 
     # Same target / wall geometry the run used (equil-PTC fix path).
-    if ep.equil_peptide_geometry:
+    if ep.optimize_ptc_geometry:
         a_target, p_target = optimal_ptc_targets(ribo)
         if ep.tunnel_wall:
             ep.tunnel_wall_x0_nm = float(min(a_target[0], p_target[0]))

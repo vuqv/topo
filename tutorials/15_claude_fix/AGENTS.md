@@ -76,7 +76,7 @@ faithful to O'Brien** (his bonds are rigid constraints, not springs).
 > **Goal.** Show the new default **reproduces O'Brien's continuous-synthesis results on
 > 4c5c** — physically sane synthesis + clean tunnel ejection (D-checks below) and
 > quantitative agreement (dwell times / geometry) with the reference run — **and** that it
-> does so on the *unpinned, current default* path (no `equil_peptide_geometry = no`, no
+> does so on the *unpinned, current default* path (no `optimize_ptc_geometry = no`, no
 > `constraints = None`). **If validation exposes a defect in the default path, fix it in
 > `topo/csp/*`** (this is a `claude_fix` tutorial — see §9 for the guardrails), then
 > re-validate. **If 4c5c succeeds, repeat for P0CX28** in the [`P0CX28/`](P0CX28/) subfolder.
@@ -97,9 +97,9 @@ derivation):
 - **Rigid bonds, no guard.** Build with `constraints = "AllBonds"`; the dt-halving guard in
   `run_length` never fires (verified in Tutorial 14: max |PotE| ≈ 30–85 kJ/mol vs the 1e9
   divergence limit; old far-seed path peaked ~500 kJ/mol from a 1.9×-stretched seed bond).
-- **Now the default.** `protocol.csp_default_elong()` sets `equil_peptide_geometry=True,
+- **Now the default.** `protocol.csp_default_elong()` sets `optimize_ptc_geometry=True,
   constraints="AllBonds"`; `CSPParams.elong` / `read_csp_config` use it when the INI is
-  silent. Legacy path stays reachable via `equil_peptide_geometry = no` + `constraints =
+  silent. Legacy path stays reachable via `optimize_ptc_geometry = no` + `constraints =
   None` (how 12 & 13 are pinned). **This tutorial deliberately leaves the default ON.**
 
 ---
@@ -196,7 +196,7 @@ Background on the fix: Tutorial 14's
 from [`../14b_P0CX28/`](../14b_P0CX28/). **Never overwrite** any raw input. The fixed-point
 INI shape to mirror: tut 14's `csp_step2_allbonds.ini` for the **debug** profile and tut
 14c / 14b's `csp_*.ini` for the **full** profile (note: those leave the default ON by simply
-*not* pinning `equil_peptide_geometry`/`constraints`).
+*not* pinning `optimize_ptc_geometry`/`constraints`).
 
 **P0CX28 caveat.** There is **no O'Brien reference run** for P0CX28, so D6 (quantitative
 match) does **not** apply there — the P0CX28 deliverable is D3/D4/D5/D5b (runs, sane
@@ -210,7 +210,7 @@ Verify each — don't assume it. 4c5c first; the P0CX28 subset only after 4c5c's
 - [ ] **D0 — Scaffold.** Inputs copied into this folder (and `P0CX28/`); raw inputs never
       overwritten. `analyze_validation.py` present.
 - [ ] **D1 — Configs.** `csp.ini` (debug) + `csp_val.ini` (full) exist and **use the current
-      default fix path** — i.e. they do **not** pin `equil_peptide_geometry = no` and do
+      default fix path** — i.e. they do **not** pin `optimize_ptc_geometry = no` and do
       **not** set `constraints = None`. Confirm the run banner reports the
       equilibrium-geometry + `AllBonds` path (not "flexible (harmonic)"). Kinetics
       (`time_stage_1/2`, `scale_factor`, `mrna`, `trans_times`) match the reference mapping.

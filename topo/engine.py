@@ -183,7 +183,8 @@ def setup_simulation(cfg, built: BuiltSystem,
         coord_source=coord_source,
         vel_source=vel_source,
     )
-    print(f"[tracking] writing run metadata to {runinfo_path}")
+    if not getattr(cfg, 'quiet', False):
+        print(f"[tracking] writing run metadata to {runinfo_path}")
 
     return RunContext(simulation=simulation, checkpoint=checkpoint,
                       restart_active=restart_active, done_steps=done_steps,
@@ -251,8 +252,10 @@ def finalize_simulation(cfg, ctx: RunContext, topology, start_epoch: float) -> N
         getPositions=True, enforcePeriodicBox=bool(cfg.pbc)).getPositions()
     with open(final_pdb, 'w') as fh:
         mm.app.PDBFile.writeFile(topology, last_positions, fh)
-    print(f"Wrote last conformation to {final_pdb}")
+    if not getattr(cfg, 'quiet', False):
+        print(f"Wrote last conformation to {final_pdb}")
 
     topo.runinfo.write_run_end(ctx.runinfo_path, simulation=simulation,
                                start_epoch=start_epoch, final_structure=final_pdb)
-    print("--- Finished in %s seconds ---" % (time.time() - start_epoch))
+    if not getattr(cfg, 'quiet', False):
+        print("--- Finished in %s seconds ---" % (time.time() - start_epoch))

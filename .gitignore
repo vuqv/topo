@@ -30,6 +30,9 @@
 # Reference-run log file (a plain file named "log", not *.log)
 **/continuous_synthesis/log
 
+# --- Scratch sandbox for exploratory simulation runs (never committed) ---
+/sandbox/
+
 # --- Python / build artifacts ---
 **/__pycache__/
 *.py[cod]

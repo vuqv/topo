@@ -52,7 +52,7 @@ Severity: ⚠️ = correctness / could bite silently · 📌 = decision needed �
   production warning. (TODO §B.)
 
 - [ ] 📌 **Rigid `AllBonds` as the default + retire the dt-halving guard.** Equilibrium PTC
-  seeding (`equil_peptide_geometry`) makes rigid `AllBonds` seed cleanly, but flexible
+  seeding (`optimize_ptc_geometry`) makes rigid `AllBonds` seed cleanly, but flexible
   bonds + the guard are still the default. Decision blocked on the baseline below.
 
 - [ ] 📌 **A76 P-anchor (3.45 Å off O'Brien).** Kept as topo's; PTC-seeding absorbs it.
@@ -87,7 +87,7 @@ Severity: ⚠️ = correctness / could bite silently · 📌 = decision needed �
 - [ ] 📝 **L24 free-loop residue range was wrong in the original DIFFERENCES.md.** It said
   42–**59**; the O'Brien reference is `ribo_free_mask = L24 : 42-56` (line 37). Corrected in
   the revised doc — propagate the fix if the number appears elsewhere.
-- [ ] 📝 **"Placement geometry" is superseded, not matched.** topo's `equil_peptide_geometry`
+- [ ] 📝 **"Placement geometry" is superseded, not matched.** topo's `optimize_ptc_geometry`
   solves for a least-buried seed rather than reproducing O'Brien's fixed 4.27 Å + 10° tilt.
   Same intent, different mechanism → listed as "still different" but not a regression to
   close. Only add the fixed tilt if exact O'Brien seed reproduction is required.
