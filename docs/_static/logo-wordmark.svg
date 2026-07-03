@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 392 132" role="img" aria-label="topo">
+  <title>topo</title>
+  <style>
+    .ink { fill: none; stroke: #16202b; stroke-width: 12; stroke-linecap: round; stroke-linejoin: round; }
+    @media (prefers-color-scheme: dark) { .ink { stroke: #e8eef4; } }
+  </style>
+
+  <!-- contact-map mark, left -->
+  <g transform="translate(8,16)">
+    <rect x="12" y="12" width="76" height="76" rx="16" fill="none" stroke="#0e8f86" stroke-width="4.5"/>
+    <line x1="21" y1="21" x2="79" y2="79" stroke="#0e8f86" stroke-width="6" stroke-linecap="round"/>
+    <g fill="#d9891f">
+      <circle cx="31" cy="59" r="4.5"/><circle cx="35" cy="55" r="4.5"/><circle cx="39" cy="51" r="4.5"/>
+      <circle cx="59" cy="31" r="4.5"/><circle cx="55" cy="35" r="4.5"/><circle cx="51" cy="39" r="4.5"/>
+    </g>
+  </g>
+
+  <!-- geometric monoline wordmark, right -->
+  <g transform="translate(105,-9)">
+    <!-- t -->
+    <path class="ink" d="M38 30 L38 84 Q38 96 51 96"/>
+    <path class="ink" d="M23 45 L57 45"/>
+    <!-- o -->
+    <circle class="ink" cx="92" cy="68" r="28"/>
+    <!-- p -->
+    <path class="ink" d="M134 40 L134 122"/>
+    <circle class="ink" cx="162" cy="68" r="28"/>
+    <!-- o -->
+    <circle class="ink" cx="232" cy="68" r="28"/>
+  </g>
+</svg>

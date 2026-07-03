@@ -141,6 +141,9 @@ html_theme_options = {
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ['_static']
 html_logo = "_static/logo.svg"
+# Browser-tab icon: the same square contact-map mark (teal + amber read on any
+# tab background). Modern browsers render SVG favicons directly.
+html_favicon = "_static/logo.svg"
 # Custom CSS: full-width content + wrapping tables (see _static/custom.css).
 html_css_files = ['custom.css']
 # Custom sidebar templates, must be a dictionary that maps document names
