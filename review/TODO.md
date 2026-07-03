@@ -24,6 +24,21 @@ The package is nearly marker-free — only these:
   items, now consolidated here in §B (the former `topo/csp/TODO.md` was merged in and
   deleted 2026-07-02).
 
+### Default value fixes
+- [ ] **Change the default `tau_t` (Langevin friction) from `0.01` → `0.05` ps⁻¹** to
+  match the published protocol (0.05 ps⁻¹ is the production value; 0.01 was only ever a
+  placeholder). Two hard-coded sites to update together:
+  - [`topo/utils/config.py:308`](../topo/utils/config.py#L308) —
+    `cfg.tau_t = float(params.get('tau_t', 0.01)) / unit.picoseconds` (the runner default
+    when `tau_t` is unset). The dataclass field `tau_t: Any = None` (line 77) is fine;
+    only the parsed fallback here needs changing.
+  - [`topo/optimize/optimize.py:123`](../topo/optimize/optimize.py#L123) —
+    `IMPLICIT_DEFAULTS["tau_t"] = "0.01"` (the nscale-optimizer per-round default).
+  - Note: friction is thermodynamically neutral (it does not shift Tm / folded populations
+    / the nscale calibration), so this is safe for the optimizer's equilibrium stability
+    decision; it changes only kinetics and per-round equilibration speed. Update any docs /
+    tutorial INIs that cite `tau_t ≈ 0.01` as the production default alongside this.
+
 ---
 
 ## B. CSP — validation, production, extensions
