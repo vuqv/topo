@@ -17,8 +17,8 @@ Main workflow
    factor applied to the sidechain-sidechain well depths (not an absolute energy --
    the contacts still interact at nscale = 1.0). Single-domain proteins can omit
    inter_domains.
-4. **Non-native contacts**: repulsive well with sigma from nearest non-contact
-   CA-CA distance; energy ENERGY_PARAMS['non_native'].
+4. **Non-native contacts**: repulsive well with per-residue Rmin/2 from the
+   nearest non-contact CA-CA distance (sum rule); energy ENERGY_PARAMS['non_native'].
 
 Typical use
 -----------
@@ -53,7 +53,7 @@ from typing import Dict, List, Tuple, Set, Optional
 KCAL_TO_KJ = 4.184
 DEFAULT_CUTOFF = 4.5  # Angstrom; distance cutoff for backbone-sidechain and sidechain-sidechain contacts
 LOCAL_SEPARATION = 2   # Residues within this sequence separation are excluded from non-local contacts
-SIGMA_SCALE_FACTOR = 2**(1/6)  # Factor for repulsive sigma (LJ-like)
+RMIN_SCALE_FACTOR = 2**(1/6)  # 2^(1/6): scales the nearest-contact Ca distance to the collision diameter Rmin (LJ-like)
 DISTANCE_TO_NM = 10.0  # Angstrom to nanometer (CA distances read in Angstrom)
 
 # Energy parameters (kcal/mol values, stored in kJ/mol for OpenMM)
@@ -772,10 +772,10 @@ def calculate_rmin_2_values(binary_contact_matrix: np.ndarray, ca_distances: np.
     """
     Compute per-residue collision radius Rmin/2 for non-native contacts.
 
-    For residue i, ``Rmin/2[i] = 0.5 * SIGMA_SCALE_FACTOR * (minimum CA-CA distance to
+    For residue i, ``Rmin/2[i] = 0.5 * RMIN_SCALE_FACTOR * (minimum CA-CA distance to
     residues that are (1) not in contact with i and (2) not within LOCAL_SEPARATION in
     sequence)``. The minimum CA-CA distance is taken as the LJ sigma (closest approach);
-    ``SIGMA_SCALE_FACTOR = 2^(1/6)`` scales it to the full collision *diameter* Rmin, and
+    ``RMIN_SCALE_FACTOR = 2^(1/6)`` scales it to the full collision *diameter* Rmin, and
     the ``0.5`` gives **Rmin/2** -- the per-residue collision *radius* (structure-derived
     Karanicolas-Brooks). If no such residue j exists, ``Rmin/2[i] = 0.0``. Non-native pairs
     combine by the SUM rule ``Rmin_ij = Rmin/2[i] + Rmin/2[j]``.
@@ -803,7 +803,7 @@ def calculate_rmin_2_values(binary_contact_matrix: np.ndarray, ca_distances: np.
         ]
         if not_in_contact_with_i:
             distance_to_i = ca_distances[i, not_in_contact_with_i]
-            rmin_2.append(0.5 * SIGMA_SCALE_FACTOR * np.min(distance_to_i))
+            rmin_2.append(0.5 * RMIN_SCALE_FACTOR * np.min(distance_to_i))
         else:
             rmin_2.append(0.0)  # fallback value
     return rmin_2

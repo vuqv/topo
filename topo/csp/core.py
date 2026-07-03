@@ -143,8 +143,8 @@ def optimal_ptc_targets(ribo, *, aa_rmin_2_nm: float = 0.5,
     O'Brien restraint energy -- the **A/P tRNA bonds** (``_PTC_D_A_NM`` / ``_PTC_D_P_NM``,
     harmonic ``kb = RESTRAINT_K_KJ``) and orienting **angles/improper**
     (``_PTC_ANGLE_K_KJ``; ``continuous_synthesis_v6.py``) -- plus the ribosome
-    ``eps*(sigma/r)^12`` excluded volume (``eps = RIBO_NC_EPS_KJ``,
-    ``sigma_ij = 1/2 (sigma_AA + sigma_bead)``), subject to:
+    ``eps*(Rmin/r)^12`` excluded volume (``eps = RIBO_NC_EPS_KJ``,
+    ``Rmin_ij = (Rmin/2)_AA + (Rmin/2)_bead`` sum rule), subject to:
 
     - the **peptide bond** as the only **hard** distance constraint
       (``_PTC_PEPTIDE_NM`` = 0.381 nm -- it is topo's AllBonds constraint length, so it
@@ -456,9 +456,9 @@ def build_length_model(sub_pdb: str, R_L: np.ndarray, eps_L: np.ndarray,
     nascent_rmin_2 : numpy.ndarray or None
         Per-residue collision radius Rmin/2 (nm), length ``L``, for the nascent chain
         -- the structure-derived Karanicolas-Brooks values (Option A). Used as the
-        particle excluded-volume radius (``rf_sigma``). This is deliberately **not**
+        particle excluded-volume radius (``particle_rmin_2``). This is deliberately **not**
         taken from ``model_parameters`` (whose fixed per-AA protein Rmin_2 is the rigid
-        *ribosome* scenery value, not the mobile chain's). ``rf_sigma`` only feeds
+        *ribosome* scenery value, not the mobile chain's). ``particle_rmin_2`` only feeds
         ``dumpForceFieldData``, so ``None`` is harmless (the radius is left unset).
 
     Returns
@@ -505,7 +505,7 @@ def build_length_model(sub_pdb: str, R_L: np.ndarray, eps_L: np.ndarray,
     # Per-residue particle properties. Mass/charge are per-AA (from model_parameters).
     # The nascent excluded-volume radius is the per-residue K-B Rmin/2 (structure-derived,
     # Option A), NOT the fixed per-AA model_parameters value (that is the rigid ribosome
-    # scenery radius). rf_sigma only feeds dumpForceFieldData, so None is harmless.
+    # scenery radius). particle_rmin_2 only feeds dumpForceFieldData, so None is harmless.
     topo_model.setCAMassPerResidueType()
     topo_model.setCAChargePerResidueType()
     if nascent_rmin_2 is not None:
@@ -579,7 +579,7 @@ def seed_positions(prev_final: np.ndarray, a_anchor: np.ndarray,
     peptide bond ``L-1<->L`` starts at its equilibrium length and a rigid ``AllBonds``
     constraint seeds cleanly; tutorials/14 step 2), or at the A-anchor offset by
     ``buffer_nm`` along +x (default; the buffer clears excluded volume so the new bead
-    does not get a huge ``(sigma/r)^12`` kick -- DESIGN §2.5 / invariant 6). Returns an
+    does not get a huge ``(Rmin/r)^12`` kick -- DESIGN §2.5 / invariant 6). Returns an
     ``(L, 3)`` array in nm.
     """
     if seed_point is not None:

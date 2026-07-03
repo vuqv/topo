@@ -285,6 +285,27 @@ What distinguishes TOPO from a textbook Gō model is **how the well position**
 Pairs split into two classes (all built by
 :func:`topo.utils.nonbonded.build_nonbonded_interaction`):
 
+.. important::
+
+   **The same symbol** :math:`R_{ij}` **means two physically different things in
+   the two classes** — it is a real distance for one and a collision radius for
+   the other. For a **native** contact, :math:`R_{ij}` is the *measured* Cα–Cα
+   **distance of that pair** in your input structure, so the attractive well sits
+   exactly at the native geometry. For a **non-native** pair, :math:`R_{ij}` is
+   *not* a distance of the pair at all: it is a **sum of two independent
+   per-residue collision radii**, :math:`R_{ij}=(R_\mathrm{min}/2)_i+(R_\mathrm{min}/2)_j`,
+   i.e. how close beads *i* and *j* may approach before they overlap (excluded
+   volume). What makes one an attractive **well** and the other a soft repulsive
+   **wall** is the paired **well depth** :math:`\varepsilon_{ij}`: a real energy
+   (kJ/mol) for native contacts, but a near-zero value
+   (:math:`1.32\times10^{-4}` kcal/mol) for non-native pairs, so their attractive
+   terms vanish and only the :math:`(R_{ij}/r)^{12}` repulsion remains. Both
+   classes are then stored in the **same** ``rmin_matrix`` / ``energy_matrix`` and
+   evaluated by a **single** ``CustomNonbondedForce`` — the native/non-native
+   distinction lives entirely in the *tabulated parameter values*, not in the
+   functional form. Merging them into one matrix is an exact computational
+   convenience, not an approximation.
+
 **1. Native contacts** — pairs that are genuinely in contact in your input
 structure. A pair counts as a native contact if it has at least one of:
 
@@ -334,11 +355,40 @@ kept). For a native contact:
 
 **2. Non-native pairs** — every other (non-excluded) pair. These get a soft
 **excluded-volume repulsion**: a negligible well depth
-:math:`\varepsilon_{ij} = 1.32\times10^{-4}` kcal/mol with a distance
-:math:`R_{ij} = \tfrac12(\sigma_i + \sigma_j)`, where each residue's
-:math:`\sigma_i = 2^{1/6}\times(\text{nearest non-contact Cα distance})`. In
-effect, non-native pairs feel almost no attraction but cannot interpenetrate —
-they provide chain self-avoidance without biasing toward any non-native fold.
+:math:`\varepsilon_{ij} = 1.32\times10^{-4}` kcal/mol placed at a collision
+distance built from a **per-residue collision radius** :math:`(R_\mathrm{min}/2)_i`
+combined by the **sum rule**
+
+.. math::
+
+   R_{ij} = \Big(\tfrac{R_\mathrm{min}}{2}\Big)_i + \Big(\tfrac{R_\mathrm{min}}{2}\Big)_j,
+   \qquad
+   \Big(\tfrac{R_\mathrm{min}}{2}\Big)_i
+   = \tfrac12\,2^{1/6}\times(\text{nearest non-contact Cα distance}).
+
+Each :math:`(R_\mathrm{min}/2)_i` is residue *i*'s collision **radius** (half the
+collision diameter :math:`R_\mathrm{min}`), so the sum rule puts the well minimum
+at the sum of the two radii. This is computed by
+:func:`topo.utils.nonbonded.calculate_rmin_2_values`, mirroring the per-type
+``Rmin_2`` entries in :mod:`topo.parameters.model_parameters`. In effect,
+non-native pairs feel almost no attraction but cannot interpenetrate — they
+provide chain self-avoidance without biasing toward any non-native fold.
+
+.. admonition:: Naming — ``Rmin/2``, not σ
+   :class: note
+
+   TOPO uses the **Rmin/2 (collision-radius) convention** throughout — ``Rmin_2``
+   in the parameter tables, :func:`~topo.utils.nonbonded.calculate_rmin_2_values`
+   and ``rmin_matrix`` in the builder — to match O'Brien's CHARMM ``.prm``
+   NONBONDED blocks. Earlier notes (and textbook Lennard-Jones notation) wrote the
+   same quantity with a per-residue **σ** and the arithmetic-mean combining rule
+   :math:`R_{ij}=\tfrac12(\sigma_i+\sigma_j)`. **The two are numerically identical**
+   — :math:`\sigma_i \equiv R_\mathrm{min} = 2\,(R_\mathrm{min}/2)_i`, and
+   :math:`\tfrac12(\sigma_i+\sigma_j) = (R_\mathrm{min}/2)_i + (R_\mathrm{min}/2)_j`
+   — only the name changed. Note too that in this **12-10-6** potential the well
+   minimum sits at :math:`r = R_{ij}` (i.e. at ``Rmin``), *not* at the potential's
+   zero-crossing, so any "σ" here denotes the collision *diameter at the minimum*,
+   not the 12-6 σ where :math:`U = 0`.
 
 .. admonition:: Why this design matters
    :class: tip

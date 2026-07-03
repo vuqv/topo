@@ -174,7 +174,7 @@ class models:
         topo_model.energy_matrix = energy_matrix
 
         # Excluded-volume radius = per-residue K-B Rmin/2 (structure-derived), matching the
-        # non-native contacts. rf_sigma feeds only dumpForceFieldData; this keeps that dump
+        # non-native contacts. particle_rmin_2 feeds only dumpForceFieldData; this keeps that dump
         # consistent with the actual per-residue radii rather than a fixed per-AA lookup.
         topo_model.setParticlesRadii(list(rmin_2))
 

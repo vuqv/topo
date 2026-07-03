@@ -41,8 +41,10 @@ class system:
         If a list is provided, per-particle masses will be assigned.
     particles_charge : list
         The charge of each particle.
-    rf_sigma : float
-        The sigma parameter used in the pairwise force object. This is the vdw radius of beads.
+    particle_rmin_2 : float
+        Per-particle collision radius Rmin/2 (nm) -- the bead's excluded-volume
+        (vdW) radius. Feeds only :meth:`dumpForceFieldData`; the contact force
+        itself uses the per-pair ``rmin_matrix``.
     atoms : list
         A list of the current atoms in the model. The items are :class:`mm.app.topology.atoms`
         initialised classes.
@@ -129,7 +131,7 @@ class system:
         self.model = model
         # particle properties
         self.particles_mass = None
-        self.rf_sigma = None  # particle excluded-volume radius
+        self.particle_rmin_2 = None  # particle excluded-volume radius
         self.particles_charge = None
 
         # Define geometric attributes
@@ -447,23 +449,25 @@ class system:
 
     def setParticlesRadii(self, particles_radii):
         """
-        Change the excluded volume radius parameter for each atom in the system.
+        Set each particle's collision radius Rmin/2 (stored in ``particle_rmin_2``).
 
         Set the radii of the particles in the system. The input can be a
         float, to set the same radius for all particles, or a list, to define
-        a unique radius for each particle.
+        a unique radius for each particle. These per-particle Rmin/2 values feed
+        only :meth:`dumpForceFieldData`; the contact force uses the per-pair
+        ``rmin_matrix``.
 
         Parameters
         ----------
         particles_radii : float or list
-            Radii values to add for the particles in the TOPO system class.
+            Per-particle collision radius Rmin/2 (nm) for the TOPO system class.
 
         Returns
         -------
         None
         """
 
-        self.rf_sigma = particles_radii
+        self.particle_rmin_2 = particles_radii
 
     def setParticlesCharge(self, particles_charge):
         """
@@ -660,7 +664,7 @@ class system:
             for i in np.arange(len(self.atoms)):
                 self.yukawaForce.addParticle((self.particles_charge,))
 
-        # in the case each atom has different sigma para.
+        # in the case each atom has a different charge.
         elif isinstance(self.particles_charge, list):
             assert self.n_atoms == len(self.particles_charge)
             for i, atom in enumerate(self.atoms):
@@ -1065,10 +1069,10 @@ class system:
                         mass = self.particles_mass[i]
                     elif isinstance(self.particles_mass, float):
                         mass = self.particles_mass
-                    if isinstance(self.rf_sigma, list):
-                        sigma = self.rf_sigma[i]
-                    elif isinstance(self.rf_sigma, float):
-                        sigma = self.rf_sigma
+                    if isinstance(self.particle_rmin_2, list):
+                        rmin_2 = self.particle_rmin_2[i]
+                    elif isinstance(self.particle_rmin_2, float):
+                        rmin_2 = self.particle_rmin_2
                     if isinstance(self.particles_charge, list):
                         charge = self.particles_charge[i]
                     elif isinstance(self.particles_charge, float):
@@ -1077,7 +1081,7 @@ class system:
 
                     ff.write('%4s %5s %9.3f %9.3f\t# %12s\n' % (atom.index + 1,
                                                                 mass,
-                                                                sigma,
+                                                                rmin_2,
                                                                 charge,
                                                                 atom.name + '_' + res.name + '_' + str(
                                                                     res.index + 1)))
