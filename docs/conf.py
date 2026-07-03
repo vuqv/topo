@@ -56,7 +56,7 @@ autosummary_generate = True
 # instead of standalone ``.. attribute::`` directives. Without this, napoleon emits
 # a separate object description for each documented attribute, which then collides
 # with the one autodoc already generates for the same dataclass field -> "duplicate
-# object description" warnings (e.g. topo.csp.protocol.CSPConfig/CSPParams fields).
+# object description" warnings (e.g. topo.csp.protocol.CSPConfig/RunParams fields).
 napoleon_use_ivar = True
 
 # Add any Sphinx extension module names here, as strings. They can be

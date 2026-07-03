@@ -12,11 +12,11 @@ Severity: ⚠️ = correctness / could bite silently · 📌 = decision needed �
 
 ## Warnings (⚠️ — could bite silently)
 
-- [ ] ⚠️ **`trna_tether` default mismatch (footgun).** The `ElongationParams` dataclass
+- [ ] ⚠️ **`trna_tether` default mismatch (footgun).** The `RunParams` dataclass
   defaults `trna_tether = True` ([`core.py:848`](../topo/csp/core.py#L848)), but the CSP
   runner `read_csp_config` defaults it to **False**
   ([`protocol.py:654-655`](../topo/csp/protocol.py#L654-L655)). So `topo-csp` runs the
-  position-restraint path, but **any direct caller** of `run_length` / `ElongationParams`
+  position-restraint path, but **any direct caller** of `run_length` / `RunParams`
   that bypasses `read_csp_config` silently gets the *tether* path. Fix: unify the default
   (make the dataclass default `False`), or add a comment + assertion at the call sites.
 
@@ -41,7 +41,7 @@ Severity: ⚠️ = correctness / could bite silently · 📌 = decision needed �
 ## Decisions needed (📌 — "finish or delete" / pick one)
 
 - [ ] 📌 **Ribosome-traffic correction: finish or delete.** Off by default and hidden since
-  2026-06-30, but the code is still carried in `CSPParams`, `read_csp_config`,
+  2026-06-30, but the code is still carried in `RunParams`, `read_csp_config`,
   `kinetics.ribosome_traffic_times`, and a `ribosome_traffic=off` banner. It depends on an
   external binary that is not bundled (exits 127). Decide: (a) vendor/reimplement +
   validate + re-expose, or (b) remove the fields/parsing/function/banner. (TODO §B, §D.)
@@ -118,7 +118,7 @@ or consciously declined.
 
 ### Architecture / code quality
 - [ ] 🔧 **Single source of truth for defaults.** `read_csp_config` re-hardcodes defaults
-  that also live on the `ElongationParams`/`CSPParams` dataclasses (the `trna_tether`
+  that also live on the `RunParams`/`RunParams` dataclasses (the `trna_tether`
   mismatch is the symptom). Have the INI reader fall back to the dataclass default when a
   key is absent, so a default is defined once.
 - [ ] 🔧 **Warn on unknown INI keys.** `opt()` returns `None` for absent keys, so a typo'd

@@ -60,10 +60,10 @@ The original was written before the following commits landed (all `topo/csp/`):
 
 ## Nuance worth flagging
 
-- `ElongationParams.trna_tether` **dataclass default is `True`** (`core.py:848`), but the
+- `RunParams.trna_tether` **dataclass default is `True`** (`core.py:848`), but the
   CSP **runner** (`read_csp_config`) defaults it to **False** (`protocol.py:654-655`). What
   `topo-csp` actually runs is therefore the position-restraint path. Direct callers of
-  `run_length`/`ElongationParams` who don't go through `read_csp_config` would get the tether
+  `run_length`/`RunParams` who don't go through `read_csp_config` would get the tether
   path unless they set it — a minor footgun worth a comment or a unified default.
 - The original's "placement geometry" 🟡 item is now better described as *superseded*: topo's
   `optimize_ptc_geometry` solves for a least-buried seed rather than matching O'Brien's fixed

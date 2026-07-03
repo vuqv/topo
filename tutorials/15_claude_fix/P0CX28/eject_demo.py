@@ -58,7 +58,7 @@ def main() -> None:
     args = ap.parse_args()
 
     cfg = read_csp_config(args.config, verbose=False)
-    ep = cfg.params.elong
+    ep = cfg.params
     ep.trna_tether = False           # match the CSP position-restraint path
     ep.nstout = args.nstout
     if args.device:

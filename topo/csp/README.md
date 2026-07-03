@@ -4,7 +4,7 @@ The per-codon, three-stage co-translational synthesis protocol of
 `continuous_synthesis_v6.py` (Yang Jiang, Dan Nissley, Ed O'Brien), ported to topo.
 `topo.csp` (the CSP runner, `topo-csp`) times every residue from its mRNA codon and
 splits it into the three sub-stages of the elongation cycle. It is a thin outer loop
-over the shared low-level MD engine `topo.csp.core` (`run_length`, `ElongationParams`),
+over the shared low-level MD engine `topo.csp.core` (`run_length`, `RunParams`),
 the rigid-ribosome scenery `topo.csp.ribosome`, and the timing core `topo.csp.kinetics`.
 
 ```bash
@@ -51,13 +51,13 @@ its plane auto-derived from the structure.
 | file | role |
 |------|------|
 | `kinetics.py` | pure timing core (no OpenMM): codon tables, FPT sampling, `scale_factor`→steps, 3-stage split |
-| `protocol.py` | `CSPParams` / `CSPConfig`, `read_csp_config` (INI), `run_continuous_synthesis`, `csp()` CLI |
+| `protocol.py` | `RunParams` / `CSPConfig`, `read_csp_config` (INI), `run_continuous_synthesis`, `csp()` CLI |
 | `__init__.py`, `__main__.py` | public API; `python -m topo.csp` |
 
 ## Public API
 
 ```python
-from topo.csp import run_continuous_synthesis, read_csp_config, CSPParams, kinetics
+from topo.csp import run_continuous_synthesis, read_csp_config, RunParams, kinetics
 
 cfg = read_csp_config("csp.ini")
 run_continuous_synthesis(cfg.pdb_file, cfg.ribosome, L0=cfg.L0, L_max=cfg.L_max,
@@ -86,7 +86,7 @@ defaults to the bundled E. coli 310 K table).
 | `max_steps_per_stage` / `min_steps_per_stage` | clamp each stage's step count (testing) |
 | `ejection_steps` / `dissociation_steps` | post-synthesis free runs (0 = skip) |
 
-**MD / ribosome keys** (configure the shared `ElongationParams`; `n_steps` is **not** used — step
+**MD / ribosome keys** (configure the shared `RunParams`; `n_steps` is **not** used — step
 counts come from the kinetics): `dt`, `ref_t`, `tau_t`, `nstout`, `device`, `ppn`,
 `constraints`, `restraint_k`, `buffer`, `minimize`, `tunnel_wall`,
 `ptc_offset`. (Output is always nascent-only; `tunnel_wall_x0` and `tunnel_wall_k` are not keys -- the plane is auto-derived from the structure and the stiffness is a fixed model constant.)

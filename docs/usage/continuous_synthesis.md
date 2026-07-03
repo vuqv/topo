@@ -14,7 +14,7 @@ fixed per-residue step count is not, which is why CSP is the only synthesis runn
 - **Architecture:** CSP is a thin outer loop. The per-length MD work — building the
   length-`L` model, seeding coordinates, restraints, running one stage under the
   stability guard, build-once-subset contacts — lives in the shared low-level engine
-  `topo.csp.core` (`run_length`, `ElongationParams`); the rigid-ribosome scenery and
+  `topo.csp.core` (`run_length`, `RunParams`); the rigid-ribosome scenery and
   tunnel wall live in `topo.csp.ribosome`; the timing lives in `topo.csp.kinetics`.
   CSP adds only the kinetics and the three-`run_length`-calls-per-residue loop. The
   force field and ribosome representation are described in the Theory section below.
@@ -349,7 +349,7 @@ The sampled dwell **times in seconds** are always written to `dwell_times.dat` r
 of the clamp.
 ```
 
-### MD / ribosome mechanics (reused `ElongationParams`)
+### MD / ribosome mechanics (`RunParams` fields)
 
 | Key | Default | Meaning |
 |-----|---------|---------|
@@ -452,7 +452,7 @@ vmd -e <outdir>/movie.tcl
 ## Python API
 
 ```python
-from topo.csp.protocol import run_continuous_synthesis, read_csp_config, CSPParams
+from topo.csp.protocol import run_continuous_synthesis, read_csp_config
 
 # (a) drive it from an INI, exactly like the CLI:
 kwargs = read_csp_config("csp.ini")
@@ -460,8 +460,8 @@ run_continuous_synthesis(**kwargs)
 
 # (b) or construct parameters directly (the ribosome PDB is always rigid scenery;
 #     the tunnel wall plane is auto-derived from it):
-from topo.csp.core import ElongationParams
-params = CSPParams(elong=ElongationParams(tunnel_wall=True),
+from topo.csp.core import RunParams
+params = RunParams(tunnel_wall=True,
                    scale_factor=4331293.0, random_seed=20240629, ejection_steps=50000)
 run_continuous_synthesis("4c5c_model_clean.pdb", "ribosome_trunc.pdb",
                          L0=1, L_max=10, mrna="4c5c_mrna.txt", params=params)
@@ -477,6 +477,6 @@ See the {doc}`API reference <../topo>` for the autodocumented `topo.csp.protocol
 - {doc}`../usage/model_theory` — the TOPO Gō-model force field in full (the RNC
   Hamiltonian CSP uses, restricted to the synthesized residues).
 - {doc}`API reference <../topo>` — the shared low-level engine `topo.csp.core`
-  (`run_length`, `ElongationParams`), `topo.csp.ribosome`, and `topo.csp.kinetics`.
+  (`run_length`, `RunParams`), `topo.csp.ribosome`, and `topo.csp.kinetics`.
 - Tutorials 12 (`tutorials/12_auto/`) and 13 (`tutorials/13_validate_claude_fix12/`) —
   runnable, validated CSP examples; Tutorial 13 also ships a bilingual `THEORY.md`.

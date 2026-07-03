@@ -53,7 +53,7 @@ from topo import engine
 from topo.csp.core import (
     CG_BOND_LENGTH_NM,
     TUNNEL_AXIS,
-    ElongationParams,
+    RunParams,
     add_cterm_restraint,
     build_length_model,
     cold_start_positions,
@@ -128,10 +128,10 @@ def add_tunnel_cylinder(system, nascent_indices, r_nm: float,
 # Per-run parameters (cylinder additions on top of the shared run params)
 # --------------------------------------------------------------------------
 @dataclass
-class CylinderParams(ElongationParams):
+class CylinderParams(RunParams):
     """Elongation params + the analytic tunnel geometry.
 
-    Subclasses :class:`topo.csp.core.ElongationParams` so the shared
+    Subclasses :class:`topo.csp.core.RunParams` so the shared
     per-length config helper (``_make_cfg``) and the post-elongation fields
     (``post_elongation`` / ``post_elongation_steps``) are inherited unchanged; only
     the tunnel-geometry fields are new.

@@ -29,8 +29,8 @@ The package is nearly marker-free — only these:
   *Done.* 0.05 ps⁻¹ is the production value; 0.01 was only ever a placeholder. Updated
   all three hard-coded defaults — [`topo/utils/config.py:308`](../topo/utils/config.py#L308)
   (runner fallback), [`topo/optimize/optimize.py:123`](../topo/optimize/optimize.py#L123)
-  (nscale-optimizer per-round default), and [`topo/csp/core.py:816`](../topo/csp/core.py#L816)
-  (`ElongationParams` dataclass default) — plus every tutorial INI / demo script pinned to `0.01`
+  (nscale-optimizer per-round default), and [`topo/csp/core.py:827`](../topo/csp/core.py#L827)
+  (`RunParams` dataclass default) — plus every tutorial INI / demo script pinned to `0.01`
   and all docs that cited `0.01` as the production default (relaxation time `1/tau_t`
   restated 100 ps → 20 ps). Friction is thermodynamically neutral (does not shift Tm /
   folded populations / the nscale calibration); it changes only kinetics and per-round
@@ -92,13 +92,13 @@ is the only synthesis path.)*
 ### Revision list
 - [ ] **Remove per-stage step clamps for production** — `max_steps_per_stage` /
   `min_steps_per_stage` are testing-only and break the physical timescale mapping. Decide:
-  drop the `CSPParams` fields + `read_csp_config` parsing + `stage_steps` clamp args, or
+  drop the `RunParams` fields + `read_csp_config` parsing + `stage_steps` clamp args, or
   keep them but loudly warn when set. *(Also flagged inline in tutorials 12/13/14 `csp.ini`
   "delete both for production" — see §E.)*
 - [ ] **Ribosome-traffic correction** (hidden since 2026-06-30) — decide: (a) finish it
   (vendor/reimplement the `ribosome_traffic` upstream-queue correction, validate the
   intrinsic→real stretch, re-expose in docs+config) or (b) drop it entirely (remove
-  `CSPParams` fields, `read_csp_config` parsing, `kinetics.ribosome_traffic_times`). Also
+  `RunParams` fields, `read_csp_config` parsing, `kinetics.ribosome_traffic_times`). Also
   unhide/remove the `ribosome_traffic=off` runtime banner in `protocol.py`. *(Dup of §D
   "external ribosome_traffic binary".)*
 - [x] **Restore rigid `AllBonds`** — *Done for the surviving 3-stage runner.*

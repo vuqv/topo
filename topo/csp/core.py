@@ -808,8 +808,19 @@ def _finalize_nascent(cfg, ctx, nascent_topology, n_keep: int,
 # Per-length configuration
 # --------------------------------------------------------------------------
 @dataclass
-class ElongationParams:
-    """Run parameters shared by every length (set once from the CLI)."""
+class RunParams:
+    """All run parameters, set once from the CLI/INI — the single CSP + elongation
+    parameter block.
+
+    Holds both the **MD / ribosome** knobs consumed by the per-length helpers
+    (:func:`run_length` / :func:`build_length_model`: timestep, temperature, rigid
+    ribosome tunnel wall, C-terminus restraint, ...) **and** the **O'Brien kinetic**
+    knobs consumed by the high-level :func:`topo.csp.run_continuous_synthesis`
+    (per-codon timing, stage dwell means, post-synthesis phases). This was formerly
+    split across ``ElongationParams`` (MD) and ``CSPParams`` (kinetics); the two were
+    merged into this one flat class so there is a single source of truth. The
+    low-level per-length helpers simply ignore the kinetic fields.
+    """
     n_steps: int = 1000
     dt_ps: float = 0.015
     ref_t: float = 300.0
@@ -896,9 +907,30 @@ class ElongationParams:
     post_elongation: str = "stallation"
     post_elongation_steps: int = 0
 
+    # ------------------------------------------------------------------
+    # O'Brien continuous-synthesis kinetics. Used only by
+    # run_continuous_synthesis; ignored by the per-length run_length helper.
+    # ------------------------------------------------------------------
+    scale_factor: float = 4331293.0     # in-vivo seconds -> in-silico ns compressor
+    time_stage_1: float = 0.00034       # mean peptidyl-transfer dwell (s)
+    time_stage_2: float = 0.004201      # mean translocation dwell (s)
+    uniform_ta: bool = False            # ignore the mRNA; use uniform_mfpt for every codon
+    uniform_mfpt: float = 0.05          # uniform mean codon time (s) when uniform_ta
+    # ribosome_traffic / initiation_rate: HIDDEN/deferred (off by default; not exposed
+    # in the docs or example csp.ini -- see review/TODO.md B). Still parsed if present.
+    ribosome_traffic: bool = False      # apply the external traffic correction if available
+    initiation_rate: float = 0.083333   # translation initiation rate (1/s), traffic only
+    random_seed: Optional[int] = None   # seed for the FPT sampler (reproducibility)
+    # --- test clamps (production: leave both at their defaults / None) ---
+    max_steps_per_stage: Optional[int] = None  # cap each stage (tutorial: small)
+    min_steps_per_stage: int = 1               # floor each stage
+    # --- post-synthesis phases (steps; 0 = skip) ---
+    ejection_steps: int = 0             # release the restraint; let the chain leave
+    dissociation_steps: int = 0         # free run; protein drifts off the ribosome
+
 
 def _make_cfg(out_dir: Path, sub_pdb: str, seed_pdb: str,
-              params: ElongationParams) -> topo.SimulationConfig:
+              params: RunParams) -> topo.SimulationConfig:
     """Build a per-length :class:`SimulationConfig` for the engine helpers.
 
     Each length is a self-contained standalone run (its own output folder), so
@@ -915,7 +947,7 @@ def _make_cfg(out_dir: Path, sub_pdb: str, seed_pdb: str,
     seed_pdb : str or None
         Seed-coordinate PDB fed via ``init_position`` (v1); ``None`` in v2 where
         seed coordinates are set directly on ``built.positions``.
-    params : ElongationParams
+    params : RunParams
         Shared per-length run parameters (steps, dt, temperature, device, ...).
 
     Returns
@@ -955,7 +987,7 @@ def _make_cfg(out_dir: Path, sub_pdb: str, seed_pdb: str,
 def run_length(L: int, *, full_pdb: str, R_full: np.ndarray, eps_full: np.ndarray,
                p_anchor: np.ndarray, a_anchor: np.ndarray,
                prev_final: Optional[np.ndarray], out_root: Path,
-               params: ElongationParams,
+               params: RunParams,
                ribo: Optional[Ribosome] = None,
                seed_override: Optional[np.ndarray] = None,
                restrain: bool = True,

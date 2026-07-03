@@ -22,7 +22,7 @@ from openmm import unit
 warnings.filterwarnings("ignore")
 
 from topo.csp.core import (read_anchor, TUNNEL_AXIS, TRNA_TETHER_BOND_NM,
-                                       precompute_contacts, run_length, ElongationParams)
+                                       precompute_contacts, run_length, RunParams)
 from topo.csp.ribosome import load_ribosome
 
 HERE = Path(__file__).resolve().parent
@@ -33,7 +33,7 @@ ribo_pdb = str(HERE / "ribosome_trunc.pdb")
 L = 10
 
 # Match csp_val.ini MD / ribosome knobs.
-ep = ElongationParams()
+ep = RunParams()
 ep.dt_ps = 0.015
 ep.ref_t = 310.0
 ep.tau_t = 0.05

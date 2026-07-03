@@ -27,7 +27,7 @@ Port: `topo/csp/` (`core.py`, `protocol.py`, `ribosome.py`, `kinetics.py`, `cg_r
 > uses the **fixed-point position-restraint** path with A→P migration. The full O'Brien
 > **tRNA tether** (bond + 2 angles + improper) now *exists and is selectable* via
 > `trna_tether = yes` (added since the original doc — see §"What changed"). Note the raw
-> `ElongationParams` dataclass default is `True` ([`core.py:848`](../topo/csp/core.py)); the
+> `RunParams` dataclass default is `True` ([`core.py:848`](../topo/csp/core.py)); the
 > runner's INI default is what governs `topo-csp`, and that is **off**.
 
 ---

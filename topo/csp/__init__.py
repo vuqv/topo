@@ -13,13 +13,14 @@ CLI::
 
 See :mod:`topo.csp.protocol` (runner + INI) and :mod:`topo.csp.kinetics` (timing core).
 """
-from topo.csp.protocol import (CSPConfig, CSPParams, csp, read_csp_config,
+from topo.csp.core import RunParams
+from topo.csp.protocol import (CSPConfig, csp, read_csp_config,
                           run_continuous_synthesis)
 from topo.csp import kinetics
 
 __all__ = [
     "CSPConfig",
-    "CSPParams",
+    "RunParams",
     "csp",
     "read_csp_config",
     "run_continuous_synthesis",
