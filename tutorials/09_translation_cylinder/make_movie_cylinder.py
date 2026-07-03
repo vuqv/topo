@@ -4,7 +4,7 @@ Reuses the shared stitcher in ``topo.csp.movie`` for the growing
 chain, but the generated ``movie.tcl`` **also draws the analytic exit tunnel as
 designed** -- the cylindrical bore, the closed PTC end, and the infinite exit-face
 wall (a flat annulus whose hole is the bore). The tunnel geometry is read from the
-**same** ``elongate.ini`` used for the run, so the drawn tunnel always matches the
+**same** ``cylinder.ini`` used for the run, so the drawn tunnel always matches the
 forces the chain actually felt.
 
 There are no ribosome beads in cylinder mode, so the tunnel is pure VMD
@@ -12,7 +12,7 @@ There are no ribosome beads in cylinder mode, so the tunnel is pure VMD
 
 Usage (run from this folder, after the elongation finishes)::
 
-    python make_movie_cylinder.py -o synth_out -f elongate.ini
+    python make_movie_cylinder.py -o synth_out -f cylinder.ini
     vmd -e synth_out/movie.tcl
 """
 from __future__ import annotations
@@ -26,8 +26,8 @@ from typing import Optional, Tuple
 # replace the generated .tcl with a tunnel-aware one.
 from topo.csp.movie import stitch_length_movie
 
-# The tutorial's own config reader (tunnel geometry lives in elongate.ini).
-from cylinder import read_elongate_config
+# The tutorial's own config reader (tunnel geometry lives in cylinder.ini).
+from topo.csp.cylinder import read_cylinder_config
 
 # nm (the run / params) -> angstrom (VMD and the stitched DCD/PSF).
 NM_TO_A = 10.0
@@ -44,7 +44,7 @@ def make_cylinder_movie(out_root: str, ini: str, out_prefix: str = "movie",
     out_root : str
         Elongation run output root (contains the ``L_<L>/`` folders).
     ini : str
-        The ``elongate.ini`` used for the run (source of the tunnel geometry).
+        The ``cylinder.ini`` used for the run (source of the tunnel geometry).
     out_prefix, park, outname
         Passed straight through to
         :func:`topo.csp.movie.stitch_length_movie`.
@@ -62,7 +62,7 @@ def make_cylinder_movie(out_root: str, ini: str, out_prefix: str = "movie",
                                  verbose=verbose)
 
     # 2. Read the tunnel geometry from the same INI that drove the run.
-    p = read_elongate_config(ini, verbose=False).params
+    p = read_cylinder_config(ini, verbose=False).params
     x_lo = p.tunnel_x_lo_nm
     x_exit = x_lo + p.tunnel_length_nm
     r = p.tunnel_radius_nm
@@ -113,7 +113,7 @@ def _write_tcl_cylinder(path: str, psf_name: str, dcd_name: str, park: str,
 # Two molecules: (0) the growing nascent chain (the stitched movie), and
 # (1) the analytic tunnel drawn as static graphics -- the cylindrical bore, the
 # closed PTC end cap, and the infinite exit-face wall (a flat annulus whose hole
-# is the bore). Geometry is read from elongate.ini, in nm, drawn here in angstrom.
+# is the bore). Geometry is read from cylinder.ini, in nm, drawn here in angstrom.
 
 # ------------------------------------------------------------------ chain
 mol new {psf_name} type psf waitfor all
@@ -202,18 +202,18 @@ puts "Press Play to watch the chain thread the bore and emerge past the exit wal
 
 
 def main(argv: Optional[list] = None) -> None:
-    """CLI: ``python make_movie_cylinder.py -o synth_out -f elongate.ini``."""
+    """CLI: ``python make_movie_cylinder.py -o synth_out -f cylinder.ini``."""
     ap = argparse.ArgumentParser(
         prog="make_movie_cylinder.py",
         description="Stitch the topo tutorial-09 per-length elongation trajectories "
                     "into one VMD movie (reusing topo.csp.movie) AND draw the "
                     "analytic exit tunnel (bore + PTC cap + exit-face wall) read "
-                    "from elongate.ini, so the chain is seen threading the tunnel.",
+                    "from cylinder.ini, so the chain is seen threading the tunnel.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     ap.add_argument("-o", "--out-root", required=True,
                     help="elongation run output root (contains the L_<L>/ folders).")
-    ap.add_argument("-f", "--ini", default="elongate.ini",
-                    help="the elongate.ini used for the run (tunnel geometry source).")
+    ap.add_argument("-f", "--ini", default="cylinder.ini",
+                    help="the cylinder.ini used for the run (tunnel geometry source).")
     ap.add_argument("--prefix", default="movie",
                     help="basename for the stitched movie files.")
     ap.add_argument("--park", default="sentinel", choices=["sentinel", "cterm"],

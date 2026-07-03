@@ -52,6 +52,7 @@ its plane auto-derived from the structure.
 |------|------|
 | `kinetics.py` | pure timing core (no OpenMM): codon tables, FPT sampling, `scale_factor`→steps, 3-stage split |
 | `protocol.py` | `RunParams` / `CSPConfig`, `read_csp_config` (INI), `run_continuous_synthesis`, `csp()` CLI |
+| `cylinder.py` | parallel runner for the **cylinder** ribosome model (analytic exit tunnel, no beads): `CylinderParams` / `CylinderConfig`, `read_cylinder_config`, `run_cylinder_synthesis`, `cylinder()` CLI (`topo-cylinder`); same kinetics as CSP, one MD segment per residue |
 | `__init__.py`, `__main__.py` | public API; `python -m topo.csp` |
 
 ## Public API

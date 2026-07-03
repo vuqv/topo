@@ -20,6 +20,14 @@ topo.csp.core module
    :show-inheritance:
    :undoc-members:
 
+topo.csp.cylinder module
+------------------------
+
+.. automodule:: topo.csp.cylinder
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
 topo.csp.kinetics module
 ------------------------
 

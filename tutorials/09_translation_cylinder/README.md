@@ -11,16 +11,20 @@ fast and never jams.
 The chain is a **folded protein** built with topo's structure-based Gō contacts, so
 it can **fold co-translationally** as it extrudes and once it clears the bore.
 
-## Why a separate script (`cylinder.py`)
+## The cylinder ribosome model (`topo.csp.cylinder`)
 
 The analytic tunnel is a different *physics of confinement* than the explicit-bead
-ribosome, so it lives here as a self-contained tutorial and does **not** modify the
-shipped `topo.csp` package. It **reuses** that package's tested, unchanged low-level
-machinery from `topo.csp.core` (the one-time contact precompute, the
-build-once-subset length model, the seed / restrain / output path) and adds only the
-one new force, `add_tunnel_cylinder`, plus its own minimal nascent-only elongation
-loop. (Like the explicit-bead path it grows the chain at a fixed step count — fine
-for this confinement demo; for codon-resolved kinetics use CSP, `topo-csp`.)
+ribosome, so it lives in the package as a **parallel module** to the explicit-bead
+runner (`topo.csp.protocol`): [`topo.csp.cylinder`](../../topo/csp/cylinder.py),
+driven by the `topo-cylinder` console command. It **reuses** the package's tested,
+unchanged low-level machinery from `topo.csp.core` (the one-time contact precompute,
+the build-once-subset length model, the seed / restrain / output path) and adds only
+the one new force, `add_tunnel_cylinder`, plus its own nascent-only synthesis loop.
+
+Timing is the **same O'Brien codon kinetics** as `topo-csp` — each residue's MD length
+comes from its codon dwell time (`mrna` + `scale_factor`) via `topo.csp.kinetics`. The
+only difference from the explicit protocol is that the cylinder runs a **single MD
+segment per residue** (there is no A→P translocation to split into three sub-stages).
 
 ## The model (forbidden region `S`)
 
@@ -46,14 +50,16 @@ on the tunnel axis at the PTC `(x_lo, 0, 0)`; new residues are seeded there.
 
 ```bash
 cd tutorials/09_translation_cylinder
-python cylinder.py -f elongate.ini
+topo-cylinder -f cylinder.ini          # or: python -m topo.csp.cylinder -f cylinder.ini
 ```
 
-All parameters live in [`elongate.ini`](elongate.ini) (`[OPTIONS]` section). The
-nascent chain is the 106-residue P0CX28 (same as tutorial 07), with `domain.yaml` +
-the precomputed STRIDE for the contact map. Tunnel defaults: bore radius **0.9 nm**,
-length **10.0 nm** (`x_lo=0`, `x_exit=10`), axis on X, mouth fillet **0.2 nm**,
-wall stiffness **8368 kJ/mol/nm²**.
+All parameters live in [`cylinder.ini`](cylinder.ini) (`[OPTIONS]` section). The
+nascent chain is the 106-residue P0CX28, with `domain.yaml` + the precomputed STRIDE
+for the contact map, and `P0CX28_mrna.txt` for the codon kinetics. Tunnel defaults:
+bore radius **0.9 nm**, length **10.0 nm** (`x_lo=0`, `x_exit=10`), axis on X, mouth
+fillet **0.2 nm**, wall stiffness **8368 kJ/mol/nm²**. The kinetics keys (`mrna`,
+`scale_factor`, `time_stage_1/2`, `max_steps_per_stage`) are the **same** as the CSP
+tutorials; the demo caps each residue at 2000 steps (delete the clamps for production).
 
 ## Post-elongation: ejection
 
@@ -80,7 +86,7 @@ tube, closed PTC cap, and the infinite exit-face wall as an annulus whose hole i
 bore), reading the geometry from the same `elongate.ini`:
 
 ```bash
-python make_movie_cylinder.py -o synth_out -f elongate.ini
+python make_movie_cylinder.py -o synth_out -f cylinder.ini
 vmd -e synth_out/movie.tcl
 ```
 

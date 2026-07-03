@@ -30,6 +30,9 @@ topo-optimize = "topo.optimize:optimize"
 # Console command for the O'Brien continuous synthesis protocol (per-codon, 3-stage
 # co-translational synthesis): `topo-csp -f csp.ini`
 topo-csp = "topo.csp.protocol:csp"
+# Console command for the cylinder ribosome model (analytic exit tunnel; one MD segment
+# per residue, same O'Brien codon kinetics): `topo-cylinder -f cylinder.ini`
+topo-cylinder = "topo.csp.cylinder:cylinder"
 # Console command to stitch the CSP per-residue/-stage trajectories into one VMD
 # movie: `topo-csp-movie -o synth_out`
 topo-csp-movie = "topo.csp.movie:main"
