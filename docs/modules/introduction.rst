@@ -22,48 +22,10 @@ then work through the :doc:`../tutorials/index`.
    more appropriate tool.
 
 
-What TOPO can do (feature overview)
------------------------------------
+.. seealso::
 
-A newcomer's map of the full feature set, with where each is documented:
-
-.. list-table::
-   :header-rows: 1
-   :widths: 30 44 26
-
-   * - Feature
-     - What it gives you
-     - Learn it in
-   * - **Structure-based CA model**
-     - One bead/residue; native fold = energy minimum; full force field built automatically from a PDB.
-     - :doc:`../usage/model_theory`
-   * - **Single-domain simulation**
-     - The minimal workflow: one config file, one structure, run MD, read outputs.
-     - :doc:`../tutorials/01_single_domain`
-   * - **Per-domain / interface contact scaling**
-     - Tune the stability of each domain and each domain–domain interface independently (incl. discontiguous domains).
-     - :doc:`../tutorials/02_multidomain`, :doc:`../usage/domain_definition`
-   * - **Restart from checkpoint**
-     - Continue long runs across wall-clock limits; logs/trajectories append seamlessly.
-     - :doc:`../tutorials/03_restart`
-   * - **Many copies in one run**
-     - Pack N non-interacting chains into one (GPU-filling) simulation → N independent trajectories; split afterwards.
-     - :doc:`../tutorials/04_multicopy`
-   * - **Nscale optimization**
-     - Automatically search the contact nscale that keeps each domain/interface folded, instead of guessing.
-     - :doc:`../tutorials/05_opt_nscal`
-   * - **Temperature annealing / quenching**
-     - Hold hot to unfold, then T-jump or slow-cool to study refolding; quench and production write separate trajectories.
-     - :doc:`../tutorials/06_anneal`
-   * - **Native-contact (Q) analysis**
-     - Measure how folded the protein (and each domain/interface) is, frame by frame.
-     - :doc:`../usage/native_contacts`
-   * - **Flexible vs. rigid bonds, PBC, pressure coupling, custom I/O**
-     - Constraint mode, periodic box + barostat, output frequency and log formatting.
-     - :doc:`../usage/simulation_control`
-   * - **Python API**
-     - Build a model, inspect its forces, replicate/split trajectories from your own scripts.
-     - :doc:`../usage/python_api`
+   For a feature-by-feature map of what TOPO does and which tutorial teaches
+   each, see :doc:`../overview`.
 
 
 The model in one paragraph

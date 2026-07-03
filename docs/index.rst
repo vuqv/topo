@@ -10,14 +10,15 @@ single folded-protein structure it builds a one-bead-per-residue, structure-base
 (Gō-like) model and runs Langevin dynamics — ideal for studying folding,
 unfolding, thermal/mechanical stability, and multidomain motions.
 
-**New here?** Read :doc:`modules/introduction` for the feature overview, then
-:doc:`usage/model_theory` for what the model is, and work through the
-:doc:`tutorials/index`.
+**New here?** Read :doc:`overview` to see the two things TOPO does and jump to
+the right tutorials, :doc:`modules/introduction` for installation and package
+layout, and :doc:`usage/model_theory` for what the model is.
 
 .. toctree::
    :maxdepth: 1
    :caption: Getting started
 
+   overview
    modules/introduction
 
 .. toctree::
