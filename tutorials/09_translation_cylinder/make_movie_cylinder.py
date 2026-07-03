@@ -57,9 +57,9 @@ def make_cylinder_movie(out_root: str, ini: str, out_prefix: str = "movie",
     """
     # 1. Stitch the per-length DCDs exactly like the shared stitcher (no ribosome
     #    beads in cylinder mode). This writes movie.{psf,dcd} and a default .tcl.
-    psf, dcd, tcl = stitch_movie(out_root, out_prefix=out_prefix, park=park,
-                                 outname=outname, ribosome_pdb=None,
-                                 verbose=verbose)
+    psf, dcd, tcl = stitch_length_movie(out_root, out_prefix=out_prefix, park=park,
+                                        outname=outname, ribosome_pdb=None,
+                                        verbose=verbose)
 
     # 2. Read the tunnel geometry from the same INI that drove the run.
     p = read_cylinder_config(ini, verbose=False).params
