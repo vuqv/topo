@@ -33,6 +33,9 @@
 # --- Scratch sandbox for exploratory simulation runs (never committed) ---
 /sandbox/
 
+# --- CodeGraph local index (machine-local tooling, never committed) ---
+/.codegraph/
+
 # --- Python / build artifacts ---
 **/__pycache__/
 *.py[cod]
