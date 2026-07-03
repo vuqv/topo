@@ -30,7 +30,7 @@ The package is nearly marker-free — only these:
   all three hard-coded defaults — [`topo/utils/config.py:308`](../topo/utils/config.py#L308)
   (runner fallback), [`topo/optimize/optimize.py:123`](../topo/optimize/optimize.py#L123)
   (nscale-optimizer per-round default), and [`topo/csp/core.py:816`](../topo/csp/core.py#L816)
-  (`CSPParams` dataclass default) — plus every tutorial INI / demo script pinned to `0.01`
+  (`ElongationParams` dataclass default) — plus every tutorial INI / demo script pinned to `0.01`
   and all docs that cited `0.01` as the production default (relaxation time `1/tau_t`
   restated 100 ps → 20 ps). Friction is thermodynamically neutral (does not shift Tm /
   folded populations / the nscale calibration); it changes only kinetics and per-round
@@ -78,6 +78,9 @@ is the only synthesis path.)*
   (`kinetics.stage_steps`, driven by `run_continuous_synthesis`) already samples a
   per-residue dwell from the codon decoding time; the single-`n_steps` `elongate.py` runner
   this item targeted was removed (2026-06-30).
+- [ ] **Uniform translation** — support a uniform (constant per-residue dwell) elongation
+  mode as an alternative to the codon-dependent variable schedule (the 3-stage kinetics
+  above). Scope/spec TBD.
 - [ ] **Restart / resume across lengths** (DESIGN §4) — skip lengths whose
   `L_<L>/traj_final.pdb` exists; resume an interrupted length from checkpoint. *(Dup of
   §D "restart=1".)*
