@@ -29,7 +29,9 @@ simplest possible configuration.
   target property (here, realistic stability at 300 K); for `P0CX28` the
   calibrated value is **2.5044**. The raw, unscaled value (1.0) would leave the
   protein under-stabilized and only marginally folded. Tutorial 2 generalizes
-  this to *different* nscales per domain and across domain interfaces.
+  this to *different* nscales per domain and across domain interfaces. For the
+  full `domain.yaml` syntax — every key, its type, and the YAML basics — see
+  [Domain definition file](https://vuqv.github.io/topo/usage/domain_definition.html).
 - **STRIDE.** On the first run TOPO calls `stride` on the PDB to find backbone
   hydrogen bonds and writes `P0CX28_clean_stride.dat`. You don't manage this file
   by hand.

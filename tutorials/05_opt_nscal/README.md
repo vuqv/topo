@@ -168,7 +168,9 @@ inter_domains:
 
 `class` picks which Table-1 ladder a domain climbs; interfaces always use the
 *Interface* ladder. (`class` is ignored by `topo.mdrun`/`run_simulation.py`, so
-the same file works for production runs.)
+the same file works for production runs.) For the full field reference —
+including the accepted `class` values and the domain-naming rules — see
+[Domain definition file](https://vuqv.github.io/topo/usage/domain_definition.html).
 
 ## 7. What it produces
 

@@ -11,6 +11,53 @@ It is **optional**: if you omit ``domain_def``, every SS contact is scaled by
 1.0 (i.e. no domain scaling at all).
 
 
+YAML syntax in 60 seconds
+-------------------------
+
+If you have not used YAML before, these are the only rules you need for a
+``domain.yaml``. YAML is a plain-text format for nested key/value data.
+
+* **Key/value pairs** are written ``key: value`` — note the **space after the
+  colon** (``nscale:1.1`` is wrong; ``nscale: 1.1`` is right).
+* **Nesting is by indentation**, using **spaces only — never tabs**. Use a
+  consistent number of spaces per level (2 is used throughout this page). A
+  block indented further "belongs to" the key above it::
+
+      intra_domains:      # this key ...
+        A:                #   ... has child A (indented 2 spaces)
+          nscale: 1.1     #     ... which has child nscale (indented 4 spaces)
+
+* **Lists** are written either one item per line, each starting with a dash
+  and a space (``-``)::
+
+      residues:
+        - 1-117
+        - 166-214
+
+  or inline in square brackets on one line — ``residues: [1-117, 166-214]``.
+  Both forms are identical; this page uses the inline ``[...]`` form because
+  residue lists are short.
+* **Inline mappings** collapse a whole block onto one line with braces:
+  ``A: { residues: [1-164], nscale: 1.114 }`` is exactly the same as the
+  three-line indented block for ``A``. Use whichever reads better.
+* **Comments** start with ``#`` and run to the end of the line. They are
+  ignored by the parser.
+* **Numbers vs. text.** ``1.1556`` and ``214`` are read as numbers.
+  A residue *range* like ``1-117`` contains a dash, so YAML reads it as the
+  text string ``"1-117"`` — which is exactly what TOPO wants (see
+  ``residues`` below). You normally do **not** need quotes; add them only if
+  you want to be explicit (``"1-117"`` and ``1-117`` behave identically here).
+
+.. tip::
+
+   Indentation mistakes (a stray tab, or a child not indented under its
+   parent) are the most common cause of a YAML file that "looks right" but
+   fails to parse. If you get a parse error, check indentation first. Any
+   online "YAML lint" validator, or ``python -c "import yaml,sys;
+   print(yaml.safe_load(open('domain.yaml')))"``, will confirm the file is
+   syntactically valid before you feed it to TOPO.
+
+
 Quick reference
 ---------------
 
@@ -28,6 +75,86 @@ Quick reference
         nscale: 1.6871
     inter_domains:                       # OPTIONAL: scale factor BETWEEN domains
       A-B: 1.8611                         # key is "<domain1>-<domain2>"
+
+
+Field reference
+---------------
+
+Every key TOPO reads from ``domain.yaml``, its type, and its allowed values.
+Any key **not** in this table is silently ignored by the reader.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 22 12 12 54
+
+   * - Key
+     - Required?
+     - Type
+     - Meaning / allowed values
+   * - ``n_residues``
+     - **yes**
+     - integer
+     - Total residue count of the chain. Defines the full range ``1..n_residues``
+       used to detect unassigned residues. Must match the structure being
+       simulated.
+   * - ``intra_domains``
+     - **yes**
+     - mapping
+     - One entry per domain. Each key is a **domain name** (see naming rules
+       below); each value is a mapping with ``residues`` and ``nscale`` (and
+       optionally ``class``).
+   * - ``intra_domains.<name>.residues``
+     - **yes**
+     - list
+     - Residues belonging to this domain. Each list item is either a **bare
+       integer** (``5``) or a **range string** ``"start-end"`` (``1-117``,
+       inclusive of both ends). Mix freely: ``[1, 2, "5-10", 166-214]``. A
+       domain may list several ranges to cover non-contiguous segments.
+   * - ``intra_domains.<name>.nscale``
+     - **yes**
+     - float
+     - Multiplicative scale factor for SS contact energy **within** this domain.
+       ``1.0`` = unscaled. Any positive float is allowed; ``0.0`` removes the
+       domain's internal native contacts.
+   * - ``intra_domains.<name>.class``
+     - no
+     - string
+     - Structural class, used **only** by the nscale optimizer, ignored by the
+       runner. One of ``alpha``, ``beta``, ``alpha-beta`` (or ``a`` / ``b`` /
+       ``c``).
+   * - ``intra_domains.<name>.strength``
+     - no
+     - float
+     - **Deprecated** alias for ``nscale``. Still accepted (prints a one-time
+       notice); use ``nscale`` instead.
+   * - ``inter_domains``
+     - no
+     - mapping
+     - Scale factors **between** domains. Each key is ``"<name1>-<name2>"``;
+       each value is a float. Symmetric — ``A-B`` also covers ``B-A``. Omit for
+       single-domain systems. Any pair you do not list defaults to ``1.0``.
+
+.. important::
+
+   **Domain-name rules.** A domain name may be any text (``A``, ``B``,
+   ``NTD``, ``core`` …) with two hard constraints:
+
+   * It must **not contain a hyphen** (``-``). The ``inter_domains`` keys are
+     split on ``-`` to recover the two domain names, so a name like ``N-term``
+     would break that parsing. Use ``Nterm`` or ``N_term`` instead.
+   * The name **``X`` is reserved.** TOPO auto-creates a domain called ``X``
+     for any residues you leave unassigned (see the note under *How it is
+     interpreted*). If you define your own ``X`` **and** also leave some
+     residues unassigned, your ``X`` will be overwritten. Do not name a domain
+     ``X``.
+   * Names are **case-sensitive and matched exactly** between blocks. The name
+     used in an ``inter_domains`` key must be spelled identically to the
+     domain defined in ``intra_domains`` — if you define ``NTD`` and ``CTD``,
+     the interface key must be ``NTD-CTD`` (not ``ntd-ctd``, ``Ntd-Ctd``, or a
+     different label). A mismatched name is **not** an error: the pair you
+     wrote is stored under a name that never appears in ``intra_domains``, so
+     it is never applied, and the real interface silently stays at the default
+     scale of ``1.0``.
 
 
 How it is interpreted
@@ -215,8 +342,22 @@ Common pitfalls
   is smaller than the highest residue you list, the contact matrix and your
   domain assignment will be inconsistent.
 * **Quoting ranges** — ``1-117`` is parsed as a YAML string, which is what the
-  parser expects. Do *not* write it as a number; ``[1, 2, "5-10"]`` (mixed ints
-  and range strings) is also valid.
+  parser expects. Quotes are optional (``1-117`` and ``"1-117"`` behave
+  identically). Mixed ints and range strings — ``[1, 2, "5-10"]`` — are also
+  valid. Only single ``start-end`` ranges are supported; do **not** write
+  strides or open-ended ranges (``"1-117-2"`` or ``"117-"`` will error).
+* **Hyphen in a domain name** — domain names must not contain ``-`` (it clashes
+  with the ``inter_domains`` ``"A-B"`` key syntax). See the domain-name rules in
+  *Field reference*.
+* **Naming a domain ``X``** — ``X`` is reserved for auto-collected unassigned
+  residues; a user-defined ``X`` can be silently overwritten. Pick another name.
+* **Name mismatch between blocks** — an ``inter_domains`` key must spell the
+  domain names exactly as in ``intra_domains`` (case-sensitive). A typo such as
+  ``ntd-ctd`` for domains ``NTD``/``CTD`` does not error; it is simply never
+  applied, and that interface silently stays at the default scale of ``1.0``.
+* **Tabs / bad indentation** — YAML requires spaces, not tabs, and consistent
+  indentation per nesting level. This is the most common parse failure; see
+  *YAML syntax in 60 seconds*.
 * **Chain / residue order** — assignments follow the residue order of the input
   PDB (1-based). Make sure your numbering matches the structure actually being
   simulated.
