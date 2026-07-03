@@ -305,7 +305,7 @@ def read_simulation_config(config_file: str, verbose: bool = True) -> Simulation
     cfg.tcoupl = bool(strtobool(str(params.get('tcoupl', cfg.tcoupl))))
     if cfg.tcoupl:
         cfg.ref_t = float(params.get('ref_t', 300.0)) * unit.kelvin
-        cfg.tau_t = float(params.get('tau_t', 0.01)) / unit.picoseconds
+        cfg.tau_t = float(params.get('tau_t', 0.05)) / unit.picoseconds
         log(f'Turning on temperature coupling with reference temperature: '
             f'{cfg.ref_t} and time constant: {cfg.tau_t}')
     else:

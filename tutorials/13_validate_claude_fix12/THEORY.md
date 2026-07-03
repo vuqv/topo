@@ -84,7 +84,7 @@ The simulated System is built from reused, tested machinery
   **auto-derived from the ribosome structure** (not a config knob): the lower / P-site
   C-terminus hold plane, `x₀ = min(P-anchor.x, A-anchor.x) + ptc_offset` — for this
   `ribosome_trunc.pdb`, `0.5705 + 0.476 = 1.0465 nm` (≈ the old hardcoded 1.05).
-- **Thermostat.** Langevin dynamics at `ref_t = 310 K`, friction `tau_t = 0.01 /ps`,
+- **Thermostat.** Langevin dynamics at `ref_t = 310 K`, friction `tau_t = 0.05 /ps`,
   timestep `dt = 0.015 ps`.
 
 ### Build-once-subset contacts (why this is efficient)

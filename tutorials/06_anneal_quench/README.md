@@ -109,9 +109,9 @@ That has two consequences you must respect:
 
 > **These tutorial configs cheat for speed:** they use `tau_t = 1.0` ps⁻¹
 > (relaxation ≈ 1 ps ≈ 67 steps at `dt = 0.015`), so a 3000-step hold easily
-> reaches 600 K. **Production runs typically use `tau_t ≈ 0.01` ps⁻¹**
-> (relaxation ≈ 100 ps), so you would need an `anneal_steps` of *many* ×
-> 100 ps — e.g. a 15 ns hold — for the same effect. Scale the hold with your
+> reaches 600 K. **Production runs typically use `tau_t ≈ 0.05` ps⁻¹**
+> (relaxation ≈ 20 ps), so you would need an `anneal_steps` of *many* ×
+> 20 ps — e.g. a 3 ns hold — for the same effect. Scale the hold with your
 > friction, not with the demo numbers.
 
 ## Files in this folder
@@ -212,7 +212,7 @@ want.)
 
 - Sweep `t_high` (e.g. 500/600/700 K) and check at which temperature the quench
   actually unfolds the protein (*Q* → 0 in `traj_quench.dcd`).
-- Switch the demo to production-like coupling (`tau_t = 0.01`) and lengthen
+- Switch the demo to production-like coupling (`tau_t = 0.05`) and lengthen
   `anneal_steps` accordingly to see the realistic relaxation timescale.
 - Generate many independent refolding trajectories at once by combining this
   protocol with **multi-copy** runs (Tutorial 4): set `n_copies > 1` to launch a

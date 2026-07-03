@@ -89,7 +89,7 @@ Hệ mô phỏng được dựng từ bộ máy đã được tái sử dụng v
   `x₀ = min(P-anchor.x, A-anchor.x) + ptc_offset` — với `ribosome_trunc.pdb` này là
   `0,5705 + 0,476 = 1,0465 nm` (≈ giá trị cũ 1,05 đặt cứng).
 - **Bộ điều nhiệt (thermostat).** Động lực học Langevin tại `ref_t = 310 K`, ma sát
-  `tau_t = 0,01 /ps`, bước thời gian `dt = 0,015 ps`.
+  `tau_t = 0,05 /ps`, bước thời gian `dt = 0,015 ps`.
 
 ### Tính tiếp xúc một-lần-rồi-cắt (build-once-subset)
 

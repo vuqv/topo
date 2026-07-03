@@ -813,7 +813,7 @@ class ElongationParams:
     n_steps: int = 1000
     dt_ps: float = 0.015
     ref_t: float = 300.0
-    tau_t: float = 0.01
+    tau_t: float = 0.05
     nstout: int = 50
     device: str = "CPU"
     ppn: int = 1

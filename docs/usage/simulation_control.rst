@@ -42,7 +42,7 @@ Example ``md.ini``:
         ; temperature coupling
         tcoupl = yes
         ref_t = 310          ; Kelvin (also the low/refold temperature when annealing)
-        tau_t = 0.01         ; ps^-1
+        tau_t = 0.05         ; ps^-1
 
         ; temperature protocol (annealing / quenching) -- off by default.
         ; Two phases: a quench (-> <outname>_quench.dcd/.log) then production
@@ -368,7 +368,7 @@ Temperature protocol (``anneal`` / ``t_high`` / ``anneal_*``)
     temperature) and ``linear`` for maximum refolding yield. Crucially, a Langevin
     thermostat relaxes toward a new setpoint over roughly ``1/tau_t``, so
     ``anneal_steps`` must be **many** relaxation times (and long enough to actually
-    unfold the protein) — with a production-typical ``tau_t = 0.01`` ps⁻¹ (≈100 ps
+    unfold the protein) — with a production-typical ``tau_t = 0.05`` ps⁻¹ (≈20 ps
     relaxation) that means a hold of many nanoseconds. Annealing requires
     ``tcoupl = yes``. See :doc:`../tutorials/06_anneal` for a full walkthrough.
 

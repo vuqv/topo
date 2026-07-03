@@ -120,7 +120,7 @@ IMPLICIT_DEFAULTS = {
     "dt": "0.015",        # ps; CG model parameterized at a 15 fs timestep
     "model": "topo",
     "tcoupl": "yes",
-    "tau_t": "0.01",
+    "tau_t": "0.05",
     "pcoupl": "no",
     "pbc": "no",
     "minimize": "no",     # native structure is already the model's energy minimum

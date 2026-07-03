@@ -115,7 +115,7 @@ them as **three MD sub-stages per residue**.
   supply, so it can never go stale when you switch structures. For Tutorial 13's
   `ribosome_trunc.pdb` this evaluates to **x₀ = 0.5705 + 0.476 = 1.0465 nm** (the
   previously hardcoded 1.05 nm, now derived).
-- **Thermostat.** Langevin dynamics at `ref_t = 310 K`, friction `tau_t = 0.01 /ps`,
+- **Thermostat.** Langevin dynamics at `ref_t = 310 K`, friction `tau_t = 0.05 /ps`,
   timestep `dt = 0.015 ps`.
 
 **Build-once-subset contacts.** The contact map is computed **once** on the full native
@@ -355,7 +355,7 @@ of the clamp.
 |-----|---------|---------|
 | `dt` | `0.015` | Timestep, ps. |
 | `ref_t` | `310` | Temperature, K. |
-| `tau_t` | `0.01` | Langevin friction, 1/ps. |
+| `tau_t` | `0.05` | Langevin friction, 1/ps. |
 | `nstout` | — | Trajectory/log output interval (steps). |
 | `device` | — | `GPU` / `CPU`. |
 | `ppn` | — | CPU threads (CPU platform). |
