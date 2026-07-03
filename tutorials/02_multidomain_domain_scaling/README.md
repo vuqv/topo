@@ -7,7 +7,7 @@ multidomain enzyme.
 
 **Time:** ~4 seconds on a CPU.
 
-**Prerequisite:** do [Tutorial 1](https://vuqv.github.io/topo/tutorials/01_single_domain.html) first.
+**Prerequisite:** do [Tutorial 1](01_single_domain.md) first.
 
 ---
 
@@ -63,7 +63,7 @@ Reading it out:
 > kept, unscaled) — the scaling only *modulates* contacts that already exist in
 > the structure. To intentionally **decouple** two domains, set their pair to
 > **`0.0`** explicitly. Full rules:
-> [Domain definition file](https://vuqv.github.io/topo/usage/domain_definition.html).
+> [Domain definition file](../usage/domain_definition.rst).
 
 ## Step-by-step
 
@@ -101,7 +101,7 @@ Same set as Tutorial 1, in the `traj/` run folder:
 
 The reference doc has six worked scenarios (single domain, contiguous,
 discontiguous, decoupled, 3+ domains, partial assignment):
-[Domain definition file](https://vuqv.github.io/topo/usage/domain_definition.html).
+[Domain definition file](../usage/domain_definition.rst).
 
 ## Try next
 

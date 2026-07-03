@@ -8,7 +8,7 @@ multi-chain trajectory back into per-chain DCDs for normal analysis.
 **Time:** the 10-copy demo finishes in a few seconds on a CPU; the real win is on
 a GPU.
 
-**Prerequisite:** [Tutorial 1](https://vuqv.github.io/topo/tutorials/01_single_domain.html).
+**Prerequisite:** [Tutorial 1](01_single_domain.md).
 
 ---
 
@@ -39,7 +39,7 @@ A direct check confirms it: the potential energy of `N` copies equals exactly
 | File | Role |
 |------|------|
 | `P0CX28_clean.pdb` | Single-chain input structure (106 residues). |
-| `domain.yaml` | Calibrated single-domain nscale (2.5044), as in Tutorial 1 (syntax: [Domain definition file](https://vuqv.github.io/topo/usage/domain_definition.html)). |
+| `domain.yaml` | Calibrated single-domain nscale (2.5044), as in Tutorial 1 (syntax: [Domain definition file](../usage/domain_definition.rst)). |
 | `md.ini` | Config; note the **`n_copies`** and `copy_shift` options. |
 | `run_simulation.py` | The standard runner — replicates automatically when `n_copies > 1`. |
 | `split_chains.py` | Post-process: split the multi-chain DCD into per-chain DCDs. |

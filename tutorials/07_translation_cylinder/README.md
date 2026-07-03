@@ -1,7 +1,7 @@
 # Tutorial 7 — Co-translational synthesis through an analytic exit tunnel
 
 This is the **structure-based (topo) twin** of cosmo's tutorial 09. The
-ribosome-based runner ([Tutorial 8](https://vuqv.github.io/topo/tutorials/08_ribosome_synthesis.html))
+ribosome-based runner ([Tutorial 8](08_ribosome_synthesis.md))
 builds the ribosome from **explicit beads** and threads the nascent chain through
 the coarse-grained exit tunnel. Here the tunnel is modelled
 **analytically** instead: a cylindrical **bore** of radius `r` along the X-axis

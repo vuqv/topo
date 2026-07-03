@@ -9,7 +9,7 @@ trajectories**, and how the schedule interacts with restarts.
 
 **Time:** two short runs, ~2–3 seconds each.
 
-**Prerequisite:** do [Tutorial 1](https://vuqv.github.io/topo/tutorials/01_single_domain.html)
+**Prerequisite:** do [Tutorial 1](01_single_domain.md)
 first — this reuses the same single-domain protein (`P0CX28`) and its calibrated
 `domain.yaml`.
 
@@ -119,7 +119,7 @@ That has two consequences you must respect:
 | File | Role |
 |------|------|
 | `P0CX28_clean.pdb` | Input structure (same single domain as Tutorial 1). |
-| `domain.yaml` | Calibrated contact `nscale` — folded at 300 K, unfolds at 600 K (syntax: [Domain definition file](https://vuqv.github.io/topo/usage/domain_definition.html)). |
+| `domain.yaml` | Calibrated contact `nscale` — folded at 300 K, unfolds at 600 K (syntax: [Domain definition file](../usage/domain_definition.rst)). |
 | `md.ini` | **Delta T-jump quench** (`anneal_ramp = jump`). |
 | `md_linear.ini` | **Linear cooling ramp** (`anneal_ramp = linear`). |
 | `run_simulation.py` | The runner shim (`= python -m topo.mdrun`). |

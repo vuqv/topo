@@ -31,7 +31,7 @@ simplest possible configuration.
   protein under-stabilized and only marginally folded. Tutorial 2 generalizes
   this to *different* nscales per domain and across domain interfaces. For the
   full `domain.yaml` syntax — every key, its type, and the YAML basics — see
-  [Domain definition file](https://vuqv.github.io/topo/usage/domain_definition.html).
+  [Domain definition file](../usage/domain_definition.rst).
 - **STRIDE.** On the first run TOPO calls `stride` on the PDB to find backbone
   hydrogen bonds and writes `P0CX28_clean_stride.dat`. You don't manage this file
   by hand.
@@ -40,7 +40,7 @@ simplest possible configuration.
 > sequence-dependent periodic torsions, Debye–Hückel electrostatics, and the
 > 12-10-6 structure-based contact potential — is documented term by term, with
 > all constants and parameter sources, in
-> [The TOPO model: theory & force field](https://vuqv.github.io/topo/usage/model_theory.html).
+> [The TOPO model: theory & force field](../usage/model_theory.rst).
 
 ## Step-by-step
 
@@ -50,7 +50,7 @@ From this folder:
 python -c "import topo, openmm; print('OK', openmm.__version__)"
 which stride
 ```
-Both must succeed (see the [tutorials overview](https://vuqv.github.io/topo/tutorials/index.html) for setup).
+Both must succeed (see the [tutorials overview](index.md) for setup).
 
 ### 2. Look at `md.ini`
 Open `md.ini`. The important lines:

@@ -1,7 +1,7 @@
 # Tutorial 5 — Optimizing the contact nscale (*n*<sub>scale</sub>)
 
 **Goal:** instead of *hard-coding* the per-domain and per-interface contact
-nscales in `domain.yaml` (as in [Tutorial 2](https://vuqv.github.io/topo/tutorials/02_multidomain.html)),
+nscales in `domain.yaml` (as in [Tutorial 2](02_multidomain.md)),
 this tutorial **searches** for them automatically, so the force field is just
 strong enough to keep the native structure of every domain and interface folded.
 
@@ -13,8 +13,8 @@ strong enough to keep the native structure of every domain and interface folded.
 **Time:** minutes on a GPU (10 copies × short MD × up to 6 rounds); longer for a
 production-length protocol.
 
-**Prerequisites:** [Tutorial 2](https://vuqv.github.io/topo/tutorials/02_multidomain.html)
-(what `nscale` does) and [Tutorial 4](https://vuqv.github.io/topo/tutorials/04_multicopy.html)
+**Prerequisites:** [Tutorial 2](02_multidomain.md)
+(what `nscale` does) and [Tutorial 4](04_multicopy.md)
 (the multi-copy runs the optimizer uses to collect independent trajectories).
 
 ---
@@ -170,7 +170,7 @@ inter_domains:
 *Interface* ladder. (`class` is ignored by `topo.mdrun`/`run_simulation.py`, so
 the same file works for production runs.) For the full field reference —
 including the accepted `class` values and the domain-naming rules — see
-[Domain definition file](https://vuqv.github.io/topo/usage/domain_definition.html).
+[Domain definition file](../usage/domain_definition.rst).
 
 ## 7. What it produces
 

@@ -2,7 +2,7 @@
 
 **Goal:** synthesize a protein **residue by residue on TOPO's own coarse-grained
 ribosome**, using codon-resolved kinetics with `topo-csp`. This is the
-ribosome-based counterpart to [Tutorial 7](https://vuqv.github.io/topo/tutorials/07_translation_cylinder.html),
+ribosome-based counterpart to [Tutorial 7](07_translation_cylinder.md),
 which replaces the physical ribosome with an analytic cylindrical tunnel.
 
 Unlike the CHARMM-based O'Brien reference, everything here is **standalone
@@ -12,9 +12,9 @@ The nascent chain grows N→C through the exit region and is ejected once
 complete.
 
 **Prerequisite:** the coarse-grained model of
-[Tutorial 1](https://vuqv.github.io/topo/tutorials/01_single_domain.html) and
+[Tutorial 1](01_single_domain.md) and
 the domain-scaling idea of
-[Tutorial 2](https://vuqv.github.io/topo/tutorials/02_multidomain.html).
+[Tutorial 2](02_multidomain.md).
 
 ## Two worked systems
 
@@ -29,7 +29,7 @@ the domain-scaling idea of
 |------|------|
 | `*_clean.pdb` | Target folded structure (defines the native contacts). |
 | `*_stride.dat` | Precomputed STRIDE backbone hydrogen bonds. |
-| `domain.yaml` | Domain definition / contact `nscale` (see [Domain definition file](https://vuqv.github.io/topo/usage/domain_definition.html)). |
+| `domain.yaml` | Domain definition / contact `nscale` (see [Domain definition file](../usage/domain_definition.rst)). |
 | `*_mrna.txt` | The mRNA codon sequence that times each residue. |
 | `trans_times.txt` | Per-codon translation times (kinetics input). |
 | `ribosome_trunc.pdb` | TOPO's coarse-grained truncated ribosome. |

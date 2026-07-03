@@ -20,12 +20,12 @@ protocols.
 
 | # | Tutorial | What you learn |
 |---|----------|----------------|
-| 1 | [Single-domain quickstart](https://vuqv.github.io/topo/tutorials/01_single_domain.html) | The minimal workflow: a config file, one PDB, run an MD simulation, read the outputs. |
-| 2 | [Multidomain & domain scaling](https://vuqv.github.io/topo/tutorials/02_multidomain.html) | Multidomain proteins: per-domain contact scaling via `domain.yaml`, including a discontiguous domain. |
-| 3 | [Restart & outputs](https://vuqv.github.io/topo/tutorials/03_restart.html) | Continuing a run from a checkpoint, and a tour of every output file. |
-| 4 | [Many copies in one run](https://vuqv.github.io/topo/tutorials/04_multicopy.html) | Run N non-interacting chains at once to fill the GPU, then split into per-chain trajectories. |
-| 5 | [Optimizing the contact nscale](https://vuqv.github.io/topo/tutorials/05_opt_nscal.html) | Automatically search the per-domain/interface `nscale` (*n*<sub>scale</sub>) that keeps each domain folded, instead of hard-coding it. |
-| 6 | [Temperature annealing & quenching](https://vuqv.github.io/topo/tutorials/06_anneal.html) | Run a temperature protocol — hold the protein hot to unfold it, then T-jump (or slow-cool) back to `ref_t` to study refolding. |
+| 1 | [Single-domain quickstart](01_single_domain.md) | The minimal workflow: a config file, one PDB, run an MD simulation, read the outputs. |
+| 2 | [Multidomain & domain scaling](02_multidomain.md) | Multidomain proteins: per-domain contact scaling via `domain.yaml`, including a discontiguous domain. |
+| 3 | [Restart & outputs](03_restart.md) | Continuing a run from a checkpoint, and a tour of every output file. |
+| 4 | [Many copies in one run](04_multicopy.md) | Run N non-interacting chains at once to fill the GPU, then split into per-chain trajectories. |
+| 5 | [Optimizing the contact nscale](05_opt_nscal.md) | Automatically search the per-domain/interface `nscale` (*n*<sub>scale</sub>) that keeps each domain folded, instead of hard-coding it. |
+| 6 | [Temperature annealing & quenching](06_anneal.md) | Run a temperature protocol — hold the protein hot to unfold it, then T-jump (or slow-cool) back to `ref_t` to study refolding. |
 
 ## Part B — Translation (co-translational synthesis)
 
@@ -36,8 +36,8 @@ represented.
 
 | # | Tutorial | What it is |
 |---|----------|------------|
-| 7 | [Synthesis through an analytic tunnel](https://vuqv.github.io/topo/tutorials/07_translation_cylinder.html) | The exit tunnel is modelled analytically as a cylindrical bore through an infinite wall (a "hole in a wall") — **no explicit ribosome beads**. The nascent chain is the only system, so it is fast and never jams, and the protein **folds co-translationally** as it extrudes and clears the bore. |
-| 8 | [Synthesis on a coarse-grained ribosome](https://vuqv.github.io/topo/tutorials/08_ribosome_synthesis.html) | The ribosome-based counterpart: grow the chain through TOPO's own truncated **coarse-grained ribosome** (`ribosome_trunc.pdb`, standalone — no CHARMM inputs), with codon-resolved kinetics and equilibrium-PTC seeding, then eject the completed protein. Worked on 4c5c (306 aa) and P0CX28 (106 aa). |
+| 7 | [Synthesis through an analytic tunnel](07_translation_cylinder.md) | The exit tunnel is modelled analytically as a cylindrical bore through an infinite wall (a "hole in a wall") — **no explicit ribosome beads**. The nascent chain is the only system, so it is fast and never jams, and the protein **folds co-translationally** as it extrudes and clears the bore. |
+| 8 | [Synthesis on a coarse-grained ribosome](08_ribosome_synthesis.md) | The ribosome-based counterpart: grow the chain through TOPO's own truncated **coarse-grained ribosome** (`ribosome_trunc.pdb`, standalone — no CHARMM inputs), with codon-resolved kinetics and equilibrium-PTC seeding, then eject the completed protein. Worked on 4c5c (306 aa) and P0CX28 (106 aa). |
 
 The **ready-to-run files** for each tutorial (PDB, `md.ini`, `run_simulation.py`,
 …) live in the matching folder under
@@ -45,13 +45,13 @@ The **ready-to-run files** for each tutorial (PDB, `md.ini`, `run_simulation.py`
 
 **Reference docs** that complement the tutorials:
 
-- [The TOPO model: theory & force field](https://vuqv.github.io/topo/usage/model_theory.html) — every energy term, its formula, constants, and parameter sources. Read this to understand *why* the model behaves as it does.
-- [Simulation control options](https://vuqv.github.io/topo/usage/simulation_control.html) — every `md.ini` option.
-- [Domain definition file](https://vuqv.github.io/topo/usage/domain_definition.html) — the `domain.yaml` format.
-- [Native-contact (Q) analysis](https://vuqv.github.io/topo/usage/native_contacts.html) — measuring how folded the protein is.
-- [Output files & log format](https://vuqv.github.io/topo/usage/outputs.html) — every file a run writes, and how to parse the log.
-- [Using TOPO from Python](https://vuqv.github.io/topo/usage/python_api.html) — the scripting API.
-- [Continuous synthesis protocol (CSP)](https://vuqv.github.io/topo/usage/continuous_synthesis.html) — the `topo-csp` codon-resolved synthesis runner: `csp.ini` options, the rigid-ribosome force field, the tRNA tether, and the movie tool.
+- [The TOPO model: theory & force field](../usage/model_theory.rst) — every energy term, its formula, constants, and parameter sources. Read this to understand *why* the model behaves as it does.
+- [Simulation control options](../usage/simulation_control.rst) — every `md.ini` option.
+- [Domain definition file](../usage/domain_definition.rst) — the `domain.yaml` format.
+- [Native-contact (Q) analysis](../usage/native_contacts.rst) — measuring how folded the protein is.
+- [Output files & log format](../usage/outputs.rst) — every file a run writes, and how to parse the log.
+- [Using TOPO from Python](../usage/python_api.rst) — the scripting API.
+- [Continuous synthesis protocol (CSP)](../usage/continuous_synthesis.md) — the `topo-csp` codon-resolved synthesis runner: `csp.ini` options, the rigid-ribosome force field, the tRNA tether, and the movie tool.
 
 ---
 
@@ -76,7 +76,7 @@ Because the native state is the energy minimum, TOPO is ideal for studying
 folding/unfolding, domain motions, and mechanical/thermal stability.
 
 For the full functional forms, constants, and where each parameter comes from,
-see [The TOPO model: theory & force field](https://vuqv.github.io/topo/usage/model_theory.html).
+see [The TOPO model: theory & force field](../usage/model_theory.rst).
 
 ## How you run it
 
@@ -95,9 +95,9 @@ that just calls it (`from topo.mdrun import mdrun`), so every example stays
 self-contained while the runner has a single canonical implementation.
 
 A full reference for `md.ini` options lives in
-[Simulation control options](https://vuqv.github.io/topo/usage/simulation_control.html);
+[Simulation control options](../usage/simulation_control.rst);
 the `domain.yaml` format is documented in
-[Domain definition file](https://vuqv.github.io/topo/usage/domain_definition.html).
+[Domain definition file](../usage/domain_definition.rst).
 
 ---
 
