@@ -54,13 +54,15 @@ protein can be made more or less stable.
 
 .. _overview-synthesis:
 
-B. Protein synthesis (co-translational)
----------------------------------------
+B. Protein synthesis
+--------------------
 
 Grow the nascent chain **N→C, one residue at a time**, so the protein can fold
-co-translationally as it emerges from the exit tunnel. Both tutorials use
-codon-resolved kinetics with ``topo-csp`` on top of the Part A model; they differ
-in how the ribosome exit tunnel is represented.
+co-translationally as it emerges from the exit tunnel. Both tutorials layer
+codon-resolved kinetics on the Part A model but differ in how the ribosome exit
+tunnel is represented — and so in which runner they use: Tutorial 7 uses
+``topo-cylinder`` (an analytic tunnel), Tutorial 8 uses ``topo-csp`` (an explicit
+coarse-grained ribosome).
 
 .. rubric:: Tutorials
 
@@ -73,5 +75,7 @@ in how the ribosome exit tunnel is represented.
 
 .. rubric:: Reference
 
-* :doc:`Continuous synthesis protocol — CSP (topo-csp) <usage/continuous_synthesis>`
+* :doc:`Synthesis in coarse-grained ribosome model <usage/continuous_synthesis>`
+* :doc:`Synthesis in cylinder ribosome model <usage/cylinder_synthesis>`
+* :doc:`Synthesis control options (csp.ini) <usage/synthesis_control>`
 * :doc:`Using TOPO from Python <usage/python_api>`

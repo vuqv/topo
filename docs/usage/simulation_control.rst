@@ -165,7 +165,7 @@ description).
    * - ``tau_t``
      - float [ps⁻¹]
      - no
-     - ``0.01``
+     - ``0.05``
      - Friction coefficient coupling the system to the heat bath. Used when ``tcoupl = yes``.
    * - ``anneal``
      - bool
@@ -291,7 +291,7 @@ description).
 .. note::
 
    Boolean options accept ``yes``/``no``, ``true``/``false``, ``1``/``0``
-   (parsed by :func:`distutils.util.strtobool`).
+   (parsed by :func:`topo.utils.config.strtobool`).
 
 
 Notes on individual options

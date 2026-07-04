@@ -59,7 +59,8 @@ class system:
         The total number of bonds in the model.
     bonded_exclusions_index : int
         The exclusion rule for nonbonded force.
-        =3 for topo model (bonded exclusions for angles/torsions)
+        =2 for topo model (excludes 1-2 and 1-3 bonded neighbours, preserving
+        native contacts at sequence separation abs(i - j) >= 3)
     harmonicBondForce : :class:`mm.HarmonicBondForce`
         The :class:`mm.HarmonicBondForce` object that implements
         a harmonic bond potential between pairs of particles, that depends
@@ -813,8 +814,10 @@ class system:
         Searches for large bond distances for the atom pairs defined in
         the 'bonds' attribute. It raises an error when large bonds are found.
 
-        //TODO: threshold=0.5 is a safe threshold in protein system.
-        In the presence of RNA, the equilibrium bond is set to 0.5 then will raise error there.
+        The comparison is strict (``>``): a bond exactly at ``threshold`` is
+        allowed, so the ``0.5`` nm default (the nucleic equilibrium bond length,
+        ``bond_length_nucleic``) does not spuriously reject a valid RNA/nucleic
+        structure; only bonds strictly longer than ``threshold`` raise.
 
         Parameters
         ----------
@@ -829,7 +832,7 @@ class system:
             threshold = threshold * unit.nanometer
 
         for b in self.bonds:
-            if self.bonds[b][0] >= threshold:
+            if self.bonds[b][0] > threshold:
                 print('Problem with distance between atoms: ' + b[0].name + ' and ' + b[1].name)
                 r1 = b[0].residue.name + '_' + str(b[0].residue.id)
                 if b[0].residue == b[1].residue:
@@ -877,17 +880,22 @@ class system:
     def checkLargeForces(self, minimize: bool = False, threshold: float = 10) -> None:
         """
         Prints the topo system energies of the input configuration of the
-        system. It optionally checks for large forces acting upon all
-        particles in the topo system and iteratively minimizes the system
-        configuration until no forces larger than a threshold are found.
+        system and checks for large forces acting upon its particles.
+
+        With ``minimize=True`` the system is iteratively minimized until no force
+        larger than ``threshold`` remains (updating ``self.positions``). With
+        ``minimize=False`` the structure is left untouched, but if any force still
+        exceeds ``threshold`` a :class:`RuntimeWarning` is emitted so an unstable /
+        clashing input is not passed over silently.
 
         Parameters
         ----------
         threshold : (float, default=10)
-            Threshold to check for large forces.
+            Threshold to check for large forces (kJ/mol/nm).
         minimize : (bool, default= False)
             Whether to iteratively minimize the system until all forces are lower or equal to
-            the threshold value.
+            the threshold value. When ``False``, forces above ``threshold`` only trigger a
+            warning (no minimization).
 
         Returns
         -------
@@ -904,10 +912,12 @@ class system:
         # Report energy of the initial (input-structure) configuration
         self.reportEnergy(sim, header='Initial potential energy', section=True)
 
+        # Largest force magnitude on any particle (kJ/mol/nm) for the input config.
+        forces = [np.linalg.norm([f[0]._value, f[1]._value, f[2]._value]) for f in state.getForces()]
+
         if minimize:
             # Find if there is an acting force larger than threshold
             # minimize the system until forces have converged
-            forces = [np.linalg.norm([f[0]._value, f[1]._value, f[2]._value]) for f in state.getForces()]
             tolerance = 10
 
             while np.max(forces) > threshold:
@@ -928,6 +938,17 @@ class system:
             state = sim.context.getState(getPositions=True, getEnergy=True)
             self.reportEnergy(sim, header='Minimized potential energy', section=False)
             self.positions = state.getPositions()
+        elif np.max(forces) > threshold:
+            # minimize=False: we do not relax the structure, but a force above the
+            # threshold signals an unstable/clashing input -- surface it with a warning
+            # instead of passing silently.
+            warnings.warn(
+                f"Largest force on a particle is {np.max(forces):.3g} kJ/mol/nm, above the "
+                f"threshold {threshold} kJ/mol/nm, but minimize=False so the structure was "
+                f"not relaxed -- the configuration may be unstable (consider building/running "
+                f"with minimization).",
+                RuntimeWarning,
+            )
 
     def addParticles(self) -> None:
         """
@@ -1000,7 +1021,8 @@ class system:
         None
         """
 
-        self.structure.writeFile(self.topology, self.positions, file=open(output_file, 'w'))
+        with open(output_file, 'w') as ff:
+            self.structure.writeFile(self.topology, self.positions, file=ff)
 
     def dumpTopology(self, output_file: str) -> None:
         """
@@ -1058,7 +1080,7 @@ class system:
 
             ff.write('#### CG Force Field Parameters ####\n')
             ff.write('\n')
-            if self.atoms != OrderedDict():
+            if self.atoms:
                 ff.write('[atoms]\n')
                 ff.write(
                     '# %2s %3s %9s %9s \t %14s\n' % ('atom', 'mass', 'exc_radius', 'charge', 'atom_name'))

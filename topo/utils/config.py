@@ -354,6 +354,10 @@ def read_simulation_config(config_file: str, verbose: bool = True) -> Simulation
             log(f'Turning on periodic boundary conditions with box dimension: '
                 f'{cfg.box_dimension} nm')
         else:
+            # Invalid/empty box: keep the pbc flag consistent with the (absent) box,
+            # so downstream (enforcePeriodicBox, the pcoupl `assert cfg.pbc`) doesn't
+            # act as if PBC were on over a system that has no periodic box vectors.
+            cfg.pbc = False
             log('Periodic boundary conditions are off (invalid box_dimension)')
     else:
         cfg.box_dimension = None

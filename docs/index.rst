@@ -29,35 +29,32 @@ layout, and :doc:`usage/model_theory` for what the model is.
 
 .. toctree::
    :maxdepth: 1
-   :caption: Background & theory
+   :caption: The TOPO model
 
    usage/model_theory
 
 .. toctree::
    :maxdepth: 1
-   :caption: Running simulations
+   :caption: Isolated-protein simulations
 
    usage/simulation_control
    usage/domain_definition
-
-.. toctree::
-   :maxdepth: 1
-   :caption: Analysis & output
-
    usage/native_contacts
    usage/outputs
 
 .. toctree::
    :maxdepth: 1
-   :caption: Python & advanced features
+   :caption: Protein synthesis
 
-   usage/python_api
    usage/continuous_synthesis
+   usage/synthesis_control
+   usage/cylinder_synthesis
 
 .. toctree::
    :maxdepth: 1
-   :caption: API reference
+   :caption: Python & API reference
 
+   usage/python_api
    modules/parameters
    modules/system
    modules/models

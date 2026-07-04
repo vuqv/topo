@@ -823,9 +823,9 @@ class RunParams:
     """
     n_steps: int = 1000
     dt_ps: float = 0.015
-    ref_t: float = 300.0
+    ref_t: float = 310.0
     tau_t: float = 0.05
-    nstout: int = 50
+    nstout: int = 5000
     device: str = "CPU"
     ppn: int = 1
     # Flexible (harmonic) bonds by default -- NOT the package default of rigid
@@ -914,8 +914,9 @@ class RunParams:
     scale_factor: float = 4331293.0     # in-vivo seconds -> in-silico ns compressor
     time_stage_1: float = 0.00034       # mean peptidyl-transfer dwell (s)
     time_stage_2: float = 0.004201      # mean translocation dwell (s)
-    uniform_ta: bool = False            # ignore the mRNA; use uniform_mfpt for every codon
-    uniform_mfpt: float = 0.05          # uniform mean codon time (s) when uniform_ta
+    # Uniform-timing mean codon time (s), or None for per-codon timing from the mRNA.
+    # Set from the `codon_times` INI key (a number -> uniform; a path/blank -> per-codon).
+    uniform_codon_time: Optional[float] = None
     # ribosome_traffic / initiation_rate: HIDDEN/deferred (off by default; not exposed
     # in the docs or example csp.ini -- see review/TODO.md B). Still parsed if present.
     ribosome_traffic: bool = False      # apply the external traffic correction if available

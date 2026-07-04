@@ -7,9 +7,9 @@ many integration steps does each of the three elongation sub-stages run for?**
 
 The pieces (all of them straight out of v6):
 
-1. **Per-codon translation times.** The mRNA is split into codons; a ``trans_times``
+1. **Per-codon translation times.** The mRNA is split into codons; a codon-time
    table maps each codon to its mean in-vivo translation time (seconds). That gives a
-   per-residue **intrinsic mean first-passage time** list (:func:`codon_mfpt_list`).
+   per-residue **intrinsic mean first-passage time** list (:func:`codon_time_list`).
 2. **The 3-stage split.** For residue ``L`` the total dwell time is partitioned into
    peptidyl transfer (stage 1), translocation (stage 2) and tRNA binding/waiting
    (stage 3 = remainder). Each stage's dwell is drawn from an **exponential**
@@ -49,34 +49,86 @@ STOP_CODONS = ("UAA", "UAG", "UGA")
 # The per-codon mean translation times are a property of the *organism* (E. coli)
 # at a given temperature (310 K), not of the protein being synthesized, so topo.csp
 # ships one and uses it whenever an INI/caller gives no explicit table.
-DEFAULT_TRANS_TIMES_FILE = "ecoli_trans_times_310K.txt"  # in topo/csp/data/
+DEFAULT_CODON_TIME_TABLE_FILE = "ecoli_trans_times_310K.txt"  # in topo/csp/data/
 
 
-def default_trans_times_path() -> str:
+def default_codon_time_table_path() -> str:
     """Return the filesystem path of the bundled E. coli (310 K) codon-time table.
 
     The table (Fluitt *et al.* 2007) is shipped as package data under
-    ``topo/csp/data/`` and is the default used when no ``trans_times`` is supplied.
+    ``topo/csp/data/`` and is the default used when no ``codon_time_table_path`` is supplied.
 
     Returns
     -------
     str
         Absolute path to the bundled ``ecoli_trans_times_310K.txt`` resource.
     """
-    return str(resources.files("topo.csp").joinpath("data", DEFAULT_TRANS_TIMES_FILE))
+    return str(resources.files("topo.csp").joinpath("data", DEFAULT_CODON_TIME_TABLE_FILE))
+
+
+def parse_codon_times(value: Optional[str]) -> Tuple[Optional[float], Optional[str]]:
+    """Resolve the ``codon_times`` config value into a timing mode.
+
+    ``codon_times`` overloads a single INI key onto the two timing modes:
+
+    - a **positive number of seconds** (e.g. ``0.05``) -> **uniform** timing: every
+      codon gets that mean dwell (no mRNA needed);
+    - anything else -> a **path** to a per-codon time table, so timing is per-codon
+      from the mRNA;
+    - ``None`` (key absent/blank) -> per-codon timing with the bundled E. coli
+      310 K table (:func:`default_codon_time_table_path`).
+
+    A codon-time **table filename must therefore not be a bare number** -- a value
+    that parses as a float is always taken as a uniform time in seconds, never a
+    filename. (Give the table a name like ``trans_times.txt`` or ``./12345.txt``.)
+
+    Parameters
+    ----------
+    value : str or None
+        The raw ``codon_times`` value from the INI (already stripped, or ``None``).
+
+    Returns
+    -------
+    tuple
+        ``(uniform_codon_time, table_path)`` -- exactly one is non-``None`` in the
+        two "set" cases: a **float** (uniform mean codon time, seconds) with
+        ``table_path`` ``None``, or a **path** with ``uniform_codon_time`` ``None``.
+        A blank/absent value returns ``(None, None)`` (per-codon with the bundled
+        default). Ready to fill :attr:`RunParams.uniform_codon_time` and the
+        ``codon_time_table_path`` path.
+
+    Raises
+    ------
+    ValueError
+        If ``value`` is numeric but not a positive, finite time in seconds.
+    """
+    if value is None:
+        return (None, None)
+    s = str(value).strip()
+    if s == "":
+        return (None, None)
+    try:
+        num = float(s)
+    except ValueError:
+        return (None, s)   # not a number -> per-codon table path
+    # Numeric -> uniform per-codon time (seconds).
+    if num != num or num in (float("inf"), float("-inf")) or num <= 0:
+        raise ValueError(f"codon_times numeric value must be a positive, finite time "
+                         f"in seconds (uniform codon time); got {value!r}.")
+    return (num, None)
 
 
 # --------------------------------------------------------------------------
 # Input tables
 # --------------------------------------------------------------------------
-def read_trans_times(path: str) -> Dict[str, float]:
+def read_codon_time_table(path: str) -> Dict[str, float]:
     """Read a per-codon mean-translation-time table into ``{codon: seconds}``.
 
-    Format (O'Brien ``trans_times`` file, e.g. the Fluitt *E. coli* table): one
-    codon per line, ``CODON<whitespace>TIME`` -- the codon is RNA (``U`` not ``T``),
-    the time is the mean in-vivo translation time in **seconds**. Blank lines and
-    ``#`` comments are ignored. Codons are upper-cased and ``T`` is normalised to
-    ``U`` so a DNA-style table still works.
+    Format (the codon-time table file, e.g. the Fluitt *E. coli* ``trans_times.txt``):
+    one codon per line, ``CODON<whitespace>TIME`` -- the codon is RNA (``U`` not
+    ``T``), the time is the mean in-vivo translation time in **seconds** (e.g.
+    ``UUU  0.068164``). Blank lines and ``#`` comments are ignored. Codons are
+    upper-cased and ``T`` is normalised to ``U`` so a DNA-style table still works.
 
     Parameters
     ----------
@@ -103,7 +155,7 @@ def read_trans_times(path: str) -> Dict[str, float]:
                 continue
             parts = line.split()
             if len(parts) < 2:
-                raise ValueError(f"{path}: cannot parse trans_times line: {line!r}")
+                raise ValueError(f"{path}: cannot parse codon-time table line: {line!r}")
             codon = parts[0].upper().replace("T", "U")
             table[codon] = float(parts[1])
     if not table:
@@ -156,73 +208,74 @@ def read_mrna(path: str, stop_at_stop: bool = True) -> List[str]:
     return codons
 
 
-def codon_mfpt_list(codons: Sequence[str],
-                    trans_times: Dict[str, float]) -> List[float]:
-    """Map a codon list to a 0-indexed list of mean first-passage times (seconds).
+def codon_time_list(codons: Sequence[str],
+                    codon_time_table: Dict[str, float]) -> List[float]:
+    """Map a codon list to a 0-indexed list of per-codon mean times (seconds).
 
-    ``mfpt[i] = trans_times[codons[i]]`` -- i.e. the per-codon **intrinsic** mean
-    translation time (no ribosome-traffic correction). Raises if a codon is missing
-    from the table, so an incomplete ``trans_times`` is caught early rather than
-    silently mis-timing a residue.
+    ``time[i] = codon_time_table[codons[i]]`` -- i.e. the per-codon **intrinsic** mean
+    translation time (the intrinsic mean first-passage time; no ribosome-traffic
+    correction). Raises if a codon is missing from the table, so an incomplete table
+    is caught early rather than silently mis-timing a residue.
 
     Parameters
     ----------
     codons : sequence of str
         Codons (upper-case RNA), e.g. the output of :func:`read_mrna`.
-    trans_times : dict of {str: float}
-        Codon -> mean translation time (seconds), e.g. from :func:`read_trans_times`.
+    codon_time_table : dict of {str: float}
+        Codon -> mean translation time (seconds), e.g. from
+        :func:`read_codon_time_table`.
 
     Returns
     -------
     list of float
-        The intrinsic mean first-passage time (seconds) for each codon, in the same
+        The intrinsic mean per-codon time (seconds) for each codon, in the same
         order as ``codons``.
 
     Raises
     ------
     KeyError
-        If any codon in ``codons`` is absent from ``trans_times``.
+        If any codon in ``codons`` is absent from ``codon_time_table``.
     """
     out: List[float] = []
     for i, c in enumerate(codons):
-        if c not in trans_times:
-            raise KeyError(f"codon #{i + 1} {c!r} not found in trans_times table.")
-        out.append(float(trans_times[c]))
+        if c not in codon_time_table:
+            raise KeyError(f"codon #{i + 1} {c!r} not found in the codon-time table.")
+        out.append(float(codon_time_table[c]))
     return out
 
 
-def uniform_mfpt_list(n: int, uniform_mfpt: float) -> List[float]:
-    """A constant mFPT list of length ``n`` (the ``uniform_ta = 1`` mode of v6).
+def uniform_codon_time_list(n: int, uniform_codon_time: float) -> List[float]:
+    """A constant mean-first-passage-time list of length ``n`` (uniform timing).
 
-    Every codon gets the same mean translation time ``uniform_mfpt`` (seconds);
-    used when no mRNA / ``trans_times`` are supplied.
+    Every codon gets the same mean translation time ``uniform_codon_time``
+    (seconds); used for uniform timing (``codon_times`` set to a number).
 
     Parameters
     ----------
     n : int
         Length of the list to build (number of codons needed).
-    uniform_mfpt : float
+    uniform_codon_time : float
         The single mean translation time (seconds) assigned to every codon.
 
     Returns
     -------
     list of float
-        A list of ``n`` identical values, all equal to ``uniform_mfpt``.
+        A list of ``n`` identical values, all equal to ``uniform_codon_time``.
 
     Raises
     ------
     ValueError
-        If ``uniform_mfpt <= 0``.
+        If ``uniform_codon_time <= 0``.
     """
-    if uniform_mfpt <= 0:
-        raise ValueError("uniform_mfpt must be > 0 when uniform_ta is on.")
-    return [float(uniform_mfpt)] * int(n)
+    if uniform_codon_time <= 0:
+        raise ValueError("uniform_codon_time must be > 0 for uniform timing.")
+    return [float(uniform_codon_time)] * int(n)
 
 
 # --------------------------------------------------------------------------
 # Ribosome traffic (optional external correction)
 # --------------------------------------------------------------------------
-def ribosome_traffic_times(mrna_path: str, trans_times_path: str,
+def ribosome_traffic_times(mrna_path: str, codon_time_table_path: str,
                            initiation_rate: float,
                            binary: str = "ribosome_traffic",
                            verbose: bool = True) -> Optional[List[float]]:
@@ -234,13 +287,13 @@ def ribosome_traffic_times(mrna_path: str, trans_times_path: str,
     is not on ``PATH`` (or fails to run) this returns ``None``** (the caller then
     falls back to ``real == intrinsic`` -- no traffic), so the port stays runnable
     without the compiled helper. This mirrors v6's ``ribosome_traffic <mrna>
-    <trans_times> <initiation_rate>`` call.
+    <codon_time_table_path> <initiation_rate>`` call.
 
     Parameters
     ----------
     mrna_path : str
         Path to the mRNA sequence file (passed through to the binary).
-    trans_times_path : str
+    codon_time_table_path : str
         Path to the codon-time table (passed through to the binary).
     initiation_rate : float
         Translation-initiation rate (1/s) -- sets how densely ribosomes load.
@@ -264,7 +317,7 @@ def ribosome_traffic_times(mrna_path: str, trans_times_path: str,
             print(f"  [ribosome_traffic] binary {binary!r} not found on PATH; "
                   f"falling back to real == intrinsic (no traffic correction).")
         return None
-    cmd = [exe, mrna_path, trans_times_path, str(initiation_rate)]
+    cmd = [exe, mrna_path, codon_time_table_path, str(initiation_rate)]
     if verbose:
         print(f"  [ribosome_traffic] running: {' '.join(cmd)}")
     # The helper is a compiled external binary with its own runtime/library needs;
@@ -464,20 +517,21 @@ def stage_steps(L: int, intrinsic: Sequence[float], real: Sequence[float],
 # --------------------------------------------------------------------------
 # Convenience: build the intrinsic / real lists from config inputs
 # --------------------------------------------------------------------------
-def build_mfpt_lists(n_codons_needed: int, *,
-                     uniform_ta: bool, uniform_mfpt: float,
-                     mrna_path: Optional[str], trans_times_path: Optional[str],
+def build_codon_time_lists(n_codons_needed: int, *,
+                     uniform_codon_time: Optional[float],
+                     mrna_path: Optional[str], codon_time_table_path: Optional[str],
                      ribosome_traffic: bool, initiation_rate: float,
                      verbose: bool = True) -> Tuple[List[float], List[float], Optional[List[str]]]:
     """Assemble the ``(intrinsic, real, codons)`` lists for a run.
 
-    - ``uniform_ta``: every codon gets ``uniform_mfpt`` (no mRNA needed); ``real ==
-      intrinsic`` and ``codons`` is ``None``.
-    - otherwise: read the mRNA + ``trans_times``, build the intrinsic per-codon list;
-      if ``ribosome_traffic`` and the external binary is available, replace ``real``
-      with its traffic-corrected output, else ``real == intrinsic``. When
-      ``trans_times_path`` is ``None`` the **bundled E. coli (310 K) table**
-      (:func:`default_trans_times_path`) is used -- the codon-time table is
+    - ``uniform_codon_time`` set (uniform timing): every codon gets that mean time
+      (no mRNA needed); ``real == intrinsic`` and ``codons`` is ``None``.
+    - ``uniform_codon_time`` is ``None`` (per-codon timing): read the mRNA +
+      ``codon_time_table_path``, build the intrinsic per-codon list; if ``ribosome_traffic``
+      and the external binary is available, replace ``real`` with its
+      traffic-corrected output, else ``real == intrinsic``. When
+      ``codon_time_table_path`` is ``None`` the **bundled E. coli (310 K) table**
+      (:func:`default_codon_time_table_path`) is used -- the codon-time table is
       organism-universal, so only the (protein-specific) ``mrna`` is mandatory.
 
     ``n_codons_needed`` is the minimum list length required (``L_max + 1`` so that
@@ -487,15 +541,14 @@ def build_mfpt_lists(n_codons_needed: int, *,
     ----------
     n_codons_needed : int
         Minimum required list length (use ``L_max + 1``).
-    uniform_ta : bool
-        If True, ignore the mRNA and give every codon ``uniform_mfpt`` seconds.
-    uniform_mfpt : float
-        The per-codon mean time (seconds) used when ``uniform_ta`` is True.
+    uniform_codon_time : float or None
+        If a float, uniform timing -- ignore the mRNA and give every codon that mean
+        time (seconds). If ``None``, per-codon timing from the mRNA + table.
     mrna_path : str or None
-        Path to the mRNA file (required unless ``uniform_ta``).
-    trans_times_path : str or None
-        Path to the codon-time table. If ``None`` (and not ``uniform_ta``), the
-        bundled E. coli 310 K table (:func:`default_trans_times_path`) is used.
+        Path to the mRNA file (required for per-codon timing).
+    codon_time_table_path : str or None
+        Path to the codon-time table. If ``None`` (per-codon timing), the bundled
+        E. coli 310 K table (:func:`default_codon_time_table_path`) is used.
     ribosome_traffic : bool
         If True, attempt the external ``ribosome_traffic`` correction for ``real``
         (falls back to ``real == intrinsic`` if the binary is unavailable).
@@ -509,35 +562,35 @@ def build_mfpt_lists(n_codons_needed: int, *,
     tuple
         ``(intrinsic, real, codons)`` -- the intrinsic and (traffic-corrected) real
         per-codon mFPT lists (seconds), and the codon list (or ``None`` in the
-        ``uniform_ta`` mode).
+        uniform-timing mode).
 
     Raises
     ------
     ValueError
-        If non-uniform timing is requested without ``mrna_path``, or if the mRNA /
+        If per-codon timing is requested without ``mrna_path``, or if the mRNA /
         traffic output has fewer than ``n_codons_needed`` entries.
     """
-    if uniform_ta:
-        intrinsic = uniform_mfpt_list(n_codons_needed, uniform_mfpt)
+    if uniform_codon_time is not None:
+        intrinsic = uniform_codon_time_list(n_codons_needed, uniform_codon_time)
         return intrinsic, list(intrinsic), None
 
     if not mrna_path:
-        raise ValueError("non-uniform kinetics require an `mrna` file.")
-    if not trans_times_path:
-        trans_times_path = default_trans_times_path()
+        raise ValueError("per-codon kinetics require an `mrna` file.")
+    if not codon_time_table_path:
+        codon_time_table_path = default_codon_time_table_path()
         if verbose:
-            print(f"  [kinetics] no trans_times given -- using bundled E. coli "
-                  f"310 K table ({DEFAULT_TRANS_TIMES_FILE}).")
-    trans = read_trans_times(trans_times_path)
+            print(f"  [kinetics] no codon-time table given -- using bundled E. coli "
+                  f"310 K table ({DEFAULT_CODON_TIME_TABLE_FILE}).")
+    codon_time_table = read_codon_time_table(codon_time_table_path)
     codons = read_mrna(mrna_path)
-    intrinsic = codon_mfpt_list(codons, trans)
+    intrinsic = codon_time_list(codons, codon_time_table)
     if len(intrinsic) < n_codons_needed:
         raise ValueError(
             f"mRNA has {len(intrinsic)} codons but the schedule needs at least "
             f"{n_codons_needed} (L_max + 1). Provide a longer mRNA or lower L_max.")
     real = list(intrinsic)
     if ribosome_traffic:
-        traffic = ribosome_traffic_times(mrna_path, trans_times_path,
+        traffic = ribosome_traffic_times(mrna_path, codon_time_table_path,
                                          initiation_rate, verbose=verbose)
         if traffic is not None:
             if len(traffic) < n_codons_needed:

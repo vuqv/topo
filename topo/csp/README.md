@@ -12,9 +12,9 @@ topo-csp -f csp.ini
 python -m topo.csp -f csp.ini
 ```
 
-See **[Tutorial 12](../../tutorials/12_auto/)** for a runnable, validated example, and
-its [`PLAN.md`](../../tutorials/12_auto/PLAN.md) for the porting design + the
-done/remaining matrix.
+See **[Tutorial 8](../../tutorials/08_ribosome_synthesis/)** for runnable, validated
+examples — 4c5c (smoke `csp_debug.ini`, full-length `csp_val.ini`) and P0CX28 — and
+[`review/TODO.md`](../../review/TODO.md) for the done/remaining matrix.
 
 ## What it does
 
@@ -62,7 +62,7 @@ from topo.csp import run_continuous_synthesis, read_csp_config, RunParams, kinet
 
 cfg = read_csp_config("csp.ini")
 run_continuous_synthesis(cfg.pdb_file, cfg.ribosome, L0=cfg.L0, L_max=cfg.L_max,
-                         out_root=cfg.outdir, mrna=cfg.mrna, trans_times=cfg.trans_times,
+                         out_root=cfg.outdir, mrna=cfg.mrna, codon_time_table_path=cfg.codon_time_table_path,
                          domain_def=cfg.domain_def,
                          stride_output_file=cfg.stride_output_file, params=cfg.params)
 ```
@@ -71,7 +71,7 @@ run_continuous_synthesis(cfg.pdb_file, cfg.ribosome, L0=cfg.L0, L_max=cfg.L_max,
 
 A single `[OPTIONS]` section. Required: `pdb_file`, `ribosome`, `domain_def` (the
 protein's contact-nscale definition). `L0` (default `1`) and `L_max` (default = full
-length) are optional. Per-codon timing also requires `mrna` (`trans_times` is optional --
+length) are optional. Per-codon timing also requires `mrna` (`codon_times` is optional --
 defaults to the bundled E. coli 310 K table).
 
 **Kinetic keys**
@@ -79,10 +79,9 @@ defaults to the bundled E. coli 310 K table).
 | key | meaning |
 |-----|---------|
 | `mrna` | mRNA sequence file (raw nucleotides; one codon/residue + 1 stop) |
-| `trans_times` | codon → mean in-vivo time (s) table (**optional**; default = bundled E. coli 310 K) |
+| `codon_times` | codon-time table path (per-codon) **or** a positive number of s (uniform codon time). Optional -- default = bundled E. coli 310 K. A table filename must not be a bare number. |
 | `scale_factor` | in-vivo seconds → in-silico ns compressor |
 | `time_stage_1` / `time_stage_2` | mean peptidyl-transfer / translocation dwell (s) |
-| `uniform_ta` / `uniform_mfpt` | ignore the mRNA; use a uniform mean codon time (s) |
 | `random_seed` | seed for the FPT sampler (reproducible schedules) |
 | `max_steps_per_stage` / `min_steps_per_stage` | clamp each stage's step count (testing) |
 | `ejection_steps` / `dissociation_steps` | post-synthesis free runs (0 = skip) |
@@ -120,4 +119,4 @@ stitches them with the shared `stitch_segments` core.
 CHARMM PSF/TOP/PRM/COR ingestion (O'Brien's exact systems); multi-trajectory
 multiprocessing; literal mid-residue peptide-bond toggling / explicit A/P tRNA bonded
 geometry; `restart = 1`; quantitative validation. See
-[Tutorial 12 `PLAN.md`](../../tutorials/12_auto/PLAN.md).
+[`review/TODO.md`](../../review/TODO.md).

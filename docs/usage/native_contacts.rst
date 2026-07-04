@@ -67,9 +67,17 @@ domains that never touch) yields ``Q = NaN``.
    <theory-contacts>`) are built from hydrogen bonds + backbone–sidechain +
    sidechain–sidechain terms with :math:`|i-j| > 2`. The two sets overlap heavily
    but are **not identical** — *Q* is a geometric folding metric, not a readout of
-   the exact pairs that carry energy. Both are reasonable definitions of
-   "native"; just don't expect the *Q* contact count to equal the
-   ``native contacts:`` number printed when the model is built.
+   the exact pairs that carry energy.
+
+   The sequence-separation cutoffs also differ **by design**: :math:`|i-j| > 2`
+   (i.e. :math:`\ge 3`) is part of the **model parameterization** — the separation
+   at which native pairs are given energy (``LOCAL_SEPARATION = 2``) — whereas the
+   *Q* default :math:`|i-j| > 3` (i.e. :math:`\ge 4`) is our **analysis convention**
+   for the folding metric. Consequently *Q*'s default does **not** score the
+   :math:`|i-j| = 3` pairs the model does carry energetically; pass
+   ``--local-separation 2`` if you want *Q* to use the model's separation instead.
+   Both are reasonable definitions of "native"; just don't expect the *Q* contact
+   count to equal the ``native contacts:`` number printed when the model is built.
 
 
 Command-line use

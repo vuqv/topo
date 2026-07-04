@@ -126,8 +126,8 @@ class CylinderParams(RunParams):
 
     Subclasses :class:`topo.csp.core.RunParams`, so every MD knob (timestep, temperature,
     restraint constant, output, ...) **and** every kinetic field (``scale_factor``,
-    ``time_stage_1``/``time_stage_2``, ``uniform_ta``, ``max_steps_per_stage``, ...) is
-    inherited unchanged; only the analytic-tunnel geometry fields are new.
+    ``time_stage_1``/``time_stage_2``, ``uniform_codon_time``, ``max_steps_per_stage``, ...)
+    is inherited unchanged; only the analytic-tunnel geometry fields are new.
     """
     tunnel_radius_nm: float = 0.9          # bore radius r (~3 CG beads wide)
     tunnel_length_nm: float = 10.0         # bore length; x_exit = x_lo + length
@@ -255,7 +255,7 @@ def run_length(L: int, *, full_pdb: str, R_full: np.ndarray, eps_full: np.ndarra
 def run_cylinder_synthesis(full_pdb: str, *, L0: int = 1, L_max: Optional[int] = None,
                            out_root: str = "synth_out",
                            mrna: Optional[str] = None,
-                           trans_times: Optional[str] = None,
+                           codon_time_table_path: Optional[str] = None,
                            domain_def: Optional[str] = None,
                            stride_output_file: Optional[str] = None,
                            params: Optional[CylinderParams] = None) -> None:
@@ -278,10 +278,10 @@ def run_cylinder_synthesis(full_pdb: str, *, L0: int = 1, L_max: Optional[int] =
         Root output directory; each length writes to ``<out_root>/L_<L>/``.
     mrna : str, optional
         mRNA sequence file (one codon per residue) for the codon-resolved kinetics.
-        Required unless ``params.uniform_ta``.
-    trans_times : str, optional
+        Required for per-codon timing (i.e. unless ``params.uniform_codon_time`` is set).
+    codon_time_table_path : str, optional
         Per-codon mean-time table; ``None`` -> the bundled E. coli 310 K table
-        (:func:`topo.csp.kinetics.default_trans_times_path`).
+        (:func:`topo.csp.kinetics.default_codon_time_table_path`).
     domain_def, stride_output_file : str, optional
         Passed to the one-time contact precompute (nscale / STRIDE).
     params : CylinderParams, optional
@@ -292,7 +292,7 @@ def run_cylinder_synthesis(full_pdb: str, *, L0: int = 1, L_max: Optional[int] =
     ValueError
         If the length schedule is invalid (``1 <= L0 <= L_max <= N_full`` fails), or if
         non-uniform kinetics are requested without ``mrna`` (propagated from
-        :func:`topo.csp.kinetics.build_mfpt_lists`).
+        :func:`topo.csp.kinetics.build_codon_time_lists`).
     """
     if params is None:
         params = CylinderParams()
@@ -328,9 +328,9 @@ def run_cylinder_synthesis(full_pdb: str, *, L0: int = 1, L_max: Optional[int] =
     # at least L_max + 1 codons. Single stage -> each residue's whole codon dwell is one
     # MD segment (the explicit protocol instead splits it into peptidyl-transfer /
     # translocation / tRNA-binding; the cylinder has no A/P translocation to model).
-    intrinsic, real, codons = kinetics.build_mfpt_lists(
-        L_max + 1, uniform_ta=params.uniform_ta, uniform_mfpt=params.uniform_mfpt,
-        mrna_path=mrna, trans_times_path=trans_times,
+    intrinsic, real, codons = kinetics.build_codon_time_lists(
+        L_max + 1, uniform_codon_time=params.uniform_codon_time,
+        mrna_path=mrna, codon_time_table_path=codon_time_table_path,
         ribosome_traffic=params.ribosome_traffic,
         initiation_rate=params.initiation_rate)
     rng = random.Random(params.random_seed)
@@ -339,7 +339,7 @@ def run_cylinder_synthesis(full_pdb: str, *, L0: int = 1, L_max: Optional[int] =
     print("=" * 66)
     print("[ cylinder continuous synthesis -- kinetic schedule (single stage/residue) ]")
     print("=" * 66)
-    print(f"  timing mode: {'uniform' if params.uniform_ta else 'per-codon (mRNA)'}; "
+    print(f"  timing mode: {'uniform' if params.uniform_codon_time is not None else 'per-codon (mRNA)'}; "
           f"scale_factor={params.scale_factor:g}; dt={params.dt_ps} ps")
     if params.max_steps_per_stage is not None:
         print(f"  TEST CLAMP: <= {params.max_steps_per_stage} steps/residue. "
@@ -353,7 +353,7 @@ def run_cylinder_synthesis(full_pdb: str, *, L0: int = 1, L_max: Optional[int] =
     dwell_fh.write(
         "# cylinder continuous-synthesis per-residue dwell times (topo.csp.cylinder)\n"
         f"#   scale_factor={params.scale_factor:g}  dt={params.dt_ps} ps  "
-        f"timing={'uniform' if params.uniform_ta else 'per-codon'}  "
+        f"timing={'uniform' if params.uniform_codon_time is not None else 'per-codon'}  "
         f"random_seed={params.random_seed}\n"
         "#   t_dwell = sampled codon dwell (s); ns = in-silico ns; steps = integration "
         "steps actually run (single MD segment)\n"
@@ -424,7 +424,7 @@ class CylinderConfig:
     L_max: Optional[int] = None
     outdir: str = "synth_out"
     mrna: Optional[str] = None
-    trans_times: Optional[str] = None
+    codon_time_table_path: Optional[str] = None
     domain_def: Optional[str] = None
     stride_output_file: Optional[str] = None
     params: CylinderParams = None
@@ -435,19 +435,20 @@ def read_cylinder_config(config_file: str, verbose: bool = True) -> CylinderConf
     """Parse a cylinder synthesis control file (INI) into a :class:`CylinderConfig`.
 
     Single ``[OPTIONS]`` section. Required: ``pdb_file``, ``L0``, ``domain_def``, and --
-    unless ``uniform_ta = yes`` -- ``mrna``. No ribosome PDB (the tunnel geometry comes
-    from the params, not a structure). Recognised keys (optional ones fall back to
-    defaults):
+    unless ``codon_times`` is a positive number (uniform timing) -- ``mrna``. No ribosome
+    PDB (the tunnel geometry comes from the params, not a structure). Recognised keys
+    (optional ones fall back to defaults):
 
     - ``pdb_file`` -- full native PDB of the target protein (the nascent chain).
     - ``L0`` / ``L_max`` -- start / final nascent length (blank ``L_max`` -> full).
     - ``outdir`` -- root output directory (per-length subfolders ``L_<L>/``).
     - ``domain_def`` -- domain YAML for contact ``nscale`` (one-time precompute).
     - ``stride_output_file`` -- precomputed STRIDE (else STRIDE runs once if on PATH).
-    - **Kinetics** (same as CSP): ``mrna`` (per-codon sequence), ``trans_times`` (codon
-      table; blank -> bundled E. coli 310 K), ``scale_factor``, ``time_stage_1``,
-      ``time_stage_2``, ``uniform_ta`` (yes/no), ``uniform_mfpt``, ``ribosome_traffic``,
-      ``initiation_rate``, ``random_seed``, ``max_steps_per_stage``, ``min_steps_per_stage``.
+    - **Kinetics** (same as CSP): ``mrna`` (per-codon sequence), ``codon_times`` (a codon
+      table path for per-codon timing, or a positive number of seconds for a uniform
+      codon time; blank -> bundled E. coli 310 K table), ``scale_factor``,
+      ``time_stage_1``, ``time_stage_2``, ``random_seed``, ``max_steps_per_stage``,
+      ``min_steps_per_stage``.
     - **Integrator / MD**: ``dt``, ``ref_t``, ``tau_t``, ``nstout``, ``device``, ``ppn``,
       ``minimize`` (yes/no), ``constraints`` ('None' flexible / 'AllBonds' rigid),
       ``restraint_k`` (C-terminus position-restraint constant, kJ/mol/nm^2).
@@ -497,7 +498,8 @@ def read_cylinder_config(config_file: str, verbose: bool = True) -> CylinderConf
     domain_def = req("domain_def")   # required: defines the protein's contact nscales
     stride_output_file = opt("stride_output_file")
     mrna = opt("mrna")
-    trans_times = opt("trans_times")
+    # codon_times: a table path (per-codon) OR a positive number of seconds (uniform).
+    _uniform_codon_time, codon_time_table_path = kinetics.parse_codon_times(opt("codon_times"))
 
     p = CylinderParams()
     # --- integrator / MD knobs ---
@@ -527,10 +529,14 @@ def read_cylinder_config(config_file: str, verbose: bool = True) -> CylinderConf
         p.time_stage_1 = float(opt("time_stage_1"))
     if opt("time_stage_2") is not None:
         p.time_stage_2 = float(opt("time_stage_2"))
-    if opt("uniform_ta") is not None:
-        p.uniform_ta = bool(strtobool(opt("uniform_ta")))
-    if opt("uniform_mfpt") is not None:
-        p.uniform_mfpt = float(opt("uniform_mfpt"))
+    p.uniform_codon_time = _uniform_codon_time
+    # Retired keys -> point users at the single codon_times key.
+    for _legacy in ("trans_times", "uniform_ta", "uniform_mfpt"):
+        if opt(_legacy) is not None:
+            raise ValueError(
+                f"{config_file}: '{_legacy}' has been replaced by the single "
+                f"'codon_times' key -- set it to a codon-time table path (per-codon "
+                f"timing) or to a positive number of seconds (uniform codon time).")
     if opt("ribosome_traffic") is not None:
         p.ribosome_traffic = bool(strtobool(opt("ribosome_traffic")))
     if opt("initiation_rate") is not None:
@@ -565,20 +571,22 @@ def read_cylinder_config(config_file: str, verbose: bool = True) -> CylinderConf
         p.post_elongation_steps = as_int(opt("post_elongation_steps"))
 
     # Validation: per-codon timing needs the (protein-specific) mRNA. The codon-time table
-    # is organism-universal, so trans_times is optional (defaults to the bundled table).
-    if not p.uniform_ta and mrna is None:
+    # is organism-universal, so a codon_times table path is optional (bundled default).
+    if p.uniform_codon_time is None and mrna is None:
         raise ValueError(
             f"{config_file}: per-codon kinetics need an 'mrna' file (or set "
-            f"'uniform_ta = yes' to use a uniform per-codon dwell). "
-            f"trans_times is optional (defaults to the bundled E. coli 310 K table).")
+            f"'codon_times' to a positive number of seconds for a uniform codon time). "
+            f"A 'codon_times' table path is optional (defaults to the bundled "
+            f"E. coli 310 K table).")
 
     log(f"  inputs: pdb_file={pdb_file} (ribosome: analytic tunnel, no PDB)")
     log(f"  contacts: domain_def={domain_def}, stride_output_file={stride_output_file}")
     log(f"  schedule: L0={L0}, L_max={L_max if L_max is not None else 'full'}, "
         f"constraints={p.constraints}")
-    log(f"  timing: {'uniform' if p.uniform_ta else f'per-codon (mrna={mrna}, trans_times={trans_times})'}; "
-        f"scale_factor={p.scale_factor:g}, time_stage_1={p.time_stage_1:g} s, "
-        f"time_stage_2={p.time_stage_2:g} s")
+    _timing = (f"uniform (codon_time={p.uniform_codon_time:g} s)" if p.uniform_codon_time is not None
+               else f"per-codon (mrna={mrna}, codon_times={codon_time_table_path or 'bundled E. coli 310 K'})")
+    log(f"  timing: {_timing}; scale_factor={p.scale_factor:g}, "
+        f"time_stage_1={p.time_stage_1:g} s, time_stage_2={p.time_stage_2:g} s")
     log(f"  tunnel: r={p.tunnel_radius_nm} nm, length={p.tunnel_length_nm} nm, "
         f"x_lo={p.tunnel_x_lo_nm} nm, center={p.tunnel_center_nm} nm, "
         f"k={p.tunnel_k} kJ/mol/nm^2, mouth_round={p.tunnel_mouth_round_nm} nm")
@@ -589,7 +597,7 @@ def read_cylinder_config(config_file: str, verbose: bool = True) -> CylinderConf
     log(f"  hardware/output: device={p.device}, ppn={p.ppn}, outdir={outdir}")
 
     return CylinderConfig(pdb_file=pdb_file, L0=L0, L_max=L_max, outdir=outdir,
-                          mrna=mrna, trans_times=trans_times, domain_def=domain_def,
+                          mrna=mrna, codon_time_table_path=codon_time_table_path, domain_def=domain_def,
                           stride_output_file=stride_output_file,
                           params=p, config_file=config_file)
 
@@ -631,7 +639,7 @@ def cylinder(argv: Optional[List[str]] = None) -> None:
         cfg.params.device = args.device
 
     run_cylinder_synthesis(cfg.pdb_file, L0=cfg.L0, L_max=cfg.L_max, out_root=cfg.outdir,
-                           mrna=cfg.mrna, trans_times=cfg.trans_times,
+                           mrna=cfg.mrna, codon_time_table_path=cfg.codon_time_table_path,
                            domain_def=cfg.domain_def,
                            stride_output_file=cfg.stride_output_file, params=cfg.params)
 

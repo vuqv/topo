@@ -1,16 +1,19 @@
-# Continuous synthesis protocol — CSP (`topo.csp`)
+# Synthesis in coarse-grained ribosome model
 
 The **Continuous Synthesis Protocol (CSP)** is the **codon-resolved, kinetic** runner
-for co-translational synthesis, and the package's user-facing synthesis tool. It times
+for co-translational synthesis on an **explicit coarse-grained ribosome**. It times
 **every residue from its mRNA codon** and splits each elongation cycle into **three
 kinetic sub-stages** — reproducing O'Brien's `continuous_synthesis_v6.py` protocol in
 topo style. (Codon-resolved kinetics are what make the model physically meaningful; a
-fixed per-residue step count is not, which is why CSP is the only synthesis runner.)
+fixed per-residue step count is not.) For the analytic-tunnel variant — the same codon
+kinetics with the explicit ribosome replaced by a cylindrical bore — see
+{doc}`cylinder_synthesis`.
 
 - **CLI:** `topo-csp -f csp.ini` (or `python -m topo.csp -f csp.ini`)
 - **Movie tool:** `topo-csp-movie -o <out_root> [--ribosome ribo.pdb]`
-- **Worked examples:** Tutorial 12 (validated reproduction on 4c5c, L = 1 → 10) and
-  Tutorial 13 (full-length 306-residue stability validation).
+- **Worked example:** Tutorial 8 (`tutorials/08_ribosome_synthesis/`) — a smoke run
+  (`csp_debug.ini`, L = 1 → 8) and a full-length validation (`csp_val.ini`, L = 1 → 306)
+  on 4c5c, plus a second protein (P0CX28).
 - **Architecture:** CSP is a thin outer loop. The per-length MD work — building the
   length-`L` model, seeding coordinates, restraints, running one stage under the
   stability guard, build-once-subset contacts — lives in the shared low-level engine
@@ -27,9 +30,9 @@ All paths in the INI are relative to the working directory; run from the tutoria
 folder. A GPU is recommended (the v2 system has ~4,600 ribosome beads).
 
 ```bash
-# Reproduce O'Brien CSP on 4c5c (Tutorial 12)
-cd tutorials/12_auto
-topo-csp -f csp.ini             # -> synth_out_debug/  (or synth_out/ for the production INI)
+# Reproduce O'Brien CSP on 4c5c (Tutorial 8)
+cd tutorials/08_ribosome_synthesis/4c5c
+topo-csp -f csp_debug.ini       # smoke run -> synth_out_debug/  (or csp_val.ini -> synth_out/ for full length)
 
 # Stitch the per-stage trajectories into one VMD movie
 topo-csp-movie -o synth_out_debug --ribosome ribosome_trunc.pdb
@@ -112,7 +115,7 @@ them as **three MD sub-stages per residue**.
   hold planes**, i.e. `x₀ = min(P-anchor.x, A-anchor.x) + ptc_offset` (the P-site, where
   the nascent C-terminus is tethered). So the held C-terminus sits right on the plane and
   the chain grows away from it; the wall is recomputed for whatever ribosome PDB you
-  supply, so it can never go stale when you switch structures. For Tutorial 13's
+  supply, so it can never go stale when you switch structures. For Tutorial 8's
   `ribosome_trunc.pdb` this evaluates to **x₀ = 0.5705 + 0.476 = 1.0465 nm** (the
   previously hardcoded 1.05 nm, now derived).
 - **Thermostat.** Langevin dynamics at `ref_t = 310 K`, friction `tau_t = 0.05 /ps`,
@@ -170,9 +173,9 @@ decoding/tRNA wait.
 protein), so topo ships one: the **Fluitt *E. coli* table at 310 K** (Fluitt, Pienaar &
 Viljoen, *Comput. Biol. Chem.* 2007; 61 sense + 3 stop codons, mean ≈ 0.068 s ≈ 15 aa/s)
 as `topo/csp/data/ecoli_trans_times_310K.txt`. It is used **by default** whenever `csp.ini`
-gives no `trans_times` key, so only the protein-specific `mrna` is mandatory. Supply
-`trans_times` only to override it (a different organism/temperature). See
-`topo.csp.kinetics.default_trans_times_path`.
+gives no `codon_times` key, so only the protein-specific `mrna` is mandatory. Set
+`codon_times` to a table path only to override it (a different organism/temperature). See
+`topo.csp.kinetics.default_codon_time_table_path`.
 ```
 
 **(b) First-passage-time sampling.** Real elongation is stochastic: each stage is gated by
@@ -218,7 +221,7 @@ different `U₁` gets a different `t1` — and they average to `time_stage_1 = 0
 So the **per-cycle clock** = fixed-mean peptide bond + fixed-mean translocation + a
 variable-mean decoding wait. (Indexing: stage 3 uses the *next* codon's mean — having just
 incorporated residue `L`, the ribosome now waits for residue `L+1`'s tRNA. This is why
-`build_mfpt_lists` needs the codon list to extend to `L_max + 1`.)
+`build_codon_time_lists` needs the codon list to extend to `L_max + 1`.)
 
 **(d) In-vivo seconds → in-silico steps.** The coarse-grained model evolves far faster
 than real translation, so a **time-compression factor** maps seconds to MD steps:
@@ -234,7 +237,7 @@ folding). Step counts may additionally be clamped to
 `[min_steps_per_stage, max_steps_per_stage]` for tractability — a clamp on **MD steps
 only**; the sampled dwell **times in seconds** are recorded untouched in `dwell_times.dat`.
 
-**(e) Worked example (real 4c5c mRNA, Tutorial 13).** The first residues of
+**(e) Worked example (real 4c5c mRNA, Tutorial 8).** The first residues of
 `4c5c_mrna.txt` and their `τ` from the default E. coli 310 K table:
 
 | residue | codon | τ (s) |
@@ -255,7 +258,7 @@ mean(t3) = τ(ACU) − time_stage_1 − time_stage_2
          = 0.023025 s          # mean of the exponential; sampled t3 = −mean·ln(U)
 ```
 
-Then → MD steps at Tutorial 13's `scale_factor = 216564650`, `dt = 0.015 ps`:
+Then → MD steps at Tutorial 8's `scale_factor = 216564650`, `dt = 0.015 ps`:
 
 ```text
 t_sim = 0.023025 s × 1e9 / 216564650 = 0.10632 ns
@@ -276,7 +279,8 @@ remain. Biologically this is **termination** — release factors free the finish
 With the tether gone, the chain **diffuses out of the tunnel along +x** (the one-sided
 wall biases motion forward) and clears the ribosome. An optional **dissociation** phase
 (`dissociation_steps`) continues the free protein away from the ribosome. For a longer,
-dedicated egress demonstration see the `eject_demo.py` helper in Tutorials 12/13.
+dedicated egress demonstration, raise `ejection_steps` (and `dissociation_steps`) in the
+Tutorial 8 `csp_val.ini`.
 
 ### 6. Numerical integration and the stability guard
 
@@ -299,7 +303,8 @@ step count doubled**. Because the physical dwell time is `n_steps · dt`, halvin
 doubling `n_steps` **leaves the dwell time exactly unchanged** while stabilising the
 integration (up to 6 halvings). The common case runs once at 15 fs. Watch for
 `[stability] ...` lines in the log: those are stages auto-stabilised at a halved timestep.
-Tutorial 13 validates this across the full 306-residue chain (919 stages, zero blow-ups).
+Tutorial 8's full-length run (`csp_val.ini`, L = 1 → 306) validates this across the whole
+chain (919 stages, zero blow-ups).
 
 ---
 
@@ -310,6 +315,13 @@ CSP reads a single INI control file with one `[OPTIONS]` section
 kJ/mol/nm² — and **dwell times are in seconds**. Integers may use `_` digit separators
 (e.g. `200_000`).
 
+```{tip}
+For a compact, single-page tabular reference of every `csp.ini` option (grouped
+by role, with types and defaults) — the synthesis analogue of the single-protein
+{doc}`simulation_control` page — see {doc}`synthesis_control`. The tables below
+repeat the same options with more inline commentary on the physics.
+```
+
 ### Inputs & schedule
 
 | Key | Required | Default | Meaning |
@@ -318,8 +330,8 @@ kJ/mol/nm² — and **dwell times are in seconds**. Integers may use `_` digit s
 | `ribosome` | **yes** | — | Truncated CG ribosome PDB (P-/A-anchors + rigid scenery). |
 | `L0` | no | `1` | Start nascent-chain length (omit/blank = start from a single residue). |
 | `L_max` | no | full length | Final nascent length (omit/blank = synthesize the whole chain). |
-| `mrna` | cond. | — | mRNA file (one codon per residue). Required for per-codon timing (unless `uniform_ta = yes`). |
-| `trans_times` | no | bundled E. coli 310 K | Codon→mean-time table. Optional — defaults to the bundled Fluitt *E. coli* table; set only to override (other organism/temperature). |
+| `mrna` | cond. | — | mRNA file (one codon per residue). Required for per-codon timing (unless `codon_times` is a number). |
+| `codon_times` | no | bundled E. coli 310 K | Codon-timing key. A **table path** = per-codon timing; a **positive number of seconds** = uniform codon time (every codon, no `mrna` needed); omit = bundled Fluitt *E. coli* table. A table filename must **not** be a bare number. |
 | `domain_def` | **yes** | — | `domain.yaml` — the protein's **contact-nscale definition** (per-domain / per-interface Gō well-depth scaling, the structure-based analog of O'Brien's `nscal`). |
 | `stride_output_file` | no | — | Precomputed STRIDE file (skips re-running STRIDE). |
 | `outdir` | no | `synth_out` | Output root. |
@@ -331,8 +343,6 @@ kJ/mol/nm² — and **dwell times are in seconds**. Integers may use `_` digit s
 | `scale_factor` | `4331293` | In-vivo-seconds → in-silico-ns compression (larger = fewer steps = faster). |
 | `time_stage_1` | `0.00034` | Mean peptidyl-transfer (peptide-bond) dwell, **seconds**. |
 | `time_stage_2` | `0.004201` | Mean translocation dwell, **seconds**. |
-| `uniform_ta` | `no` | Ignore the mRNA; use `uniform_mfpt` for every codon. |
-| `uniform_mfpt` | `0.05` | Uniform per-codon mean time (s) used when `uniform_ta = yes`. |
 | `random_seed` | — | Seed for the FPT sampler (reproducible schedules). |
 | `max_steps_per_stage` | — (uncapped) | **Testing only** — upper clamp on each stage's MD step count (tutorials use a small value for speed). See note below. |
 | `min_steps_per_stage` | `1` | **Testing only** — lower clamp on each stage's MD step count. See note below. |
@@ -356,9 +366,9 @@ of the clamp.
 | `dt` | `0.015` | Timestep, ps. |
 | `ref_t` | `310` | Temperature, K. |
 | `tau_t` | `0.05` | Langevin friction, 1/ps. |
-| `nstout` | — | Trajectory/log output interval (steps). |
-| `device` | — | `GPU` / `CPU`. |
-| `ppn` | — | CPU threads (CPU platform). |
+| `nstout` | `5000` | Trajectory/log output interval (steps). |
+| `device` | `CPU` | `GPU` / `CPU`. |
+| `ppn` | `1` | CPU threads (CPU platform). |
 | `constraints` | `None` | Bond constraints; CSP needs flexible bonds — leave `None`. |
 | `restraint_k` | `83680` | C-terminus harmonic restraint constant, kJ/mol/nm². |
 | `buffer` | `0.4` | Offset (nm) of the seeded new bead into the tunnel from the A-anchor. |
@@ -401,7 +411,7 @@ depends on it.
 **`dwell_times.dat`** records, per residue, the codon, the three sampled dwell **times in
 seconds** (`t1`/`t2`/`t3`), their nanosecond equivalents, and the integer MD step counts —
 the physical schedule, independent of any step clamp. This is the file to compare against a
-reference run for quantitative validation (Tutorial 12's D6 check).
+reference run for quantitative validation (Tutorial 8).
 
 ### Console progress log
 
@@ -454,9 +464,16 @@ vmd -e <outdir>/movie.tcl
 ```python
 from topo.csp.protocol import run_continuous_synthesis, read_csp_config
 
-# (a) drive it from an INI, exactly like the CLI:
-kwargs = read_csp_config("csp.ini")
-run_continuous_synthesis(**kwargs)
+# (a) drive it from an INI, exactly like the CLI. read_csp_config returns a
+#     CSPConfig dataclass; unpack its fields into the call:
+cfg = read_csp_config("csp.ini")
+run_continuous_synthesis(
+    cfg.pdb_file, cfg.ribosome,
+    L0=cfg.L0, L_max=cfg.L_max, out_root=cfg.outdir,
+    mrna=cfg.mrna, codon_time_table_path=cfg.codon_time_table_path,
+    domain_def=cfg.domain_def, stride_output_file=cfg.stride_output_file,
+    params=cfg.params,
+)
 
 # (b) or construct parameters directly (the ribosome PDB is always rigid scenery;
 #     the tunnel wall plane is auto-derived from it):
@@ -474,9 +491,13 @@ See the {doc}`API reference <../topo>` for the autodocumented `topo.csp.protocol
 
 ## See also
 
+- {doc}`cylinder_synthesis` — the analytic-tunnel variant (`topo-cylinder`): the same
+  codon kinetics with a nascent-only system and a single MD segment per residue, with the
+  explicit-bead ribosome replaced by a cylindrical bore through an infinite wall.
+- {doc}`synthesis_control` — the concise `csp.ini` control-options reference.
 - {doc}`../usage/model_theory` — the TOPO Gō-model force field in full (the RNC
   Hamiltonian CSP uses, restricted to the synthesized residues).
 - {doc}`API reference <../topo>` — the shared low-level engine `topo.csp.core`
   (`run_length`, `RunParams`), `topo.csp.ribosome`, and `topo.csp.kinetics`.
-- Tutorials 12 (`tutorials/12_auto/`) and 13 (`tutorials/13_validate_claude_fix12/`) —
-  runnable, validated CSP examples; Tutorial 13 also ships a bilingual `THEORY.md`.
+- Tutorial 8 (`tutorials/08_ribosome_synthesis/`) — runnable, validated CSP examples on
+  4c5c (smoke `csp_debug.ini` + full-length `csp_val.ini`) and P0CX28.

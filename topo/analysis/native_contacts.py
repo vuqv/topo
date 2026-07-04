@@ -88,6 +88,10 @@ def load_domains(domain_yaml, n_res):
     for name, values in cfg["intra_domains"].items():
         resnums = parse_residue_list(values["residues"])     # 1-based
         idx = np.array(sorted(r - 1 for r in resnums), dtype=int)  # -> 0-based
+        if idx.size == 0:
+            raise ValueError(
+                f"{domain_yaml}: domain {name!r} has no residues listed"
+            )
         if idx.min() < 0 or idx.max() >= n_residues:
             raise ValueError(
                 f"Domain {name}: residue numbers must be within 1..{n_residues}"
@@ -242,8 +246,12 @@ def parse_args():
     p.add_argument("-o", "--output", required=True, help="Output CSV path.")
     p.add_argument("--cutoff", type=float, default=4.5,
                    help="Heavy-atom distance defining a native contact (Å).")
+    # Default 3 (score |i-j| >= 4) is the Q-analysis *convention*, deliberately
+    # stricter than the model's parameterization (nonbonded.LOCAL_SEPARATION = 2,
+    # i.e. |i-j| >= 3 pairs carry energy). Pass --local-separation 2 to match the model.
     p.add_argument("--local-separation", type=int, default=3,
-                   help="Minimum sequence separation (abs(i - j) > this).")
+                   help="Minimum sequence separation (abs(i - j) > this; default 3 is the "
+                        "analysis convention, stricter than the model's |i-j| >= 3).")
     p.add_argument("--tolerance", type=float, default=1.2,
                    help="Cα-distance stretch factor for a 'formed' contact.")
     p.add_argument("--start-frame", type=int, default=0,

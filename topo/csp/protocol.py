@@ -72,7 +72,7 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
                              L0: int = 1, L_max: Optional[int] = None,
                              out_root: str = "synth_out",
                              mrna: Optional[str] = None,
-                             trans_times: Optional[str] = None,
+                             codon_time_table_path: Optional[str] = None,
                              domain_def: Optional[str] = None,
                              stride_output_file: Optional[str] = None,
                              params: Optional[RunParams] = None) -> None:
@@ -93,10 +93,11 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
         Root output directory; each residue writes ``L_<L>/stage_<1,2,3>/``.
     mrna : str, optional
         mRNA sequence file (one codon per residue) -- the codon-resolved kinetics.
-        Required for per-codon timing; not needed when ``params.uniform_ta``.
-    trans_times : str, optional
+        Required for per-codon timing; not needed for uniform timing
+        (``params.uniform_codon_time`` set).
+    codon_time_table_path : str, optional
         Per-codon mean-time table. ``None`` -> the bundled E. coli 310 K table
-        (organism-universal; see :func:`topo.csp.kinetics.default_trans_times_path`).
+        (organism-universal; see :func:`topo.csp.kinetics.default_codon_time_table_path`).
     domain_def : str
         Domain-definition file (``domain.yaml``) defining the protein's **native-contact
         nscales** -- per-domain and per-interface Gō well-depth scaling factors (the
@@ -117,8 +118,8 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
     ------
     ValueError
         If the length schedule is invalid (``1 <= L0 <= L_max <= N_full`` fails), or
-        if non-uniform kinetics are requested without ``mrna`` / ``trans_times``
-        (propagated from :func:`topo.csp.kinetics.build_mfpt_lists`).
+        if non-uniform kinetics are requested without ``mrna`` / ``codon_time_table_path``
+        (propagated from :func:`topo.csp.kinetics.build_codon_time_lists`).
     """
     if params is None:
         params = RunParams()
@@ -216,9 +217,9 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
 
     # --- kinetics: intrinsic / real per-codon mFPT lists --------------------
     # Need intrinsic[L_max] valid -> at least L_max + 1 codons.
-    intrinsic, real, codons = kinetics.build_mfpt_lists(
-        L_max + 1, uniform_ta=params.uniform_ta, uniform_mfpt=params.uniform_mfpt,
-        mrna_path=mrna, trans_times_path=trans_times,
+    intrinsic, real, codons = kinetics.build_codon_time_lists(
+        L_max + 1, uniform_codon_time=params.uniform_codon_time,
+        mrna_path=mrna, codon_time_table_path=codon_time_table_path,
         ribosome_traffic=params.ribosome_traffic,
         initiation_rate=params.initiation_rate)
     rng = random.Random(params.random_seed)
@@ -227,7 +228,7 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
     print("=" * 66)
     print("[ O'Brien continuous synthesis -- kinetic schedule ]")
     print("=" * 66)
-    print(f"  timing mode: {'uniform' if params.uniform_ta else 'per-codon (mRNA)'}; "
+    print(f"  timing mode: {'uniform' if params.uniform_codon_time is not None else 'per-codon (mRNA)'}; "
           f"scale_factor={params.scale_factor:g}; dt={ep.dt_ps} ps")
     print(f"  stage means (s): peptidyl-transfer={params.time_stage_1:g}, "
           f"translocation={params.time_stage_2:g}, tRNA-binding=remainder")
@@ -247,7 +248,7 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
         "# O'Brien continuous-synthesis per-residue dwell times (topo.csp)\n"
         f"#   scale_factor={params.scale_factor:g}  dt={ep.dt_ps} ps  "
         f"time_stage_1={params.time_stage_1:g} s  time_stage_2={params.time_stage_2:g} s\n"
-        f"#   timing={'uniform' if params.uniform_ta else 'per-codon'}  "
+        f"#   timing={'uniform' if params.uniform_codon_time is not None else 'per-codon'}  "
         f"{'ribosome_traffic=on  ' if params.ribosome_traffic else ''}"
         f"random_seed={params.random_seed}\n"
         "#   t1/t2/t3 = sampled peptidyl-transfer / translocation / tRNA-binding "
@@ -383,9 +384,9 @@ class CSPConfig:
         Final length (``None`` -> the full residue count).
     outdir : str
         Root output directory (default ``"synth_out"``).
-    mrna, trans_times : str or None
-        mRNA sequence file and per-codon time table (required unless
-        ``params.uniform_ta``).
+    mrna, codon_time_table_path : str or None
+        mRNA sequence file and per-codon time table (required for per-codon timing,
+        i.e. unless ``params.uniform_codon_time`` is set).
     domain_def : str
         Domain-definition file (contact-nscale scaling); required via the INI.
     stride_output_file : str or None
@@ -401,7 +402,7 @@ class CSPConfig:
     L_max: Optional[int] = None
     outdir: str = "synth_out"
     mrna: Optional[str] = None
-    trans_times: Optional[str] = None
+    codon_time_table_path: Optional[str] = None
     domain_def: Optional[str] = None
     stride_output_file: Optional[str] = None
     params: RunParams = field(default_factory=RunParams)
@@ -416,20 +417,21 @@ def read_csp_config(config_file: str, verbose: bool = True) -> CSPConfig:
     are added on top. Required: ``pdb_file``, ``ribosome``, ``domain_def`` (the protein's
     domain/contact-nscale definition). ``L0`` (default ``1``) and ``L_max`` (default =
     full residue count) are optional. Per-codon timing additionally requires ``mrna``
-    (``trans_times`` is optional).
+    (``codon_times`` is optional).
 
     Kinetic keys
     ------------
     - ``mrna`` -- mRNA sequence file (raw nucleotides, wrapped ok); one codon per
       residue + 1 stop. Required for per-codon timing (it is protein-specific).
-    - ``trans_times`` -- per-codon mean-time table (``CODON  seconds``). **Optional**:
-      defaults to the bundled E. coli 310 K table (the table is organism-universal,
-      so it is not protein-specific). See :func:`topo.csp.kinetics.default_trans_times_path`.
+    - ``codon_times`` -- the codon-timing key. Either a **path** to a per-codon
+      mean-time table (``CODON  seconds``; per-codon timing) **or** a **positive number
+      of seconds** (uniform codon time for every codon, no ``mrna`` needed). **Optional**:
+      omitting it uses the bundled E. coli 310 K table (organism-universal). A table
+      filename must not be a bare number. See
+      :func:`topo.csp.kinetics.parse_codon_times`.
     - ``scale_factor`` -- in-vivo seconds -> in-silico ns compressor.
     - ``time_stage_1`` / ``time_stage_2`` -- mean peptidyl-transfer / translocation
       dwell (s); stage 3 = codon total minus these.
-    - ``uniform_ta`` -- yes: ignore the mRNA, use ``uniform_mfpt`` for every codon.
-    - ``uniform_mfpt`` -- the uniform mean codon time (s) when ``uniform_ta``.
     - ``random_seed`` -- seed for the FPT sampler (reproducible schedules).
     - ``max_steps_per_stage`` -- cap each stage's step count (the tutorial uses a
       small value for a ~2000-steps/residue test; blank = uncapped production).
@@ -553,7 +555,9 @@ def read_csp_config(config_file: str, verbose: bool = True) -> CSPConfig:
     L_max = int(L_max) if L_max is not None else None      # optional; default = full length
     outdir = opt("outdir") or "synth_out"
     mrna = opt("mrna")
-    trans_times = opt("trans_times")
+    # codon_times: a table path (per-codon timing) OR a positive number of seconds
+    # (uniform codon time). Resolved here; applied to `p` in the kinetics section below.
+    _uniform_codon_time, codon_time_table_path = kinetics.parse_codon_times(opt("codon_times"))
     domain_def = req("domain_def")   # required: defines the protein's contact nscales
     stride_output_file = opt("stride_output_file")
 
@@ -614,10 +618,14 @@ def read_csp_config(config_file: str, verbose: bool = True) -> CSPConfig:
         p.time_stage_1 = float(opt("time_stage_1"))
     if opt("time_stage_2") is not None:
         p.time_stage_2 = float(opt("time_stage_2"))
-    if opt("uniform_ta") is not None:
-        p.uniform_ta = bool(strtobool(opt("uniform_ta")))
-    if opt("uniform_mfpt") is not None:
-        p.uniform_mfpt = float(opt("uniform_mfpt"))
+    p.uniform_codon_time = _uniform_codon_time
+    # Retired keys -> point users at the single codon_times key.
+    for _legacy in ("trans_times", "uniform_ta", "uniform_mfpt"):
+        if opt(_legacy) is not None:
+            raise ValueError(
+                f"{config_file}: '{_legacy}' has been replaced by the single "
+                f"'codon_times' key -- set it to a codon-time table path (per-codon "
+                f"timing) or to a positive number of seconds (uniform codon time).")
     if opt("ribosome_traffic") is not None:
         p.ribosome_traffic = bool(strtobool(opt("ribosome_traffic")))
     if opt("initiation_rate") is not None:
@@ -634,16 +642,21 @@ def read_csp_config(config_file: str, verbose: bool = True) -> CSPConfig:
         p.dissociation_steps = as_int(opt("dissociation_steps"))
 
     # Validation: per-codon timing needs the (protein-specific) mRNA. The codon-time
-    # table is organism-universal, so `trans_times` is optional -- it defaults to the
-    # bundled E. coli 310 K table (topo.csp.kinetics.default_trans_times_path).
-    if not p.uniform_ta and mrna is None:
+    # table is organism-universal, so `codon_time_table_path` is optional -- it defaults to the
+    # bundled E. coli 310 K table (topo.csp.kinetics.default_codon_time_table_path).
+    if p.uniform_codon_time is None and mrna is None:
         raise ValueError(f"{config_file}: per-codon timing needs an 'mrna' file "
-                         f"(or set uniform_ta = yes). 'trans_times' is optional "
+                         f"(or set 'codon_times' to a positive number of seconds for a "
+                         f"uniform codon time). A 'codon_times' table path is optional "
                          f"(defaults to the bundled E. coli 310 K table).")
 
     log(f"  inputs: pdb_file={pdb_file}, ribosome={ribosome}")
     log(f"  schedule: L0={L0}, L_max={L_max if L_max is not None else 'full'}")
-    log(f"  timing: {'uniform (mfpt=%g s)' % p.uniform_mfpt if p.uniform_ta else f'per-codon (mrna={mrna}, trans_times={trans_times or 'bundled E. coli 310 K'})'}")
+    if p.uniform_codon_time is not None:
+        log(f"  timing: uniform (codon_time={p.uniform_codon_time:g} s)")
+    else:
+        _table = codon_time_table_path or "bundled E. coli 310 K"
+        log(f"  timing: per-codon (mrna={mrna}, codon_times={_table})")
     log(f"          scale_factor={p.scale_factor:g}, time_stage_1={p.time_stage_1:g} s, "
         f"time_stage_2={p.time_stage_2:g} s")
     if p.ribosome_traffic:   # hidden/deferred feature; only mention it when enabled
@@ -660,7 +673,7 @@ def read_csp_config(config_file: str, verbose: bool = True) -> CSPConfig:
     log(f"  hardware/output: device={p.device}, ppn={p.ppn}, outdir={outdir}")
 
     return CSPConfig(pdb_file=pdb_file, ribosome=ribosome, L0=L0, L_max=L_max,
-                     outdir=outdir, mrna=mrna, trans_times=trans_times,
+                     outdir=outdir, mrna=mrna, codon_time_table_path=codon_time_table_path,
                      domain_def=domain_def, stride_output_file=stride_output_file,
                      params=p, config_file=config_file)
 
@@ -727,7 +740,7 @@ def csp(argv: Optional[List[str]] = None) -> None:
 
     run_continuous_synthesis(
         cfg.pdb_file, cfg.ribosome, L0=cfg.L0, L_max=cfg.L_max, out_root=cfg.outdir,
-        mrna=cfg.mrna, trans_times=cfg.trans_times, domain_def=cfg.domain_def,
+        mrna=cfg.mrna, codon_time_table_path=cfg.codon_time_table_path, domain_def=cfg.domain_def,
         stride_output_file=cfg.stride_output_file, params=cfg.params)
 
 
