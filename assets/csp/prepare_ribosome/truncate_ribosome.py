@@ -24,9 +24,9 @@ of its beads qualifies, so P/R/BR units stay intact):
 
 Usage
 -----
-    python -m topo.csp.truncate_ribosome \
-        -i structures/4v9d_50S_PtR_5jte_AtR_model_cg.pdb \
-        -o structures/4v9d_50S_PtR_5jte_AtR_model_cg_trunc.pdb \
+    python truncate_ribosome.py \
+        -i assets/csp/prepare_ribosome/structures/ecoli/4v9d_50S_PtR_5jte_AtR_model_cg.pdb \
+        -o assets/csp/prepare_ribosome/structures/ecoli/4v9d_50S_PtR_5jte_AtR_model_cg_trunc.pdb \
         [--r-cyl 30] [--x-lo -8] [--x-exit 58] [--keep-segids PtR,AtR]
 """
 from __future__ import annotations
@@ -169,7 +169,7 @@ def main(argv=None):
         from ``sys.argv``.
     """
     p = argparse.ArgumentParser(
-        prog="python -m topo.csp.truncate_ribosome",
+        prog="python truncate_ribosome.py",
         description="Truncate a CG ribosome around the exit tunnel "
                     "(tunnel = X-axis; PTC near x=0; exit toward +x).")
     p.add_argument("-i", "--input", required=True, help="CG ribosome PDB")

@@ -37,11 +37,11 @@ bead centroid is computed from the complete all-atom residue.
 
 Usage
 -----
-    python -m topo.csp.cg_ribosome -i ribosome.pdb -o ribosome_cg.pdb
+    python cg_ribosome.py -i ribosome.pdb -o ribosome_cg.pdb
 
 or as a library::
 
-    from topo.csp.cg_ribosome import coarse_grain
+    from cg_ribosome import coarse_grain
     coarse_grain("ribosome.pdb", "ribosome_cg.pdb")
 """
 from __future__ import annotations
@@ -349,7 +349,7 @@ def main(argv=None):
         read from ``sys.argv``.
     """
     p = argparse.ArgumentParser(
-        prog="python -m topo.csp.cg_ribosome",
+        prog="python cg_ribosome.py",
         description="Coarse-grain a protein+RNA structure to the TOPO convention "
                     "(protein: CA; RNA: P/R/BR beads).")
     p.add_argument("-i", "--input", required=True, help="input all-atom PDB")

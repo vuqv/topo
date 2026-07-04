@@ -1,0 +1,5 @@
+# Not shipped: raw depositions (download via fetch_cifs.sh) and the regeneration
+# workspace (large intermediates). Only structures/ (full CG + truncated CG) ships.
+raw/
+out/
+__pycache__/
