@@ -16,7 +16,7 @@ It handles **two output layouts** with a shared stitching core
   Use :func:`stitch_movie` / :func:`find_stage_segments`. The movie plays the chain
   growing **stage by stage** (new residue at the A-site, settle, translocate to P).
 * **Flat (per-length)** -- ``<out>/L_<L>/traj.dcd`` from a fixed-rate per-length loop
-  (e.g. the Tutorial-9 cylinder runner), plus ``ejection/`` / ``stallation/``.
+  (e.g. the Tutorial-9 cylinder runner), plus ``ejection/`` / ``dissociation/``.
   Use :func:`stitch_length_movie` / :func:`find_lengths`.
 
 The :func:`main` CLI (``topo-csp-movie``) **auto-detects** the layout (per-stage if any
@@ -49,9 +49,10 @@ SENTINEL_A = 99999.0
 # Per-residue elongation sub-stages, in playback order (CSP layout).
 STAGES = (1, 2, 3)
 # Post-synthesis phase folders, in the order they should appear after growth.
-# CSP runs ejection/dissociation; the flat per-length loop runs ejection/stallation.
+# Both the CSP protocol and the flat per-length (cylinder) loop run the same two
+# free-run phases: ejection then dissociation.
 POST_PHASES_CSP = ("ejection", "dissociation")
-POST_PHASES_FLAT = ("ejection", "stallation")
+POST_PHASES_FLAT = ("ejection", "dissociation")
 
 
 # ==========================================================================
@@ -435,7 +436,7 @@ def stitch_movie(out_root: str, out_prefix: str = "movie",
 
 
 # ==========================================================================
-# Flat layout: <out>/L_<L>/traj.dcd  (+ ejection/ stallation/)
+# Flat layout: <out>/L_<L>/traj.dcd  (+ ejection/ dissociation/)
 # ==========================================================================
 def find_lengths(out_root: str,
                  outname: str = "traj") -> List[Tuple[int, str, str]]:
@@ -477,7 +478,7 @@ def find_lengths(out_root: str,
 def find_post(out_root: str, outname: str = "traj") -> List[Tuple[str, str, str]]:
     """Return ``[(name, psf, dcd), ...]`` for present post-synthesis phases (flat).
 
-    Looks for ``<out_root>/ejection/`` and ``<out_root>/stallation/`` (in that
+    Looks for ``<out_root>/ejection/`` and ``<out_root>/dissociation/`` (in that
     order) -- the optional post-synthesis runs written after the chain reaches its
     final length in the flat per-length layout. Only phases with both a ``.psf`` and
     a ``.dcd`` are returned.
@@ -485,7 +486,7 @@ def find_post(out_root: str, outname: str = "traj") -> List[Tuple[str, str, str]
     Parameters
     ----------
     out_root : str
-        The run's output root (may contain the ``ejection/`` and/or ``stallation/``
+        The run's output root (may contain the ``ejection/`` and/or ``dissociation/``
         folders).
     outname : str
         Per-length output basename used by the runner (default ``traj``); the
@@ -515,7 +516,7 @@ def stitch_length_movie(out_root: str, out_prefix: str = "movie",
 
     The flat-layout counterpart of :func:`stitch_movie`: enumerates
     ``<out_root>/L_<L>/`` per-length trajectories (:func:`find_lengths`), appends any
-    ``ejection/`` / ``stallation/`` phase (:func:`find_post`), and hands them to the
+    ``ejection/`` / ``dissociation/`` phase (:func:`find_post`), and hands them to the
     shared :func:`stitch_segments` core. Used by the Tutorial-9 cylinder runner.
 
     Parameters
@@ -553,8 +554,8 @@ def stitch_length_movie(out_root: str, out_prefix: str = "movie",
             f"no per-length trajectories found under {out_root!r} "
             f"(expected {out_root}/L_<L>/{outname}.dcd + .psf).")
 
-    # Ordered playback segments: each growth length, then the post-synthesis phase
-    # (ejection / stallation) at full length. Each segment is (label, n_atoms,
+    # Ordered playback segments: each growth length, then the post-synthesis phases
+    # (ejection / dissociation) at full length. Each segment is (label, n_atoms,
     # psf, dcd); the post phases run at the final length, so n_atoms = max L.
     segments = [(f"L={L}", L, psf, dcd) for L, psf, dcd in items]
     for name, psf, dcd in find_post(out_root, outname=outname):
@@ -612,7 +613,7 @@ def main(argv: Optional[List[str]] = None) -> None:
                     "VMD-playable movie that grows the chain, and write a movie.tcl "
                     "to view it. Auto-detects the CSP per-stage layout "
                     "(<out>/L_<L>/stage_<1,2,3>/) or the flat per-length layout "
-                    "(<out>/L_<L>/), plus any ejection/ dissociation/ stallation/ phase.",
+                    "(<out>/L_<L>/), plus any ejection/ dissociation/ phase.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     p.add_argument("-o", "--out-root", required=True,
                    help="synthesis run output root (contains the L_<L>/ folders).")

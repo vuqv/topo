@@ -43,7 +43,7 @@ vmd -e synth_out/movie.tcl
 ```
 
 `topo-cylinder` writes, per residue `L`, a standalone trajectory under
-`<outdir>/L_<L>/`, an optional post-elongation phase (`ejection/` or `stallation/`),
+`<outdir>/L_<L>/`, optional post-synthesis free runs (`ejection/` and `dissociation/`),
 and a per-residue dwell-time log `<outdir>/dwell_times.dat`.
 
 ---
@@ -91,11 +91,10 @@ co-translationally once residues clear the bore.
 (1) No `ribosome` PDB — the tunnel is analytic, its geometry set by the `tunnel_*` keys.
 (2) **One MD segment per residue** (no peptidyl-transfer / translocation / tRNA-binding
 sub-stages), so `time_stage_1` / `time_stage_2` are inherited but **unused** — the whole
-codon dwell is a single segment. (3) The post-synthesis phase is set with
-`post_elongation` + `post_elongation_steps` (one phase, ejection *or* stallation) rather
-than the CSP runner's separate `ejection_steps` / `dissociation_steps`. (4) The
-ribosome-specific knobs (`optimize_ptc_geometry`, `nascent_ev_radii`, `trna_tether`,
-`tunnel_wall`, `ptc_offset`, `buffer`) do not apply.
+codon dwell is a single segment. (3) The ribosome-specific knobs
+(`optimize_ptc_geometry`, `nascent_ev_radii`, `trna_tether`, `tunnel_wall`,
+`ptc_offset`, `buffer`) do not apply. The post-synthesis phases use the **same**
+`ejection_steps` / `dissociation_steps` keys as the CSP runner.
 ```
 
 ---
@@ -147,9 +146,9 @@ tunnel_center      = 0.0, 0.0   ; tunnel axis (y0, z0) (nm); axis = X
 tunnel_k           = 8368       ; wall stiffness (kJ/mol/nm^2 = 20 kcal/mol/A^2)
 tunnel_mouth_round = 0.2        ; mouth-corner fillet radius rho (nm)
 
-; --- post-elongation (after the chain reaches full length) ---
-post_elongation       = ejection   ; 'ejection' (release restraint) or 'stallation' (stay threaded)
-post_elongation_steps = 300_000    ; 0 -> skip
+; --- post-synthesis free runs (after the chain reaches full length) ---
+ejection_steps     = 300_000    ; release the C-terminus restraint; protein diffuses out (0 -> skip)
+dissociation_steps = 0          ; continued free run; protein drifts off the ribosome (0 -> skip)
 
 ; --- hardware / output ---
 device = GPU
@@ -181,12 +180,16 @@ outdir = synth_out
 | `tunnel_k` | `8368` | Wall stiffness (kJ/mol/nm² = 20 kcal/mol/Å²). |
 | `tunnel_mouth_round` | `0.2` | Mouth-corner fillet radius `rho` (nm); rounds the 90° inner corner so the potential is continuous. |
 
-### Post-elongation
+### Post-synthesis free runs
+
+Same keys as the CSP runner. Both phases run at full length and **release** the
+C-terminus restraint so the finished protein diffuses out the exit (+x) and folds in the
+cytosol; the analytic tunnel stays on throughout, so the only way out is the exit face.
 
 | Key | Default | Meaning |
 |-----|---------|---------|
-| `post_elongation` | `stallation` | Phase run after the chain reaches full length: `ejection` releases the C-terminus restraint so the finished protein diffuses out the exit (+x) and folds in the cytosol; `stallation` keeps the restraint so the chain stays threaded/stalled. |
-| `post_elongation_steps` | `0` | Length of that phase (steps); `0` = skip. Use a **long** run so the protein can clear the tunnel. |
+| `ejection_steps` | `0` | Steps of the first free run (restraint OFF); `0` = skip. Use a **long** run so the protein can clear the tunnel. Writes `ejection/`. |
+| `dissociation_steps` | `0` | Steps of a second, continued free run (restraint OFF); `0` = skip. Writes `dissociation/`. |
 
 ### Shared kinetics & MD keys
 
@@ -230,7 +233,8 @@ Boolean options accept `yes`/`no`, `true`/`false`, `1`/`0`.
 │   ├── traj_final.pdb      # last conformation (seeds the next residue)
 │   ├── traj.log            # energies
 │   └── ...
-├── ejection/ | stallation/ # post-elongation phase (if post_elongation_steps > 0)
+├── ejection/               # post-synthesis free run (if ejection_steps > 0)
+├── dissociation/           # continued free run (if dissociation_steps > 0)
 └── dwell_times.dat         # per-residue: codon, sampled dwell (s), ns, integration steps
 ```
 

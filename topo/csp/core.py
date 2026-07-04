@@ -900,13 +900,6 @@ class RunParams:
     # ribosome is static, so writing it every frame would waste storage; the checkpoint
     # still holds the full system, and the movie overlays the ribosome separately). This
     # is the default CSP behavior and is no longer a flag (keyed off `ribo is not None`).
-    # Post-elongation phase (runs after the chain reaches its final length, for
-    # post_elongation_steps steps; 0 = skip). 'ejection' releases the C-terminus
-    # tether and lets the protein move (-> 'ejection/'); 'stallation' keeps the
-    # restraint so the chain stays stalled on the ribosome (-> 'stallation/').
-    post_elongation: str = "stallation"
-    post_elongation_steps: int = 0
-
     # ------------------------------------------------------------------
     # O'Brien continuous-synthesis kinetics. Used only by
     # run_continuous_synthesis; ignored by the per-length run_length helper.
