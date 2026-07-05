@@ -31,8 +31,12 @@ protocols.
 
 Grow the nascent chain **residue by residue**, so it can fold *as it is
 synthesized*. Both tutorials build on the Part A model and use codon-resolved
-kinetics with `topo-csp`; they differ only in how the ribosome exit tunnel is
-represented.
+kinetics; they differ only in how the ribosome exit tunnel is represented — an
+analytic bore (7) vs an explicit truncated ribosome (8). See the
+[co-translational synthesis overview](../usage/synthesis_overview.md) for the
+biology and which model to use, and
+[the ribosome structure](../usage/ribosome_preparation.md) for where tutorial 8's
+`ribosome_trunc.pdb` comes from (four organisms ship ready-made).
 
 | # | Tutorial | What it is |
 |---|----------|------------|

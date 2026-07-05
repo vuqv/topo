@@ -438,8 +438,9 @@ Per-residue parameters
 
 Each Cα bead inherits three properties from its amino-acid type (defined in
 :mod:`topo.parameters.model_parameters`): a **mass** (≈ residue molar mass,
-amu), a **charge** (e), and a ``radii`` value (nm) reserved for future
-inter-chain excluded volume (see the note below the table).
+amu), a **charge** (e), and a ``Rmin_2`` collision-radius value (nm) used by the
+inter-chain (ribosome↔nascent) excluded-volume term in co-translational synthesis
+(see the note below the table).
 
 .. list-table::
    :header-rows: 1
@@ -540,13 +541,15 @@ supported and raise an error at build time. RNA sites P, R, BR are defined for
 planned nucleic-acid support.
 
 Of the three properties, the **charge** enters the Yukawa electrostatics and the
-**mass** sets the particle dynamics. The **radii are not used by any force in the
-current single-chain model**: every contact distance :math:`R_{ij}` — native
-*and* non-native — is derived from the input structure (native distances are the
-Cα–Cα distances; non-native distances come from the nearest non-contact Cα
-distance, see :ref:`theory-contacts`). The ``radii`` values are reserved for a
-planned **inter-chain excluded-volume** term (for ribosome–nascent-chain complex
-systems), which is not yet implemented.
+**mass** sets the particle dynamics. The **collision radii (``Rmin_2``) are not
+used by any force in the single-chain (isolated-protein) model**: every contact
+distance :math:`R_{ij}` — native *and* non-native — is derived from the input
+structure (native distances are the Cα–Cα distances; non-native distances come
+from the nearest non-contact Cα distance, see :ref:`theory-contacts`). They **are**
+used by the **inter-chain excluded-volume** term for ribosome–nascent-chain
+complexes — the ribosome↔nascent :math:`(\sigma/r)^{12}` repulsion in
+co-translational synthesis (:mod:`topo.csp.ribosome`), where each rigid-ribosome
+bead's collision radius comes from ``Rmin_2``.
 
 
 Temperature, dynamics, and ensembles
@@ -593,6 +596,9 @@ Where to go next
 
 * :doc:`simulation_control` — every ``md.ini`` option that turns these terms on
   and off and sets the run.
+* :doc:`synthesis_overview` — how this base force field is **extended for
+  co-translational synthesis** (a growing nascent chain in a rigid ribosome:
+  ribosome↔chain excluded volume + electrostatics, the tRNA tether, codon kinetics).
 * :doc:`domain_definition` — scaling the contact energies per domain.
 * :doc:`native_contacts` — measuring how folded the protein is (the *Q* score).
 * :doc:`outputs` — the files and the energy/temperature log a run writes.

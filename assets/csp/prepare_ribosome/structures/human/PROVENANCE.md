@@ -48,8 +48,9 @@ Full section list: `configs/human.ini`.
 >    (`read_anchor`, `add_trna_tether`, `optimal_ptc_targets` /
 >    `_ptc_bead_index`) looks up `PtR`/`AtR` `:76:{R,P,BR2}`. Without the shift,
 >    human `PtR:76` was a **cytidine (no BR2 bead)**, which silently mis-placed
->    the P-anchor by ~5 Å and would have **crashed `optimize_ptc_geometry`**
->    (missing `BR2`). After the shift, `PtR:76` is the purine acceptor A with
+>    the P-anchor by ~5 Å and would have **crashed the (always-on) PTC-geometry
+>    optimization `optimal_ptc_targets`** (missing `BR2`). After the shift,
+>    `PtR:76` is the purine acceptor A with
 >    R/P/BR2 all present; verified A–P anchor spacing 0.722 nm.
 
 **uL24 vs eL24.** The exit landmark uses **RPL26 = uL24** (chain LY). The

@@ -55,10 +55,9 @@ from typing import List, Optional
 import numpy as np
 import openmm as mm
 
-from topo.csp.core import (RunParams, TUNNEL_AXIS,
+from topo.csp.core import (RunParams,
                                        precompute_contacts,
-                                       run_length, optimal_ptc_targets,
-                                       TRNA_TETHER_BOND_NM)
+                                       run_length, optimal_ptc_targets)
 from topo.csp.ribosome import (load_ribosome, anchor_coord)
 from topo.utils.config import strtobool
 from topo.csp import kinetics
@@ -150,8 +149,8 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
           f"(mass-0 scenery; ribosome<->nascent forces on).")
 
     # --- anchors (fixed points from the truncated ribosome) -----------------
-    # NOTE (tRNA presence/naming): the P-/A-anchors -- and, when optimize_ptc_geometry
-    # is on, optimal_ptc_targets -- assume the ribosome carries tRNA beads under fixed
+    # NOTE (tRNA presence/naming): the P-/A-anchors and optimal_ptc_targets (the PTC
+    # optimization is always on) assume the ribosome carries tRNA beads under fixed
     # names (segids "PtR"/"AtR", resid 76, beads "R"/"P"/"BR2"). A ribosome PDB with no
     # tRNA, or with differently-named tRNA segments, makes anchor_coord raise a generic
     # "expected exactly one bead" error here. TODO: detect this up front and either raise
@@ -162,41 +161,25 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
     print(f"P-anchor (PtR 76 R): {p_anchor} nm")
     print(f"A-anchor (AtR 76 R): {a_anchor} nm")
 
-    # Hold/seed targets. Default path: offset into the tunnel (+x) from each anchor
-    # bead so the C-terminus does not sit on top of a ribosome bead (clash); offset
-    # defaults to the tether bond length (override via `ptc_offset`).
-    offset = ep.ptc_offset_nm
-    if offset is None:
-        offset = TRNA_TETHER_BOND_NM
-    seed_point: Optional[np.ndarray] = None
-    if ep.optimize_ptc_geometry:
-        # Optimize the PTC restraint/seed geometry (tutorials/14 step 2; opt-in).
-        # Replace the far A-anchor+buffer seed / anchor-offset targets with the optimal
-        # A-site & P-site *target points* -- one peptide bond (0.381 nm) apart and clear
-        # of the ribosome excluded volume. Seeding the new residue at a_target (one
-        # equilibrium bond from the previous C-terminus, which rests at p_target) makes
-        # the always-present peptide bond start at equilibrium, so a rigid AllBonds build
-        # seeds/minimizes cleanly at 15 fs without the dt-halving guard firing.
-        a_target, p_target = optimal_ptc_targets(ribo)
-        seed_point = a_target
-        print(f"[optimize_ptc_geometry] optimal PTC restraint targets "
-              f"(|A-P| = {np.linalg.norm(a_target - p_target):.4f} nm; fixed points, "
-              f"not bonds):")
-        print(f"  A-site target (new AA seed + stage-1/2 restraint): {a_target} nm")
-        print(f"  P-site target (prev AA / stage-3 restraint)      : {p_target} nm")
-    else:
-        p_target = p_anchor + offset * TUNNEL_AXIS
-        a_target = a_anchor + offset * TUNNEL_AXIS
+    # Hold/seed targets: the PTC-geometry optimization (always on) places the optimal
+    # A-site & P-site *target points* -- one equilibrium peptide bond (0.381 nm) apart
+    # and clear of the ribosome excluded volume. Seeding each new residue at a_target
+    # (one equilibrium bond from the previous C-terminus, which rests at p_target) makes
+    # the always-present peptide bond start at equilibrium, so a rigid AllBonds build
+    # seeds/minimizes cleanly at 15 fs without the dt-halving guard firing.
+    a_target, p_target = optimal_ptc_targets(ribo)
+    seed_point = a_target
+    print(f"Optimal PTC restraint targets "
+          f"(|A-P| = {np.linalg.norm(a_target - p_target):.4f} nm; fixed points, not bonds):")
+    print(f"  A-site target (new AA seed + stage-1/2 restraint): {a_target} nm")
+    print(f"  P-site target (prev AA / stage-3 restraint)      : {p_target} nm")
 
     # Tunnel wall plane (auto-derived from the structure -- never a stale user knob):
     # place the one-sided wall at the LOWER (deeper-in-tunnel, smaller-x) C-terminus
     # hold plane so the held C-terminus still sits at (just on) the plane while the
-    # chain cannot slip below the synthesis point into the truncated-50S void.
+    # chain cannot slip below the synthesis point into the truncated-ribosome void.
     if ep.tunnel_wall:
-        if ep.optimize_ptc_geometry:
-            ep.tunnel_wall_x0_nm = float(min(a_target[0], p_target[0]))
-        else:
-            ep.tunnel_wall_x0_nm = float(min(p_anchor[0], a_anchor[0]) + offset)
+        ep.tunnel_wall_x0_nm = float(min(a_target[0], p_target[0]))
         print(f"Tunnel wall plane: x >= {ep.tunnel_wall_x0_nm:.4f} nm "
               f"(auto: lower C-terminus hold plane).")
 
@@ -440,8 +423,8 @@ def read_csp_config(config_file: str, verbose: bool = True) -> CSPConfig:
       (0 = skip).
 
     MD / ribosome keys: ``dt``, ``ref_t``, ``tau_t``, ``nstout``, ``device``, ``ppn``,
-    ``constraints``, ``restraint_k``, ``buffer``, ``minimize``, ``tunnel_wall``,
-    ``ptc_offset``. (The supplied ribosome is always rigid scenery -- there is no
+    ``constraints`` (default ``AllBonds``), ``restraint_k``, ``minimize``,
+    ``tunnel_wall``. (The supplied ribosome is always rigid scenery -- there is no
     ``rigid_ribosome`` key -- and output is always nascent-only, so there is no
     ``nascent_only_output`` key either. The wall plane ``tunnel_wall_x0`` and stiffness
     ``tunnel_wall_k`` are **not** keys -- the plane is auto-derived from the ribosome
@@ -576,13 +559,10 @@ def read_csp_config(config_file: str, verbose: bool = True) -> CSPConfig:
     if opt("ppn") is not None:
         p.ppn = int(opt("ppn"))
     cons = opt("constraints")
-    p.constraints = None if (cons is None or cons.lower() == "none") else cons
+    if cons is not None:   # absent -> keep the RunParams default ("AllBonds")
+        p.constraints = None if cons.lower() == "none" else cons
     if opt("restraint_k") is not None:
         p.restraint_k = float(opt("restraint_k"))
-    if opt("buffer") is not None:
-        p.buffer_nm = float(opt("buffer"))
-    if opt("optimize_ptc_geometry") is not None:
-        p.optimize_ptc_geometry = bool(strtobool(opt("optimize_ptc_geometry")))
     # Nascent excluded-volume radii for the NC<->ribosome force: "kb" (per-residue
     # Karanicolas-Brooks, Option A, DEFAULT) or "per_aa" (per-AA SA..SY, Option B).
     if opt("nascent_ev_radii") is not None:
@@ -606,8 +586,6 @@ def read_csp_config(config_file: str, verbose: bool = True) -> CSPConfig:
     # auto-derived from the ribosome structure (see run_continuous_synthesis), and the
     # stiffness is a fixed model constant (O'Brien's 20 kcal/mol/A^2 = 8368 kJ/mol/nm^2,
     # RunParams.tunnel_wall_k). Only the `tunnel_wall` on/off toggle is exposed.
-    if opt("ptc_offset") is not None:
-        p.ptc_offset_nm = float(opt("ptc_offset"))
     # nascent_only_output is not a key: with a ribosome present (always, for CSP) the
     # output is always nascent-only -- it is the default CSP behavior, not a toggle.
 

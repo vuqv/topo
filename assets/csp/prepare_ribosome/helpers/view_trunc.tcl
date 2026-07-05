@@ -14,7 +14,9 @@
 # ---------------------------------------------------------------------------
 
 # ---- user-editable parameters ---------------------------------------------
-set pdbfile "sandbox/prep_rib/out/human/8g61_60S_model_cg_trunc.pdb"
+# Path relative to the bundle root (assets/csp/prepare_ribosome/); any shipped
+# structure works. Run e.g.:  vmd -e helpers/view_trunc.tcl
+set pdbfile "structures/human/8g61_60S_model_cg_trunc.pdb"
 
 # Axis extents (Å). X spans the whole structure; Y/Z are a short reference triad.
 set x_min  -25.0

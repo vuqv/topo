@@ -46,10 +46,11 @@ topo-csp -f csp_val.ini        # -> synth_out/
 ```
 
 The runner uses **codon-resolved kinetics** (each elongation cycle split into
-O'Brien's three kinetic sub-stages) with a per-stage **dt-halving stability
-guard**, rigid `AllBonds`, and equilibrium-PTC seeding (`optimize_ptc_geometry =
-yes`) so a new residue is placed one peptide bond from the C-terminus. A
-successful full-length run shows **no `[stability]` lines** in the log.
+three kinetic sub-stages) with a per-stage **dt-halving stability guard**, rigid
+`AllBonds` (the default), and **always-on equilibrium-PTC seeding** — each new
+residue is placed one peptide bond from the previous C-terminus, clear of the
+ribosome, so rigid bonds seed cleanly. A successful full-length run shows **no
+`[stability]` lines** in the log.
 
 ## What it produces
 

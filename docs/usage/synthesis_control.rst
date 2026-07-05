@@ -73,10 +73,8 @@ Example ``csp.ini``:
         nstout = 100         ; trajectory/log output interval (steps)
 
         ; --- ribosome / PTC mechanics ---
-        optimize_ptc_geometry = yes       ; seed at the equilibrium peptide-bond geometry ...
-        constraints           = AllBonds  ; ... and pair with rigid bonds (stable 15 fs path)
+        constraints = AllBonds  ; rigid bonds (default; equilibrium PTC seeding keeps them stable)
         restraint_k = 83680  ; C-terminus harmonic restraint (kJ/mol/nm^2)
-        buffer      = 0.4    ; A-site seed offset into the tunnel (nm)
         minimize    = yes    ; energy-minimize each seeded structure before its MD
         ; tunnel_wall = yes  ; one-sided tunnel floor (default on; plane auto-derived)
 
@@ -252,16 +250,12 @@ consumed by :func:`~topo.csp.core.run_length`).
      - Trajectory (DCD) and log output interval, in steps, for every stage.
    * - ``constraints``
      - str
-     - ``None``
-     - Bond treatment. ``None`` (flexible harmonic bonds) is required for the default far-seed path. Set ``AllBonds`` (rigid) **only together with** ``optimize_ptc_geometry = yes``, which seeds at the equilibrium bond length so rigid constraints stay stable.
+     - ``AllBonds``
+     - Bond treatment. Rigid ``AllBonds`` is the default and is stable because each residue is seeded at the equilibrium peptide-bond length (the PTC-geometry optimization is always on). Set ``None`` for flexible harmonic bonds instead.
    * - ``restraint_k``
      - float [kJ/mol/nm²]
      - ``83680``
      - Stiffness of the C-terminus harmonic restraint to the A/P target point (= 200 kcal/mol/Å²). Switching the target A→P is how translocation is reproduced.
-   * - ``buffer``
-     - float [nm]
-     - ``0.4``
-     - Offset into the tunnel (+x) at which a newly added bead is seeded from the A-anchor. Ignored when ``optimize_ptc_geometry = yes`` (which seeds at the optimal A-site target instead).
    * - ``minimize``
      - bool
      - ``yes``
@@ -270,14 +264,6 @@ consumed by :func:`~topo.csp.core.run_length`).
      - bool
      - ``yes``
      - Apply the one-sided half-harmonic tunnel wall (a floor below the synthesis point that keeps the chain extruding forward). The plane ``x₀`` is **auto-derived** from the ribosome structure and the stiffness is a fixed model constant — neither is an INI key; only this on/off toggle is exposed.
-   * - ``ptc_offset``
-     - float [nm]
-     - auto ``0.476``
-     - Offset into the tunnel (+x) from the P-anchor bead at which the C-terminus is held, so it clears the P-tRNA bead. Defaults to the tRNA-tether bond length.
-   * - ``optimize_ptc_geometry``
-     - bool
-     - ``no``
-     - Seed each new residue at the optimal A-site target — one equilibrium peptide bond (0.381 nm) from the previous C-terminus — and place the A/P restraint targets and tunnel-wall plane there too. This lets a rigid ``constraints = AllBonds`` build run cleanly at 15 fs without the dt-halving guard firing. Pair it with ``constraints = AllBonds``.
    * - ``nascent_ev_radii``
      - str
      - ``kb``
@@ -342,32 +328,40 @@ Kinetics and step counts (``scale_factor`` / ``time_stage_1`` / ``time_stage_2``
     ``random_seed`` fixes the whole schedule. Full derivation in
     :doc:`continuous_synthesis`.
 
-Bond treatment and PTC geometry (``constraints`` / ``optimize_ptc_geometry`` / ``buffer``)
-    Two consistent paths exist:
+Bond treatment and PTC geometry (``constraints``)
+    The PTC-geometry optimization is **always on**: each new residue is seeded at the
+    optimal A-site target — one equilibrium peptide bond (0.381 nm) from the previous
+    C-terminus, clear of the ribosome excluded volume (``optimal_ptc_targets``) — and
+    those optimized A-/P-site points are the C-terminus restraint targets and the
+    tunnel-wall plane. Because the peptide bond starts at its equilibrium length, rigid
+    ``constraints = AllBonds`` (the **default**) seeds and minimizes cleanly at 15 fs
+    without the dt-halving stability guard firing. Set ``constraints = None`` for
+    flexible harmonic bonds if you prefer; the equilibrium seeding keeps either stable.
 
-    * **Default (flexible bonds).** ``constraints = None`` with
-      ``optimize_ptc_geometry = no``. The new bead is seeded far (``buffer`` nm
-      from the A-anchor) and the harmonic bond absorbs the stretch, but stiff
-      native contacts can force the dt-halving stability guard to fire.
-    * **Optimized (rigid bonds).** ``optimize_ptc_geometry = yes`` together with
-      ``constraints = AllBonds`` seeds each residue at the equilibrium peptide-bond
-      length, so rigid constraints stay stable at 15 fs and the guard never fires.
-      This is the path the ribosome-synthesis tutorial uses.
+    .. note::
 
-    Do **not** set ``constraints = AllBonds`` without ``optimize_ptc_geometry =
-    yes`` — a rigid constraint cannot represent the far A-site seed.
+       **Why the seed uses a conservative excluded-volume radius (0.5 nm).**
+       ``optimal_ptc_targets`` places each new residue clear of the ribosome using a
+       **fixed 0.5 nm** nascent collision radius rather than that residue's own value.
+       The nascent chain's non-native
+       excluded-volume ``Rmin/2`` is set by the Karanicolas–Brooks rule from the
+       *native structure*, so it is **structure-dependent** — there is no universal
+       per-residue-type radius to look up for a residue that has not been placed yet.
+       0.5 nm exceeds **every** amino acid's ``Rmin/2`` (the largest is TRP,
+       0.382 nm), so the new bead is seeded clear of the ribosome wall for every
+       residue; the peptide bond then starts near its equilibrium length and the
+       rigid-bond path stays stable. The seed excluded volume is thus a conservative
+       **superset** of the one the simulation applies (per-residue K-B radii,
+       0.25–0.38 nm), not an exact copy.
 
-C-terminus restraint (``trna_tether`` / ``restraint_k`` / ``ptc_offset``)
-    The nascent C-terminus is held at the PTC and translocated A→P each residue.
-    The default ``trna_tether = no`` uses a simple harmonic position restraint
-    (stiffness ``restraint_k``) to the A/P target point — the validated path.
-    ``trna_tether = yes`` replaces it with O'Brien's full tRNA tether (bond + two
-    orienting angles + improper), which additionally aims the chain down the
-    tunnel. ``ptc_offset`` sets how far past the anchor bead the hold point sits
-    (so the C-terminus clears the tRNA bead); it defaults to the tether bond
-    length (``0.476`` nm). (Note: the underlying ``RunParams`` dataclass field
-    defaults ``trna_tether`` to ``True``, but ``read_csp_config`` makes the
-    effective ``csp.ini`` default ``no``.)
+C-terminus restraint (``trna_tether`` / ``restraint_k``)
+    The nascent C-terminus is held at the PTC (the optimized P-/A-site target) and
+    translocated A→P each residue. The default ``trna_tether = no`` uses a simple
+    harmonic position restraint (stiffness ``restraint_k``) to the target point — the
+    validated path. ``trna_tether = yes`` replaces it with O'Brien's full tRNA tether
+    (bond + two orienting angles + improper), which additionally aims the chain down
+    the tunnel. (Note: the underlying ``RunParams`` field defaults ``trna_tether`` to
+    ``True``, but ``read_csp_config`` makes the effective ``csp.ini`` default ``no``.)
 
 Tunnel wall (``tunnel_wall``)
     A one-sided half-harmonic wall supplies the "floor" that the truncated 50S

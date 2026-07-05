@@ -4,7 +4,7 @@ Build step v1 (:mod:`topo.csp.core`) simulates the **nascent chain
 only** and uses the truncated ribosome merely as two fixed anchor *coordinates*.
 **Build step v2** adds the truncated ribosome to the System as **rigid (mass-0)
 scenery** and wires the two ribosome <-> nascent-chain interactions, following
-``DESIGN.md`` §2.2/§3.2 and ``PROMPT.md`` §v2:
+the RNC design (see ``topo/csp/README.md`` and ``docs/usage/continuous_synthesis.md``):
 
 1. **Append** the ribosome beads at indices ``L..N-1`` with **mass = 0** (frozen;
    not integrated), coordinates as-is. The P-/A-anchors are now real beads.
@@ -47,7 +47,12 @@ from topo.parameters.model_parameters import parameters as MODEL_PARAMS
 RIBO_NC_EPS_KJ = 0.000132 * 4.184
 
 # All force constants below are in OpenMM units (kJ/mol/nm^2); the kcal/mol/A^2 ->
-# kJ/mol/nm^2 factor is 4.184 * 100 = 418.4, shown for provenance.
+# kJ/mol/nm^2 factor is 4.184 * 100 = 418.4, shown for provenance. They are the
+# O'Brien NOMINAL stiffnesses in the E = k (x-x0)^2 convention (no implicit 1/2).
+# The CustomForce terms (improper, tunnel wall, C-terminus position restraint) use
+# them as-is; the two built-in Harmonic{Bond,Angle}Force tether terms (add_trna_tether)
+# evaluate E = 1/2 k (x-x0)^2, so they are passed 2*k there to realize the same
+# nominal strength -- keep all four terms consistent if you change these.
 # O'Brien peptidyl-tRNA tether (P-site resting geometry), from
 # Continuous_synthesis_protocol/continuous_synthesis_v6.py:
 #   bond   C-term(CA) -- PtR:76 R      d = 4.76 A,  k = 200 kcal/mol/A^2 = 83680 kJ/mol/nm^2
@@ -119,7 +124,7 @@ class Ribosome:
 
 
 def _bead_type(name: str, resname: str) -> str:
-    """Parameter-lookup key for a CG bead (FILES.md mapping).
+    """Parameter-lookup key for a CG bead.
 
     Protein Cα beads (atom name ``CA``) look up by residue name; RNA beads look up
     by atom name with trailing digits stripped (``P``, ``R``, ``BR1``/``BR2`` → ``BR``).
@@ -456,17 +461,23 @@ def add_trna_tether(nascent_model, cterm_index: int, prev_index,
     bond_nm, ang_P_deg, ang_U2_deg, imp_deg = _TRNA_SITE_GEOM[segid]
     d2r = math.radians
 
+    # OpenMM's built-in HarmonicBondForce/HarmonicAngleForce evaluate E = 1/2 k (x-x0)^2,
+    # so we pass 2*k to realize the O'Brien nominal stiffness (E = k (x-x0)^2, the
+    # CHARMM/no-1/2 convention in which TRNA_TETHER_*_K are defined). This keeps the
+    # tether bond/angle at the SAME full strength as the improper, tunnel wall and
+    # C-terminus position restraint, which use CustomForces (no implicit 1/2).
+
     # 1. bond N -- R (holds the residue at the PTC at its site's resting length).
     bond = mm.HarmonicBondForce()
-    bond.addBond(int(cterm_index), R_idx, bond_nm, TRNA_TETHER_BOND_K)
+    bond.addBond(int(cterm_index), R_idx, bond_nm, 2.0 * TRNA_TETHER_BOND_K)
     system.addForce(bond)
 
     # 2. orienting harmonic angles N -- R -- P and N -- R -- PU2 (tRNA frame).
     haf = mm.HarmonicAngleForce()
     if P_idx is not None:
-        haf.addAngle(int(cterm_index), R_idx, P_idx, d2r(ang_P_deg), TRNA_TETHER_ANGLE_K)
+        haf.addAngle(int(cterm_index), R_idx, P_idx, d2r(ang_P_deg), 2.0 * TRNA_TETHER_ANGLE_K)
     if U2_idx is not None:
-        haf.addAngle(int(cterm_index), R_idx, U2_idx, d2r(ang_U2_deg), TRNA_TETHER_ANGLE_K)
+        haf.addAngle(int(cterm_index), R_idx, U2_idx, d2r(ang_U2_deg), 2.0 * TRNA_TETHER_ANGLE_K)
     if haf.getNumAngles() > 0:
         system.addForce(haf)
 

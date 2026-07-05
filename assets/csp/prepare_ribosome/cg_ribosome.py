@@ -32,8 +32,8 @@ tRNA), ``PtR`` (P-site tRNA), ``23S`` / ``5S`` (rRNAs), and ``L2``..``L36``
 Anything that is neither a standard amino acid nor a standard nucleotide
 (ions, water, ligands) is skipped with a warning.
 
-The ribosome is coarse-grained **before** truncation (see ``FILES.md``): every
-bead centroid is computed from the complete all-atom residue.
+The ribosome is coarse-grained **before** truncation (see the bundle README):
+every bead centroid is computed from the complete all-atom residue.
 
 Usage
 -----

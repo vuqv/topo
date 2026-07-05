@@ -25,7 +25,7 @@ and finalizes **one length-``L`` segment** of nascent-chain MD:
 2. **Seed coordinates.** ``L == L0``: lay residues ``1..L0`` extended along the
    tunnel axis (+x) from the P-anchor, one CG bond length apart. ``L > L0``:
    residues ``1..L-1`` from the previous segment's final structure; the new residue
-   ``L`` at the A-anchor + buffer.
+   ``L`` at the optimal A-site target (one equilibrium peptide bond from residue L-1).
 3. **Restrain only residue ``L``** (the current C-terminus) to a chosen anchor with
    a harmonic ``CustomExternalForce`` (``k = restraint_k``).
 4. **Minimize**, draw Boltzmann velocities at ``ref_t``, **run the requested step
@@ -80,8 +80,8 @@ def _vprint(*args, **kwargs) -> None:
 # CG protein bond length (nm); cold-start beads are laid one bond length apart so
 # no bond is pre-stretched (matches model_parameters['topo']['bond_length_protein']).
 CG_BOND_LENGTH_NM = 0.381
-# Tunnel / exit axis: the working ribosome is X-aligned (FILES.md), so the chain
-# extrudes toward +x.
+# Tunnel / exit axis: the working ribosome is X-aligned (oriented by the
+# assets/csp/prepare_ribosome pipeline), so the chain extrudes toward +x.
 TUNNEL_AXIS = np.array([1.0, 0.0, 0.0])
 # Default C-terminus position-restraint force constant (kJ/mol/nm^2 = OpenMM units;
 # 83680 = 200 kcal/mol/A^2). Used only in the non-tether (position-restraint) mode.
@@ -165,10 +165,16 @@ def optimal_ptc_targets(ribo, *, aa_rmin_2_nm: float = 0.5,
         coordinates and the excluded-volume radii).
     aa_rmin_2_nm : float, optional
         Nascent-bead Rmin/2 (nm) used in the seed excluded-volume term, combined with the
-        ribosome per-bead Rmin/2 by O'Brien's SUM rule (R = aa_rmin_2_nm + Rmin/2_ribo) --
-        the SAME EV the simulation applies. Default 0.5 (a conservative value ~ the largest
-        per-residue Karanicolas-Brooks radius, so the seed clears the wall for essentially
-        every residue -> fewer dt-halving blow-ups).
+        ribosome per-bead Rmin/2 by O'Brien's SUM rule (R = aa_rmin_2_nm + Rmin/2_ribo).
+        Default 0.5 nm -- a deliberately conservative CONSTANT, *not* the simulation's
+        per-residue value. In the simulation the nascent chain's non-native Rmin/2 is set
+        by the Karanicolas-Brooks rule from the **native structure**, so it is
+        structure-dependent: there is no universal per-residue-type radius to look up when
+        seeding a not-yet-placed residue. 0.5 nm exceeds every amino acid's Rmin/2 (largest
+        is TRP = 0.382 nm), so seeding against this larger radius places the new residue
+        clear of the ribosome wall for *every* residue -- the peptide bond then starts near
+        its equilibrium length and dt-halving blow-ups are avoided. The seed EV is thus a
+        conservative **superset** of the simulation EV, not identical to it.
     n_starts : int, optional
         Number of deterministic multistart initial orientations (default 60).
 
@@ -188,11 +194,14 @@ def optimal_ptc_targets(ribo, *, aa_rmin_2_nm: float = 0.5,
     U2A = RB[_ptc_bead_index(ribo, "AtR", 76, "BR2")]       # topo BR2 == O'Brien PU2
     U2P = RB[_ptc_bead_index(ribo, "PtR", 76, "BR2")]
 
-    # Pair contact distance for the seed EV, CONSISTENT with the simulation's NC<->ribosome
-    # force (topo.csp.ribosome.append_ribosome): O'Brien's SUM rule R_ij = Rmin/2_nascent +
-    # Rmin/2_ribo (NOT the average 0.5*(sig_i+sig_j)). aa_rmin_2_nm is the nascent bead's Rmin/2
-    # (a conservative value ~ the max per-residue Karanicolas-Brooks radius, so the seed is
-    # placed clear of the wall for essentially every residue -> fewer dt-halving blow-ups).
+    # Pair contact distance for the seed EV: O'Brien's SUM rule R_ij = Rmin/2_nascent +
+    # Rmin/2_ribo (NOT the average 0.5*(sig_i+sig_j)) -- the same combining rule as the
+    # simulation's NC<->ribosome force (topo.csp.ribosome.append_ribosome). The nascent
+    # Rmin/2 here is a conservative CONSTANT (aa_rmin_2_nm = 0.5 nm), NOT the simulation's
+    # per-residue value: that value is the Karanicolas-Brooks Rmin/2 derived from the native
+    # structure (structure-dependent -- no universal per-residue-type number to use at seed
+    # time), and 0.5 nm > every AA's Rmin/2 (max TRP 0.382 nm), so the seed clears the wall
+    # for every residue. Conservative superset of the sim EV, not identical.
     R_pair = aa_rmin_2_nm + RBr                              # pair contact dist (nm), sum rule
     mA = np.ones(ribo.n, bool); mA[iRA] = False             # O'Brien exclusions
     mP = np.ones(ribo.n, bool); mP[iRP] = False
@@ -266,7 +275,7 @@ def optimal_ptc_targets(ribo, *, aa_rmin_2_nm: float = 0.5,
     # even on geometries where 0.427/0.476 cannot be met exactly. Inequality
     # constraints keep each point on the EXIT side of its tRNA R bead (x >= x_tRNA),
     # i.e. between the tRNA and the +x exit port -- never buried back in the ribosome
-    # (the working ribosome is +x-aligned; FILES.md / tutorials/14). Without this a
+    # (the working ribosome is +x-aligned; see assets/csp/prepare_ribosome). Without this a
     # feasible-but-buried minimum (A behind the A-tRNA) can win on excluded volume alone.
     cons = [{"type": "eq", "fun": lambda x: np.linalg.norm(x[:3] - x[3:]) - _PTC_PEPTIDE_NM},
             {"type": "ineq", "fun": lambda x: x[0] - RA[0]},   # A.x >= A-tRNA.x (exit side)
@@ -330,8 +339,9 @@ def read_anchor(pdb_file: str, segid: str, resid: int = 76,
     Parses the (CG) ribosome PDB for the single atom whose **segID** (columns
     73-76), **residue number** and **atom name** match ``segid`` / ``resid`` /
     ``bead``. Used to pick the P-anchor (``segid='PtR'``) and A-anchor
-    (``segid='AtR'``) from the truncated ribosome (both keep residue 76 — see
-    FILES.md). PDB coordinates are in angstrom; the returned vector is in nm.
+    (``segid='AtR'``) from the truncated ribosome (both keep residue 76 — the
+    truncation retains the tRNA acceptor ends). PDB coordinates are in angstrom;
+    the returned vector is in nm.
 
     Raises
     ------
@@ -567,25 +577,17 @@ def cold_start_positions(L0: int, p_anchor: np.ndarray) -> np.ndarray:
     return positions
 
 
-def seed_positions(prev_final: np.ndarray, a_anchor: np.ndarray,
-                   buffer_nm: float,
-                   seed_point: Optional[np.ndarray] = None) -> np.ndarray:
+def seed_positions(prev_final: np.ndarray, seed_point: np.ndarray) -> np.ndarray:
     """Seed length ``L`` from the previous final structure + the new residue.
 
     Residues ``1..L-1`` keep their coordinates from step ``L-1``'s final
     structure (``prev_final``, shape ``(L-1, 3)`` nm). The new C-terminal residue
-    ``L`` is placed either at ``seed_point`` directly (the equilibrium-bond A-site
-    target from :func:`optimal_ptc_targets`, when given -- so the always-present
-    peptide bond ``L-1<->L`` starts at its equilibrium length and a rigid ``AllBonds``
-    constraint seeds cleanly; tutorials/14 step 2), or at the A-anchor offset by
-    ``buffer_nm`` along +x (default; the buffer clears excluded volume so the new bead
-    does not get a huge ``(Rmin/r)^12`` kick -- DESIGN §2.5 / invariant 6). Returns an
-    ``(L, 3)`` array in nm.
+    ``L`` is placed at ``seed_point`` -- the equilibrium-bond A-site target from
+    :func:`optimal_ptc_targets` -- so the always-present peptide bond ``L-1<->L``
+    starts at its equilibrium length and a rigid ``AllBonds`` build seeds/minimizes
+    cleanly. Returns an ``(L, 3)`` array in nm.
     """
-    if seed_point is not None:
-        new_residue = np.asarray(seed_point, dtype=float)
-    else:
-        new_residue = a_anchor + buffer_nm * TUNNEL_AXIS
+    new_residue = np.asarray(seed_point, dtype=float)
     return np.vstack([prev_final, new_residue[None, :]])
 
 
@@ -828,33 +830,18 @@ class RunParams:
     nstout: int = 5000
     device: str = "CPU"
     ppn: int = 1
-    # Flexible (harmonic) bonds by default -- NOT the package default of rigid
-    # 'AllBonds'. The elongation step places the new residue at the A-anchor while
-    # restraining it to the P-anchor (~0.9-1.1 nm away), so the new bond starts far
-    # from its equilibrium length. A rigid distance constraint cannot be seeded that
-    # far off (the constraint solver / minimizer diverges); a harmonic bond absorbs
-    # the stretch, lets the minimization relax it, and the restraint then translocates
-    # the residue A->P -- exactly the DESIGN §2.5 mechanism.
-    constraints: object = None
+    # Rigid ('AllBonds') bonds by default. The CSP runner always seeds each new residue
+    # at the optimal A-site target -- one equilibrium peptide bond (0.381 nm) from the
+    # previous C-terminus (:func:`optimal_ptc_targets`, the PTC-geometry optimization is
+    # always on) -- so the always-present bond starts at its equilibrium length and rigid
+    # constraints seed/minimize cleanly at 15 fs (no dt-halving needed). Set to ``None``
+    # for flexible harmonic bonds if you prefer; the equilibrium seeding keeps either
+    # stable. The PTC optimization also supplies the C-terminus restraint targets
+    # (a_target/p_target) and the tunnel-wall plane, and requires the ribosome to carry
+    # tRNA beads under the expected names (segids ``AtR``/``PtR``, resid 76, beads
+    # ``R``/``P``/``BR2``); a ribosome without a well-formed PTC makes it fail.
+    constraints: object = "AllBonds"
     restraint_k: float = RESTRAINT_K_KJ   # kJ/mol/nm^2 (= 200 kcal/mol/A^2)
-    buffer_nm: float = 0.4
-    # Optimize the PTC (peptidyl-transferase-center) restraint/seed geometry
-    # (tutorials/14 step 2; opt-in). When True, the CSP runner seeds each new residue at
-    # the optimal A-site target point one peptide bond (0.381 nm) from the previous
-    # C-terminus (:func:`optimal_ptc_targets`) and uses those optimized A/P points as the
-    # C-terminus restraint targets and the tunnel-wall plane, so the always-present
-    # peptide bond starts at its equilibrium length -- letting a rigid
-    # `constraints='AllBonds'` build seed/minimize cleanly at 15 fs without the
-    # dt-halving stability guard firing. Default False keeps the validated far-seed +
-    # flexible-bond + dt-halving behavior (Tutorials 12 & 13 unchanged). Enable with
-    # `optimize_ptc_geometry = yes` + `constraints = AllBonds` in the INI.
-    #
-    # NOTE: this depends on the ribosome carrying tRNA beads under the expected names
-    # (segids ``AtR``/``PtR``, resid 76, beads ``R``/``P``/``BR2``); :func:`optimal_ptc_targets`
-    # reads them directly. A ribosome PDB with no tRNA -- or with differently-named tRNA
-    # segments -- makes this (and the plain anchor lookup) fail. See the tRNA-presence
-    # TODO in ``review/TODO.md``.
-    optimize_ptc_geometry: bool = False
     # Nascent per-residue excluded-volume radius (Rmin/2) for the NC<->ribosome 12-10-6 force:
     #   "kb"     -> per-residue Karanicolas-Brooks collision diameter from the native structure
     #               (Option A; O'Brien's actual nascent A_i radii). DEFAULT.
@@ -868,14 +855,6 @@ class RunParams:
     # longer a flag here -- the CSP runner always loads the supplied ribosome PDB as
     # rigid scenery (passed to run_length via its `ribo` argument). run_length itself
     # keys off that `ribo` argument, not a field.
-    # How far into the tunnel (+x) from the P-anchor *bead* to hold the
-    # C-terminus (nm). The P-anchor is the PtR residue-76 R bead, so in v2 a
-    # zero offset would restrain the C-terminus on top of that ribosome bead --
-    # a near-coincident excluded-volume clash that explodes. A small offset holds
-    # the C-terminus just inside the tunnel, clearing the P-tRNA bead. None ->
-    # auto: 0.0 in v1 (no ribosome), 0.4 nm in v2 (or the tether bond length when
-    # the tRNA tether is on).
-    ptc_offset_nm: Optional[float] = None
     # v2: tether the C-terminus to the P-site tRNA R bead the O'Brien way -- a bond
     # plus a CA(L-1)-CA(L)-tRNA orienting angle -- instead of a generic position
     # restraint. The angle aims the nascent chain down the tunnel (toward the exit)
@@ -887,8 +866,8 @@ class RunParams:
     # exit) and cannot fold back past the synthesis point into the truncated-ribosome
     # void below the PTC. Applied throughout synthesis + post-phase. Neither the plane
     # nor the stiffness is a user/INI knob: x0_nm is **auto-derived from the ribosome
-    # structure** by the CSP runner (the lower / P-site C-terminus hold plane =
-    # min(P,A anchor x) + ptc_offset) so it can never go stale when the structure
+    # structure** by the CSP runner (the lower C-terminus hold plane =
+    # min(A-target.x, P-target.x)) so it can never go stale when the structure
     # changes (left None here; the runner fills it in before run_length), and
     # tunnel_wall_k is a **fixed model constant** (O'Brien's 20 kcal/mol/A^2). Only the
     # `tunnel_wall` on/off toggle is exposed.
@@ -1053,8 +1032,10 @@ def run_length(L: int, *, full_pdb: str, R_full: np.ndarray, eps_full: np.ndarra
         if prev_final.shape[0] != L - 1:
             raise ValueError(
                 f"prev_final has {prev_final.shape[0]} residues but L-1 = {L - 1}.")
-        nascent_pos = seed_positions(prev_final, a_anchor, params.buffer_nm,
-                                     seed_point=seed_point)
+        if seed_point is None:
+            raise ValueError("seed_point is required to seed a continued length "
+                             "(the PTC-geometry A-site target).")
+        nascent_pos = seed_positions(prev_final, seed_point)
 
     # With a ribosome present, output is always nascent-only: write only the nascent
     # chain to the trajectory / PSF / final structure. Capture a nascent (L-atom)

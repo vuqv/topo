@@ -89,12 +89,48 @@ co-translationally once residues clear the bore.
 ```{note}
 **How it differs from the {doc}`coarse-grained ribosome model <continuous_synthesis>`.**
 (1) No `ribosome` PDB — the tunnel is analytic, its geometry set by the `tunnel_*` keys.
-(2) **One MD segment per residue** (no peptidyl-transfer / translocation / tRNA-binding
-sub-stages), so `time_stage_1` / `time_stage_2` are inherited but **unused** — the whole
-codon dwell is a single segment. (3) The ribosome-specific knobs
-(`optimize_ptc_geometry`, `nascent_ev_radii`, `trna_tether`, `tunnel_wall`,
-`ptc_offset`, `buffer`) do not apply. The post-synthesis phases use the **same**
-`ejection_steps` / `dissociation_steps` keys as the CSP runner.
+(2) **One MD segment per residue.** There are no peptidyl-transfer / translocation /
+tRNA-binding sub-stages, so the whole codon dwell — the full per-codon time
+`intrinsic[L]` from the codon-time table — is run as a **single** MD segment. This
+gives the **same total simulated time per residue** as the explicit runner (whose
+three sub-stages, by construction, sum in the mean to that same `intrinsic[L]`); the
+cylinder just does not slice it into three. Consequently `time_stage_1` / `time_stage_2`
+are **inert** here (they only *partition* the codon dwell in the explicit model, they
+do not change its total), and the **`ribosome_traffic` / `initiation_rate`** keys are
+**also not applied** — the cylinder runs the un-corrected `intrinsic[L]`, so no
+inter-ribosome traffic correction is added. Set those keys in `cylinder.ini` and they
+are silently ignored. (3) The ribosome-specific knobs (`nascent_ev_radii`,
+`trna_tether`, `tunnel_wall`) do not apply.
+The post-synthesis phases use the **same** `ejection_steps` / `dissociation_steps` keys
+as the CSP runner.
+```
+
+### Physical scope — what the bore captures, and what it omits
+
+The analytic tunnel reproduces **geometric confinement only**. Because there are no
+ribosome beads, the cylinder model **omits** two interactions that the
+{doc}`explicit coarse-grained ribosome model <continuous_synthesis>` includes:
+
+- **Ribosome↔nascent-chain electrostatics.** There is no Debye–Hückel term between
+  the ribosome surface (negatively charged rRNA phosphates, charged ribosomal-protein
+  residues) and the charged nascent residues. The real exit tunnel is strongly
+  electronegative; that field is entirely absent here.
+- **Ribosome-surface excluded volume.** The wall is a smooth bore of one fixed radius,
+  not the real ribosome's per-residue `(σ/r)¹²` surface. There is **no constriction
+  site and no vestibule** — the *E. coli* tunnel is curved, ~8 nm long, and varies
+  ~0.5–1 nm in radius, none of which a straight uniform cylinder reproduces.
+
+It also has **no A→P translocation** — the C-terminus stays position-restrained at the
+PTC, whereas the explicit model migrates it one register per residue.
+
+```{warning}
+**The cylinder and explicit-ribosome runners are comparable only in the *mean*
+per-residue dwell time, not in confinement chemistry.** Use the cylinder model for
+fast exploration of how *tunnel geometry + codon kinetics* shape co-translational
+folding; use the {doc}`explicit ribosome <continuous_synthesis>` when tunnel-wall
+charge, tunnel shape (constriction / vestibule), or translocation-coupled forces
+matter. Do **not** compare folding observables (folding order, Q-vs-length, radius of
+gyration) between the two models without accounting for these missing terms.
 ```
 
 ---
