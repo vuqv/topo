@@ -93,10 +93,9 @@ _NC_126_ENERGY = ("eps*(13*(R/r)^12 - 18*(R/r)^10 + 4*(R/r)^6); R = rm1 + rm2")
 # Planar tunnel wall (O'Brien): a one-sided restraint that keeps the nascent chain
 # at x >= x0, so it can only extrude *forward* (+x, toward the exit) and cannot move
 # backward past the synthesis point into the ribosome interior / the truncated
-# underside. x0 is the C-terminal-AA addition plane -- the PTC / P-site where each new
-# residue is placed and tethered = P-anchor x + tether bond length (0.5705 + 0.476 ~
-# 1.05 nm for this ribosome). (O'Brien quote 58 A, but that is their coordinate frame.)
-TUNNEL_WALL_X0_NM = 1.05
+# underside. The plane x0 is always derived per structure by the CSP runner from the
+# PTC-optimized A/P target points (the lower of their x) and passed in explicitly, so
+# there is no module-level default for it -- only the wall stiffness k has one.
 TUNNEL_WALL_K = 8368.0         # kJ/mol/nm^2 (= 20 kcal/mol/A^2)
 
 
@@ -495,7 +494,7 @@ def add_trna_tether(nascent_model, cterm_index: int, prev_index,
         nascent_model.gaussianAngleForce.addAngle(int(prev_index), int(cterm_index), R_idx)
 
 
-def add_tunnel_wall(system, nascent_indices, x0_nm: float = TUNNEL_WALL_X0_NM,
+def add_tunnel_wall(system, nascent_indices, x0_nm: float,
                     k: float = TUNNEL_WALL_K) -> mm.Force:
     """Add O'Brien's one-sided planar tunnel wall on the nascent chain.
 
@@ -510,9 +509,10 @@ def add_tunnel_wall(system, nascent_indices, x0_nm: float = TUNNEL_WALL_X0_NM,
         The system to which the planar-wall force is added.
     nascent_indices : iterable of int
         System indices of the nascent-chain beads subjected to the wall.
-    x0_nm : float, optional
-        Plane position (nm); beads are penalized only for ``x < x0``. Default is
-        :data:`TUNNEL_WALL_X0_NM`.
+    x0_nm : float
+        Plane position (nm); beads are penalized only for ``x < x0``. Always supplied
+        by the CSP runner from the PTC-optimized A/P targets (structure-dependent);
+        there is no default.
     k : float, optional
         Force constant (kJ/mol/nm^2) of the one-sided restraint. Default is
         :data:`TUNNEL_WALL_K`.

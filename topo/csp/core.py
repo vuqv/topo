@@ -56,7 +56,7 @@ from topo import engine
 from topo.core.system import system as TopoSystem
 from topo.csp.ribosome import (Ribosome, load_ribosome, append_ribosome,
                                        add_trna_tether, add_tunnel_wall,
-                                       TRNA_TETHER_BOND_NM, TUNNEL_WALL_X0_NM,
+                                       TRNA_TETHER_BOND_NM,
                                        TUNNEL_WALL_K, RIBO_NC_EPS_KJ)
 from topo.utils.nonbonded import build_nonbonded_interaction
 
