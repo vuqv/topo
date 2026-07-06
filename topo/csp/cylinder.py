@@ -279,9 +279,9 @@ def run_cylinder_synthesis(full_pdb: str, *, L0: int = 1, L_max: Optional[int] =
     mrna : str, optional
         mRNA sequence file (one codon per residue) for the codon-resolved kinetics.
         Required for per-codon timing (i.e. unless ``params.uniform_codon_time`` is set).
-    codon_time_table_path : str, optional
-        Per-codon mean-time table; ``None`` -> the bundled E. coli 310 K table
-        (:func:`topo.csp.kinetics.default_codon_time_table_path`).
+    codon_time_table_path : str
+        Per-codon mean-time table (required for per-codon timing; pick one under
+        ``assets/csp/codon_dwell_times/``). There is no bundled default.
     domain_def, stride_output_file : str, optional
         Passed to the one-time contact precompute (nscale / STRIDE).
     params : CylinderParams, optional
@@ -453,8 +453,9 @@ def read_cylinder_config(config_file: str, verbose: bool = True) -> CylinderConf
     - ``domain_def`` -- domain YAML for contact ``nscale`` (one-time precompute).
     - ``stride_output_file`` -- precomputed STRIDE (else STRIDE runs once if on PATH).
     - **Kinetics** (same as CSP): ``mrna`` (per-codon sequence), ``codon_times`` (a codon
-      table path for per-codon timing, or a positive number of seconds for a uniform
-      codon time; blank -> bundled E. coli 310 K table), ``scale_factor``,
+      table path for per-codon timing -- required, no bundled default; pick one under
+      ``assets/csp/codon_dwell_times/`` -- or a positive number of seconds for a uniform
+      codon time), ``scale_factor``,
       ``time_stage_1``, ``time_stage_2``, ``random_seed``, ``max_steps_per_stage``,
       ``min_steps_per_stage``.
     - **Integrator / MD**: ``dt``, ``ref_t``, ``tau_t``, ``nstout``, ``device``, ``ppn``,
@@ -579,21 +580,22 @@ def read_cylinder_config(config_file: str, verbose: bool = True) -> CylinderConf
     if opt("dissociation_steps") is not None:
         p.dissociation_steps = as_int(opt("dissociation_steps"))
 
-    # Validation: per-codon timing needs the (protein-specific) mRNA. The codon-time table
-    # is organism-universal, so a codon_times table path is optional (bundled default).
-    if p.uniform_codon_time is None and mrna is None:
+    # Validation: per-codon timing needs both the (protein-specific) mRNA and an explicit
+    # codon-time table -- there is no bundled default (pick one under
+    # assets/csp/codon_dwell_times/).
+    if p.uniform_codon_time is None and (mrna is None or codon_time_table_path is None):
         raise ValueError(
-            f"{config_file}: per-codon kinetics need an 'mrna' file (or set "
-            f"'codon_times' to a positive number of seconds for a uniform codon time). "
-            f"A 'codon_times' table path is optional (defaults to the bundled "
-            f"E. coli 310 K table).")
+            f"{config_file}: per-codon kinetics need both an 'mrna' file and a "
+            f"'codon_times' table path (e.g. one under assets/csp/codon_dwell_times/), "
+            f"or set 'codon_times' to a positive number of seconds for a uniform codon "
+            f"time.")
 
     log(f"  inputs: pdb_file={pdb_file} (ribosome: analytic tunnel, no PDB)")
     log(f"  contacts: domain_def={domain_def}, stride_output_file={stride_output_file}")
     log(f"  schedule: L0={L0}, L_max={L_max if L_max is not None else 'full'}, "
         f"constraints={p.constraints}")
     _timing = (f"uniform (codon_time={p.uniform_codon_time:g} s)" if p.uniform_codon_time is not None
-               else f"per-codon (mrna={mrna}, codon_times={codon_time_table_path or 'bundled E. coli 310 K'})")
+               else f"per-codon (mrna={mrna}, codon_times={codon_time_table_path})")
     log(f"  timing: {_timing}; scale_factor={p.scale_factor:g}, "
         f"time_stage_1={p.time_stage_1:g} s, time_stage_2={p.time_stage_2:g} s")
     log(f"  tunnel: r={p.tunnel_radius_nm} nm, length={p.tunnel_length_nm} nm, "

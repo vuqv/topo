@@ -55,8 +55,8 @@ Example ``csp.ini``:
 
         ; --- codon-resolved kinetics ---
         mrna         = 4c5c_mrna.txt   ; one codon per residue (required for per-codon timing)
-        ; codon_times = trans_times.txt  ; table path = per-codon; a positive number of s = uniform;
-                                          ; omit -> bundled E. coli 310 K table
+        codon_times  = trans_times.txt  ; table path = per-codon (required, no bundled default);
+                                          ; a positive number of s = uniform instead
         scale_factor = 216564650       ; in-vivo seconds -> in-silico ns compression (larger = faster)
         time_stage_1 = 0.000340        ; mean peptidyl-transfer dwell (s)
         time_stage_2 = 0.004201        ; mean translocation dwell (s)
@@ -136,9 +136,9 @@ Inputs & length schedule
      - mRNA sequence file (raw nucleotides; one codon per residue plus one stop). Drives the per-codon timing, so it is required unless ``codon_times`` is set to a number (uniform timing).
    * - ``codon_times``
      - str or float
-     - no
-     - bundled E. coli 310 K
-     - Codon-timing key. A **path** to a codon→mean-time table (``CODON  seconds``) selects **per-codon** timing; a **positive number of seconds** selects **uniform** timing (that mean dwell for every codon, no ``mrna`` needed). Omit it to use the bundled Fluitt *E. coli* 310 K table (organism-universal). A table filename must **not** be a bare number (a numeric value is always read as a uniform time).
+     - for per-codon timing
+     - —
+     - Codon-timing key. A **path** to a codon→mean-time table (``CODON  seconds``) selects **per-codon** timing (required, no bundled default -- pick one under ``assets/csp/codon_dwell_times/``); a **positive number of seconds** selects **uniform** timing (that mean dwell for every codon, no ``mrna`` needed). A table filename must **not** be a bare number (a numeric value is always read as a uniform time).
    * - ``L0``
      - int
      - no

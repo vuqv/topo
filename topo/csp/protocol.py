@@ -94,9 +94,9 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
         mRNA sequence file (one codon per residue) -- the codon-resolved kinetics.
         Required for per-codon timing; not needed for uniform timing
         (``params.uniform_codon_time`` set).
-    codon_time_table_path : str, optional
-        Per-codon mean-time table. ``None`` -> the bundled E. coli 310 K table
-        (organism-universal; see :func:`topo.csp.kinetics.default_codon_time_table_path`).
+    codon_time_table_path : str
+        Per-codon mean-time table (required for per-codon timing; pick one under
+        ``assets/csp/codon_dwell_times/``). There is no bundled default.
     domain_def : str
         Domain-definition file (``domain.yaml``) defining the protein's **native-contact
         nscales** -- per-domain and per-interface Gō well-depth scaling factors (the
@@ -408,9 +408,9 @@ def read_csp_config(config_file: str, verbose: bool = True) -> CSPConfig:
       residue + 1 stop. Required for per-codon timing (it is protein-specific).
     - ``codon_times`` -- the codon-timing key. Either a **path** to a per-codon
       mean-time table (``CODON  seconds``; per-codon timing) **or** a **positive number
-      of seconds** (uniform codon time for every codon, no ``mrna`` needed). **Optional**:
-      omitting it uses the bundled E. coli 310 K table (organism-universal). A table
-      filename must not be a bare number. See
+      of seconds** (uniform codon time for every codon, no ``mrna`` needed). Required for
+      per-codon timing -- there is no bundled default (pick a table under
+      ``assets/csp/codon_dwell_times/``). A table filename must not be a bare number. See
       :func:`topo.csp.kinetics.parse_codon_times`.
     - ``scale_factor`` -- in-vivo seconds -> in-silico ns compressor.
     - ``time_stage_1`` / ``time_stage_2`` -- mean peptidyl-transfer / translocation
@@ -619,22 +619,21 @@ def read_csp_config(config_file: str, verbose: bool = True) -> CSPConfig:
     if opt("dissociation_steps") is not None:
         p.dissociation_steps = as_int(opt("dissociation_steps"))
 
-    # Validation: per-codon timing needs the (protein-specific) mRNA. The codon-time
-    # table is organism-universal, so `codon_time_table_path` is optional -- it defaults to the
-    # bundled E. coli 310 K table (topo.csp.kinetics.default_codon_time_table_path).
-    if p.uniform_codon_time is None and mrna is None:
-        raise ValueError(f"{config_file}: per-codon timing needs an 'mrna' file "
-                         f"(or set 'codon_times' to a positive number of seconds for a "
-                         f"uniform codon time). A 'codon_times' table path is optional "
-                         f"(defaults to the bundled E. coli 310 K table).")
+    # Validation: per-codon timing needs both the (protein-specific) mRNA and an explicit
+    # codon-time table -- there is no bundled default (pick one under
+    # assets/csp/codon_dwell_times/).
+    if p.uniform_codon_time is None and (mrna is None or codon_time_table_path is None):
+        raise ValueError(f"{config_file}: per-codon timing needs both an 'mrna' file and "
+                         f"a 'codon_times' table path (e.g. one under "
+                         f"assets/csp/codon_dwell_times/), or set 'codon_times' to a "
+                         f"positive number of seconds for a uniform codon time.")
 
     log(f"  inputs: pdb_file={pdb_file}, ribosome={ribosome}")
     log(f"  schedule: L0={L0}, L_max={L_max if L_max is not None else 'full'}")
     if p.uniform_codon_time is not None:
         log(f"  timing: uniform (codon_time={p.uniform_codon_time:g} s)")
     else:
-        _table = codon_time_table_path or "bundled E. coli 310 K"
-        log(f"  timing: per-codon (mrna={mrna}, codon_times={_table})")
+        log(f"  timing: per-codon (mrna={mrna}, codon_times={codon_time_table_path})")
     log(f"          scale_factor={p.scale_factor:g}, time_stage_1={p.time_stage_1:g} s, "
         f"time_stage_2={p.time_stage_2:g} s")
     if p.ribosome_traffic:   # hidden/deferred feature; only mention it when enabled

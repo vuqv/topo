@@ -1,0 +1,89 @@
+# =============================================================================
+# Per-codon translation times — S. cerevisiae  (O'Brien data, RESCALED to 9.3 aa/s)
+# =============================================================================
+# Format : CODON<TAB>TIME_SECONDS (RNA alphabet, U; 6 dp). 64 codons (stops measured).
+#
+# WHAT THIS IS
+#   The O'Brien/Sharma 2019 absolute yeast codon translation times (Weissman
+#   dataset, MEAN; file yeast_codon_dwell_times_OBrien.txt) UNIFORMLY rescaled
+#   so the codon-usage-weighted mean of the 61 sense codons = 1/9.3 s, i.e.
+#   9.3 codons/s (Chu et al. 2014) -- the SAME anchor as the Gardin-RRT file
+#   yeast_codon_dwell_times.txt. This makes the two yeast tables directly
+#   comparable on absolute scale.
+#     rescale factor C = 0.51673  (every codon, incl. measured stops, x C)
+#   The native O'Brien absolute scale (~4.3 codons/s) is kept in the
+#   unrescaled file; use THIS file only when you want O'Brien's per-codon
+#   PATTERN on the 9.3/s scale.
+#   Verified: usage-weighted sense mean = 0.107527 s = 1/9.3.
+#
+# SOURCE: Sharma, ..., O'Brien 2019 PLoS Comput Biol 15:e1007070, S1 File
+#   (pcbi.1007070.s016.xlsx, "Weissman data translation rates", MEAN column).
+#   Codon usage for the weighting: Gardin et al. 2014 Table 2A (same as the
+#   companion Gardin yeast file). R = 9.3 codons/s: Chu et al. 2014 Cell 153:1589.
+#
+# RANGE: fastest GUU = 0.074926 s ; slowest CCG = 0.260431 s.
+# =============================================================================
+AAA	0.111613
+AAC	0.085777
+AAG	0.100245
+AAU	0.086810
+ACA	0.134349
+ACC	0.083710
+ACG	0.166903
+ACU	0.089394
+AGA	0.112647
+AGC	0.112130
+AGG	0.164320
+AGU	0.103862
+AUA	0.141067
+AUC	0.075442
+AUG	0.094045
+AUU	0.078026
+CAA	0.082160
+CAC	0.107479
+CAG	0.122465
+CAU	0.095595
+CCA	0.122981
+CCC	0.183955
+CCG	0.260431
+CCU	0.140033
+CGA	0.249063
+CGC	0.147784
+CGG	0.220643
+CGU	0.099212
+CUA	0.100245
+CUC	0.146234
+CUG	0.157602
+CUU	0.105413
+GAA	0.106446
+GAC	0.104379
+GAG	0.131766
+GAU	0.103346
+GCA	0.123498
+GCC	0.085777
+GCG	0.158636
+GCU	0.084743
+GGA	0.165353
+GGC	0.143134
+GGG	0.168453
+GGU	0.115230
+GUA	0.105413
+GUC	0.078543
+GUG	0.136416
+GUU	0.074926
+UAA	0.095595
+UAC	0.111613
+UAG	0.160702
+UAU	0.098695
+UCA	0.103346
+UCC	0.091461
+UCG	0.145717
+UCU	0.086294
+UGA	0.194290
+UGC	0.141067
+UGG	0.167937
+UGU	0.091978
+UUA	0.081643
+UUC	0.086810
+UUG	0.092494
+UUU	0.088877

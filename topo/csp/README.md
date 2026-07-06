@@ -71,15 +71,15 @@ run_continuous_synthesis(cfg.pdb_file, cfg.ribosome, L0=cfg.L0, L_max=cfg.L_max,
 
 A single `[OPTIONS]` section. Required: `pdb_file`, `ribosome`, `domain_def` (the
 protein's contact-nscale definition). `L0` (default `1`) and `L_max` (default = full
-length) are optional. Per-codon timing also requires `mrna` (`codon_times` is optional --
-defaults to the bundled E. coli 310 K table).
+length) are optional. Per-codon timing requires both `mrna` and a `codon_times` table
+path (there is no bundled default -- pick one under `assets/csp/codon_dwell_times/`).
 
 **Kinetic keys**
 
 | key | meaning |
 |-----|---------|
 | `mrna` | mRNA sequence file (raw nucleotides; one codon/residue + 1 stop) |
-| `codon_times` | codon-time table path (per-codon) **or** a positive number of s (uniform codon time). Optional -- default = bundled E. coli 310 K. A table filename must not be a bare number. |
+| `codon_times` | codon-time table path (per-codon; required, no bundled default -- pick one under `assets/csp/codon_dwell_times/`) **or** a positive number of s (uniform codon time). A table filename must not be a bare number. |
 | `scale_factor` | in-vivo seconds → in-silico ns compressor |
 | `time_stage_1` / `time_stage_2` | mean peptidyl-transfer / translocation dwell (s) |
 | `random_seed` | seed for the FPT sampler (reproducible schedules) |

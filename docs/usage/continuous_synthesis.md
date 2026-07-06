@@ -166,13 +166,13 @@ whole codon dwell, and stage 3 (`τ − time_stage_1 − time_stage_2`) is the r
 after the codon-*independent* peptidyl transfer and translocation — effectively the
 decoding/tRNA wait.
 
-**The table is organism-universal** (a property of the organism + temperature, not of the
-protein), so topo ships one: the **Fluitt *E. coli* table at 310 K** (Fluitt, Pienaar &
-Viljoen, *Comput. Biol. Chem.* 2007; 61 sense + 3 stop codons, mean ≈ 0.068 s ≈ 15 aa/s)
-as `topo/csp/data/ecoli_trans_times_310K.txt`. It is used **by default** whenever `csp.ini`
-gives no `codon_times` key, so only the protein-specific `mrna` is mandatory. Set
-`codon_times` to a table path only to override it (a different organism/temperature). See
-`topo.csp.kinetics.default_codon_time_table_path`.
+**The table is an organism + temperature property** (not of the protein). A per-codon run
+therefore needs an explicit `codon_times` table path -- there is no bundled default. The
+shared library under `assets/csp/codon_dwell_times/` holds tables per organism, including
+the **Fluitt *E. coli* table at 310 K** (Fluitt, Pienaar & Viljoen, *Comput. Biol. Chem.*
+2007; 61 sense + 3 stop codons, mean ≈ 0.068 s ≈ 15 aa/s) at
+`assets/csp/codon_dwell_times/ecoli/ecoli_codon_dwell_times_310K.txt`. Both `mrna` (the
+protein-specific sequence) and `codon_times` (the table) are mandatory for per-codon timing.
 ```
 
 **(b) First-passage-time sampling.** Real elongation is stochastic: each stage is gated by
@@ -334,7 +334,7 @@ repeat the same options with more inline commentary on the physics.
 | `L0` | no | `1` | Start nascent-chain length (omit/blank = start from a single residue). |
 | `L_max` | no | full length | Final nascent length (omit/blank = synthesize the whole chain). |
 | `mrna` | cond. | — | mRNA file (one codon per residue). Required for per-codon timing (unless `codon_times` is a number). |
-| `codon_times` | no | bundled E. coli 310 K | Codon-timing key. A **table path** = per-codon timing; a **positive number of seconds** = uniform codon time (every codon, no `mrna` needed); omit = bundled Fluitt *E. coli* table. A table filename must **not** be a bare number. |
+| `codon_times` | cond. | — | Codon-timing key. A **table path** = per-codon timing (required, no bundled default -- pick one under `assets/csp/codon_dwell_times/`); a **positive number of seconds** = uniform codon time (every codon, no `mrna` needed). A table filename must **not** be a bare number. |
 | `domain_def` | **yes** | — | `domain.yaml` — the protein's **contact-nscale definition** (per-domain / per-interface Gō well-depth scaling, the structure-based analog of the reference model's `nscal`). |
 | `stride_output_file` | no | — | Precomputed STRIDE file (skips re-running STRIDE). |
 | `outdir` | no | `synth_out` | Output root. |

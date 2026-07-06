@@ -40,7 +40,3 @@ topo-csp-movie = "topo.csp.movie:main"
 [tool.setuptools.packages.find]
 # Only ship the importable package (not tutorials/docs/etc. at the repo root).
 include = ["topo*"]
-
-[tool.setuptools.package-data]
-# Bundle non-Python data files (e.g. the default E. coli codon-time table).
-"topo.csp" = ["data/*.txt"]

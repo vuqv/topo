@@ -159,7 +159,7 @@ L_max =              ; final length (blank -> full residue count)
 
 ; --- kinetics (same O'Brien codon timing as topo-csp) ---
 mrna         = P0CX28_mrna.txt   ; one codon per residue (required for per-codon timing)
-; codon_times omitted -> bundled E. coli 310 K table (or set a path, or a number of s = uniform)
+codon_times  = ../../assets/csp/codon_dwell_times/ecoli/ecoli_codon_dwell_times_310K.txt  ; table path (required for per-codon; or a number of s = uniform)
 scale_factor = 216564650         ; in-vivo s -> in-silico ns compression (larger = faster)
 random_seed  = 20240629
 max_steps_per_stage = 2000       ; TEST CLAMP (delete for production)
@@ -202,7 +202,7 @@ outdir = synth_out
 | `L0` | **yes** | — | Starting nascent-chain length (cold-start layout). |
 | `L_max` | no | full length | Final nascent length (blank = whole chain). Must satisfy `1 ≤ L0 ≤ L_max ≤ N_full`. |
 | `mrna` | for per-codon timing | — | mRNA file (one codon per residue); required unless `codon_times` is a number. |
-| `codon_times` | no | bundled E. coli 310 K | Codon-timing key: a **table path** = per-codon; a **positive number of seconds** = uniform codon time (no `mrna` needed); omit = bundled Fluitt *E. coli* table. A table filename must **not** be a bare number. |
+| `codon_times` | for per-codon timing | — | Codon-timing key: a **table path** = per-codon (required, no bundled default -- pick one under `assets/csp/codon_dwell_times/`); a **positive number of seconds** = uniform codon time (no `mrna` needed). A table filename must **not** be a bare number. |
 | `outdir` | no | `synth_out` | Output root; each residue writes `L_<L>/`. |
 
 ### Analytic tunnel geometry
@@ -237,7 +237,7 @@ per-residue step count.
 | Key | Default | Meaning |
 |-----|---------|---------|
 | `scale_factor` | `4331293` | In-vivo-seconds → in-silico-ns compression (larger = fewer steps = faster). |
-| `codon_times` | bundled E. coli 310 K | Table path = per-codon timing; a positive number of seconds = uniform codon time (no `mrna` needed). See Inputs above. |
+| `codon_times` | — (required for per-codon) | Table path = per-codon timing (no bundled default -- pick one under `assets/csp/codon_dwell_times/`); a positive number of seconds = uniform codon time (no `mrna` needed). See Inputs above. |
 | `random_seed` | — | Seed for the first-passage-time sampler (reproducible schedule). |
 | `max_steps_per_stage` | — (uncapped) | **Testing only** — upper clamp on the per-residue MD step count. Leave unset in production. |
 | `min_steps_per_stage` | `1` | **Testing only** — lower clamp on the per-residue MD step count. |
