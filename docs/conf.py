@@ -140,6 +140,12 @@ html_theme_options = {
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ['_static']
+# Standalone, self-contained interactive diagrams (their own full-page HTML, not
+# Sphinx pages). html_extra_path copies the folder's *contents* verbatim into the
+# build root, so they are served at <site>/architecture.html and <site>/callflow.html
+# (linked from diagrams.rst). Keeping the sources in _diagrams/ keeps them out of
+# the Sphinx source scan (leading underscore).
+html_extra_path = ['_diagrams']
 html_logo = "_static/logo.svg"
 # Browser-tab icon: the same square contact-map mark (teal + amber read on any
 # tab background). Modern browsers render SVG favicons directly.

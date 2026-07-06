@@ -1,0 +1,563 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>topo — call flow</title>
+<script>
+  (function () {
+    const saved = localStorage.getItem('topo-theme');
+    const dark = saved ? saved === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+    document.documentElement.classList.toggle('dark', dark);
+  })();
+</script>
+<style>
+  :root {
+    --bg: #FAF9F5; --surface: #FFFFFF; --surface2: #F0EEE6;
+    --ink: #141413; --body: #3D3D3A; --muted: #87867F;
+    --line: #D1CFC5; --line-soft: #E6E3DA;
+    --clay: #D97757; --clay-soft: rgba(217,119,87,0.10);
+    --olive: #788C5D; --olive-soft: rgba(120,140,93,0.12);
+    --gold: #C9A45C; --blue: #5B7E96; --blue-soft: rgba(91,126,150,0.10);
+    --zone: rgba(20,20,19,0.022); --zone-line: #D1CFC5;
+    --serif: ui-serif, Georgia, "Times New Roman", serif;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  html.dark {
+    --bg: #141413; --surface: #1F1F1D; --surface2: #2A2A28;
+    --ink: #FAF9F5; --body: #D1CFC5; --muted: #8F8E86;
+    --line: #3D3D3A; --line-soft: #2A2A28;
+    --clay: #E48A6E; --clay-soft: rgba(228,138,110,0.15);
+    --olive: #9DB07C; --olive-soft: rgba(157,176,124,0.17);
+    --gold: #D4B36F; --blue: #7FA3BC; --blue-soft: rgba(127,163,188,0.15);
+    --zone: rgba(250,249,245,0.03); --zone-line: #3D3D3A;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg); color: var(--body); font-family: var(--sans);
+    -webkit-font-smoothing: antialiased; display: flex; flex-direction: column; overflow: hidden;
+  }
+
+  /* ── top bar ─────────────────────────────── */
+  .bar {
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    padding: 12px 20px; border-bottom: 1px solid var(--line-soft); flex: none;
+  }
+  .bar h1 { font-family: var(--serif); font-weight: 500; font-size: 19px; color: var(--ink); letter-spacing: -0.01em; }
+  .bar .sub { font-family: var(--mono); font-size: 10.5px; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; }
+  .spacer { flex: 1; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em;
+    padding: 5px 11px; border: 1px solid var(--line); border-radius: 999px;
+    background: transparent; color: var(--muted); cursor: pointer; transition: all .15s ease;
+  }
+  .chip:hover { color: var(--ink); border-color: var(--muted); }
+  .chip.on { background: var(--ink); border-color: var(--ink); color: var(--bg); }
+  #themeToggle {
+    font-family: var(--mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.08em;
+    padding: 5px 10px; border: 1px solid var(--line); border-radius: 6px;
+    background: transparent; color: var(--muted); cursor: pointer;
+  }
+  #themeToggle:hover { color: var(--ink); border-color: var(--muted); }
+
+  /* ── stage ───────────────────────────────── */
+  .stage { flex: 1; position: relative; min-height: 0; }
+  .stage svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+  /* zones */
+  .zone rect { fill: var(--zone); stroke: var(--zone-line); stroke-width: 1; stroke-dasharray: 5 5; }
+  .zone.core rect { fill: var(--clay-soft); stroke: var(--clay); stroke-dasharray: none; }
+  .zone.loop rect { fill: var(--blue-soft); stroke: var(--blue); stroke-dasharray: 4 4; }
+  .zone .ztitle { font-family: var(--mono); font-size: 12px; letter-spacing: 0.09em; text-transform: uppercase; fill: var(--muted); }
+  .zone.core .ztitle { fill: var(--clay); }
+  .zone.loop .ztitle { fill: var(--blue); }
+
+  /* nodes */
+  .node { cursor: pointer; }
+  .node rect { fill: var(--surface); stroke: var(--line); stroke-width: 1.5; transition: stroke .15s ease; }
+  .node:hover rect { stroke: var(--muted); }
+  .node.sel rect { stroke: var(--clay) !important; stroke-width: 2.2; }
+  .node .t  { font-family: var(--mono); font-size: 13px; font-weight: 600; fill: var(--ink); pointer-events: none; }
+  .node .m  { font-family: var(--mono); font-size: 10px; fill: var(--muted); pointer-events: none; }
+  .node .k  { font-family: var(--mono); font-size: 9px; letter-spacing: 0.09em; text-transform: uppercase; fill: var(--clay); pointer-events: none; }
+  .node .k.blue { fill: var(--blue); }
+  .node .k.olive { fill: var(--olive); }
+  .node.entry rect { fill: var(--surface); stroke: var(--ink); stroke-width: 2; }
+  .node.entry .t { fill: var(--ink); font-size: 14px; }
+  .node.core rect { fill: var(--surface); stroke: var(--clay); }
+  .node.store rect { fill: var(--surface2); }
+  .node.ext rect { stroke-dasharray: 6 3; }
+  .node.opt rect { fill: var(--olive-soft); stroke: var(--olive); stroke-dasharray: 5 3; }
+
+  /* edges */
+  .edge { stroke: var(--muted); stroke-width: 1.5; fill: none; marker-end: url(#a-mut); transition: opacity .2s ease, stroke .2s ease; }
+  .edge.dash { stroke-dasharray: 5 4; }
+  .edge.loop { stroke: var(--blue); marker-end: url(#a-blue); }
+  .elbl { font-family: var(--mono); font-size: 9.5px; fill: var(--muted); transition: opacity .2s ease; }
+
+  /* flow highlighting */
+  .stage.flowing .edge { opacity: 0.10; }
+  .stage.flowing .elbl { opacity: 0.10; }
+  .stage.flowing .node { opacity: 0.24; }
+  .stage.flowing .zone { opacity: 0.40; }
+  .stage.flowing .edge.lit {
+    opacity: 1; stroke: var(--clay); marker-end: url(#a-clay);
+    stroke-dasharray: 7 5; animation: march 0.9s linear infinite;
+  }
+  .stage.flowing .elbl.lit { opacity: 1; fill: var(--clay); }
+  .stage.flowing .node.lit { opacity: 1; }
+  .stage.flowing .node.lit rect { stroke: var(--clay); }
+  @keyframes march { to { stroke-dashoffset: -12; } }
+  @media (prefers-reduced-motion: reduce) { .stage.flowing .edge.lit { animation: none; } }
+
+  /* order badges */
+  .badge { pointer-events: none; }
+  .badge circle { fill: var(--clay); }
+  .badge text { fill: var(--bg); font-family: var(--mono); font-size: 11px; font-weight: 700; text-anchor: middle; }
+
+  /* ── floating cards ──────────────────────── */
+  .card {
+    position: absolute;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+    padding: 14px 16px; box-shadow: 0 6px 24px rgba(0,0,0,0.10);
+  }
+  #detail { right: 16px; bottom: 16px; width: 336px; }
+  #detail h3 { font-family: var(--mono); font-weight: 700; font-size: 15px; color: var(--ink); margin-bottom: 2px; }
+  #detail .meta { font-family: var(--mono); font-size: 10.5px; color: var(--muted); margin-bottom: 8px; }
+  #detail p { font-size: 12.5px; line-height: 1.55; }
+  #detail p code, #flowcap code { font-family: var(--mono); font-size: 11px; color: var(--clay); }
+  #flowcap { left: 16px; bottom: 16px; max-width: 470px; display: none; }
+  #flowcap.show { display: block; }
+  #flowcap .fname { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--clay); margin-bottom: 6px; }
+  #flowcap ol { margin-left: 18px; }
+  #flowcap li { font-size: 12px; line-height: 1.5; margin-bottom: 2px; }
+  .src { position: absolute; top: 10px; right: 16px; font-family: var(--mono); font-size: 10px; color: var(--muted); opacity: 0.8; }
+  @media (max-width: 900px) {
+    body { overflow: auto; }
+    .stage { min-height: 128vh; }
+    #detail { position: static; width: auto; margin: 10px 16px; }
+    #flowcap { position: static; margin: 0 16px 16px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <div>
+    <h1>topo — call flow</h1>
+    <div class="sub">isolated protein MD · CSP synthesis · end&#8209;to&#8209;end</div>
+  </div>
+  <div class="spacer"></div>
+  <div class="chips" id="chips">
+    <button class="chip on" data-flow="all">Everything</button>
+    <button class="chip" data-flow="isolated">Isolated MD</button>
+    <button class="chip" data-flow="csp">CSP synthesis</button>
+    <button class="chip" data-flow="residue">Per-residue (3 stages)</button>
+    <button class="chip" data-flow="build">Model build</button>
+    <button class="chip" data-flow="engine">Engine step</button>
+  </div>
+  <button id="themeToggle">Theme</button>
+</div>
+
+<div class="stage" id="stage">
+<svg viewBox="0 0 1600 1200" preserveAspectRatio="xMidYMid meet" role="img" aria-label="topo function-call flow diagram">
+  <defs>
+    <marker id="a-mut" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" style="fill: var(--muted)"/>
+    </marker>
+    <marker id="a-clay" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" style="fill: var(--clay)"/>
+    </marker>
+    <marker id="a-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" style="fill: var(--blue)"/>
+    </marker>
+  </defs>
+
+  <!-- ── zones ─────────────────────────────── -->
+  <g class="zone" id="z-left">
+    <rect x="80" y="80" width="390" height="500" rx="16"/>
+    <text class="ztitle" x="100" y="106">Isolated protein · topo-mdrun</text>
+  </g>
+  <g class="zone" id="z-right">
+    <rect x="1120" y="80" width="400" height="520" rx="16"/>
+    <text class="ztitle" x="1140" y="106">Co-translational · topo-csp</text>
+  </g>
+  <g class="zone loop" id="z-loop">
+    <rect x="1120" y="628" width="400" height="318" rx="16"/>
+    <text class="ztitle" x="1140" y="654">for L = L0 .. L_max</text>
+  </g>
+  <g class="zone core" id="z-core">
+    <rect x="588" y="606" width="436" height="556" rx="16"/>
+    <text class="ztitle" x="610" y="632">shared per-segment core · topo.engine + topo.core</text>
+  </g>
+
+  <!-- ── edges ─────────────────────────────── -->
+  <!-- left lane -->
+  <path class="edge" id="e-md1" d="M275,150 L275,176"/>
+  <path class="edge" id="e-md2" d="M275,234 L275,262"/>
+  <path class="edge" id="e-md3" d="M275,320 L275,348"/>
+  <path class="edge" id="e-md-build-protocol" d="M275,410 L275,462"/>
+  <path class="edge" id="e-md-build-ff" d="M440,379 C 545,398 545,662 615,682"/>
+  <path class="edge" id="e-md-protocol-attach" d="M440,505 C 560,522 545,952 615,965"/>
+
+  <!-- shared core spine -->
+  <path class="edge" id="e-ff-setup"     d="M660,714 C 604,742 604,800 660,810"/>
+  <path class="edge dash" id="e-ff-scenery"   d="M805,714 L805,730"/>
+  <path class="edge dash" id="e-scenery-setup" d="M805,794 L805,810"/>
+  <path class="edge" id="e-setup-attach" d="M660,866 C 604,898 604,932 660,940"/>
+  <path class="edge dash" id="e-setup-min"   d="M805,866 L805,878"/>
+  <path class="edge dash" id="e-min-attach"  d="M805,928 L805,940"/>
+  <path class="edge" id="e-attach-step"  d="M805,990 L805,1002"/>
+  <path class="edge" id="e-step-final"   d="M805,1058 L805,1070"/>
+  <path class="edge" id="e-step-omm"     d="M995,1030 C 1058,1040 1070,1092 1120,1102"/>
+  <path class="edge" id="e-final-out"    d="M615,1099 C 545,1104 530,1106 490,1106"/>
+
+  <!-- right lane -->
+  <path class="edge" id="e-csp1" d="M1320,150 L1320,176"/>
+  <path class="edge" id="e-csp2" d="M1320,234 L1320,262"/>
+  <path class="edge" id="e-csp3" d="M1320,320 L1320,344"/>
+  <path class="edge" id="e-csp4" d="M1320,398 L1320,412"/>
+  <path class="edge" id="e-csp5" d="M1320,478 L1320,492"/>
+  <path class="edge" id="e-csp6" d="M1320,550 L1320,564"/>
+  <path class="edge" id="e-csp7" d="M1320,618 L1320,662"/>
+  <path class="edge" id="e-csp8" d="M1320,716 L1320,730"/>
+  <path class="edge" id="e-csp9" d="M1320,782 L1320,796"/>
+  <path class="edge" id="e-csp10" d="M1320,848 L1320,862"/>
+  <path class="edge loop" id="e-csp-loop" d="M1490,888 C 1548,878 1548,700 1490,689"/>
+  <path class="edge" id="e-csp-post" d="M1320,914 L1320,972"/>
+  <path class="edge" id="e-csp-core" d="M1150,752 C 1055,738 1050,692 995,684"/>
+
+  <!-- ── edge labels ───────────────────────── -->
+  <text class="elbl" data-e="e-md-build-ff" x="470" y="470">build model</text>
+  <text class="elbl" data-e="e-md-protocol-attach" x="470" y="720">attach + step</text>
+  <text class="elbl" data-e="e-step-omm" x="1024" y="1058">runs on</text>
+  <text class="elbl" data-e="e-csp-core" x="1044" y="700" text-anchor="end">run_length ×3 → core</text>
+  <text class="elbl" data-e="e-csp-loop" x="1556" y="792" text-anchor="start">prev_final</text>
+  <text class="elbl" data-e="e-csp-loop" x="1556" y="808" text-anchor="start">seeds L+1</text>
+  <text class="elbl" data-e="e-csp-post" x="1332" y="950">at L_max</text>
+  <text class="elbl" data-e="e-final-out" x="552" y="1096" text-anchor="middle">_final.pdb</text>
+
+  <!-- ── nodes: left lane (isolated MD) ────── -->
+  <g class="node entry" data-k="md-cli">
+    <rect x="110" y="112" width="330" height="52" rx="10"/>
+    <text class="t" x="130" y="135">topo-mdrun</text>
+    <text class="m" x="130" y="153">CLI entry · python -m topo.mdrun -f md.ini</text>
+  </g>
+  <g class="node" data-k="md-cfg">
+    <rect x="110" y="176" width="330" height="58" rx="10"/>
+    <text class="t" x="130" y="200">read_simulation_config()</text>
+    <text class="m" x="130" y="220">md.ini → SimulationConfig</text>
+  </g>
+  <g class="node" data-k="md-driver">
+    <rect x="110" y="262" width="330" height="58" rx="10"/>
+    <text class="t" x="130" y="286">mdrun()</text>
+    <text class="m" x="130" y="306">orchestrates build · setup · run · finalize</text>
+  </g>
+  <g class="node" data-k="md-build">
+    <rect x="110" y="348" width="330" height="62" rx="10"/>
+    <text class="t" x="130" y="372">engine.build_system()</text>
+    <text class="m" x="130" y="391">CG model (+ n_copies) · dump PSF</text>
+  </g>
+  <g class="node" data-k="md-protocol">
+    <rect x="110" y="462" width="330" height="86" rx="10"/>
+    <text class="k" x="130" y="482">topo.mdrun.protocol</text>
+    <text class="t" x="130" y="502">temperature protocol</text>
+    <text class="m" x="130" y="521">anneal? quench + production : production</text>
+    <text class="m" x="130" y="537">run_protocol() → simulation.step()</text>
+  </g>
+
+  <!-- ── nodes: right lane (CSP) ───────────── -->
+  <g class="node entry" data-k="csp-cli">
+    <rect x="1150" y="112" width="340" height="52" rx="10"/>
+    <text class="t" x="1170" y="135">topo-csp</text>
+    <text class="m" x="1170" y="153">CLI entry · topo-csp -f csp.ini</text>
+  </g>
+  <g class="node" data-k="csp-cfg">
+    <rect x="1150" y="176" width="340" height="58" rx="10"/>
+    <text class="t" x="1170" y="200">read_csp_config()</text>
+    <text class="m" x="1170" y="220">csp.ini → CSPConfig · RunParams</text>
+  </g>
+  <g class="node" data-k="csp-driver">
+    <rect x="1150" y="262" width="340" height="58" rx="10"/>
+    <text class="t" x="1170" y="286">run_continuous_synthesis()</text>
+    <text class="m" x="1170" y="306">the synthesis driver</text>
+  </g>
+  <g class="node" data-k="csp-ribo">
+    <rect x="1150" y="344" width="340" height="54" rx="10"/>
+    <text class="t" x="1170" y="367">load_ribosome()</text>
+    <text class="m" x="1170" y="385">rigid mass-0 scenery (once)</text>
+  </g>
+  <g class="node" data-k="csp-anchor">
+    <rect x="1150" y="412" width="340" height="66" rx="10"/>
+    <text class="t" x="1170" y="435">anchor_coord() ×2 · optimal_ptc_targets()</text>
+    <text class="m" x="1170" y="453">P-/A-anchors → A/P target points</text>
+    <text class="m" x="1170" y="469">PTC-geometry optimization (always on)</text>
+  </g>
+  <g class="node" data-k="csp-precompute">
+    <rect x="1150" y="492" width="340" height="54" rx="10"/>
+    <text class="t" x="1170" y="515">precompute_contacts()</text>
+    <text class="m" x="1170" y="533">STRIDE once · N×N contacts (L×L reuse)</text>
+  </g>
+  <g class="node" data-k="csp-kin">
+    <rect x="1150" y="564" width="340" height="54" rx="10"/>
+    <text class="t" x="1170" y="587">kinetics.build_codon_time_lists()</text>
+    <text class="m" x="1170" y="605">per-codon mFPT schedule from mRNA</text>
+  </g>
+
+  <!-- loop body -->
+  <g class="node" data-k="csp-stagesteps">
+    <rect x="1150" y="662" width="340" height="54" rx="10"/>
+    <text class="t" x="1170" y="685">kinetics.stage_steps(L)</text>
+    <text class="m" x="1170" y="703">sample FPT → s1 / s2 / s3 steps</text>
+  </g>
+  <g class="node" data-k="csp-stage1">
+    <rect x="1150" y="730" width="340" height="52" rx="10"/>
+    <text class="t" x="1170" y="752">run_length · stage 1</text>
+    <text class="m" x="1170" y="770">peptidyl-transfer · restrain A-site</text>
+  </g>
+  <g class="node" data-k="csp-stage2">
+    <rect x="1150" y="796" width="340" height="52" rx="10"/>
+    <text class="t" x="1170" y="818">run_length · stage 2</text>
+    <text class="m" x="1170" y="836">translocation begins · still A-site</text>
+  </g>
+  <g class="node" data-k="csp-stage3">
+    <rect x="1150" y="862" width="340" height="52" rx="10"/>
+    <text class="t" x="1170" y="884">run_length · stage 3</text>
+    <text class="m" x="1170" y="902">tRNA-binding · switch A → P-site</text>
+  </g>
+
+  <g class="node" data-k="csp-post">
+    <rect x="1150" y="972" width="340" height="58" rx="10"/>
+    <text class="t" x="1170" y="996">ejection / dissociation</text>
+    <text class="m" x="1170" y="1016">run_length · restraint OFF · free drift</text>
+  </g>
+
+  <!-- ── nodes: shared core ────────────────── -->
+  <g class="node core" data-k="ff-build">
+    <rect x="615" y="650" width="380" height="64" rx="10"/>
+    <text class="t" x="635" y="674">build model</text>
+    <text class="m" x="635" y="693">buildCoarseGrainModel / build_length_model</text>
+  </g>
+  <g class="node opt" data-k="scenery">
+    <rect x="615" y="730" width="380" height="64" rx="10"/>
+    <text class="k olive" x="635" y="750">CSP only</text>
+    <text class="t" x="635" y="770">append_ribosome · restraint · tunnel</text>
+    <text class="m" x="635" y="787">rigid beads · A↔P C-term · wall</text>
+  </g>
+  <g class="node core" data-k="eng-setup">
+    <rect x="615" y="810" width="380" height="56" rx="10"/>
+    <text class="t" x="635" y="833">setup_simulation()</text>
+    <text class="m" x="635" y="852">integrator · platform · restart / chk</text>
+  </g>
+  <g class="node opt" data-k="eng-min">
+    <rect x="615" y="878" width="380" height="50" rx="10"/>
+    <text class="k olive" x="635" y="897">CSP only</text>
+    <text class="t" x="635" y="918" style="font-size:12px">minimizeEnergy() · relax the seed</text>
+  </g>
+  <g class="node core" data-k="eng-attach">
+    <rect x="615" y="940" width="380" height="50" rx="10"/>
+    <text class="t" x="635" y="963">attach_reporters()</text>
+    <text class="m" x="635" y="981">DCD · topoReporter log · checkpoint</text>
+  </g>
+  <g class="node core" data-k="eng-step">
+    <rect x="615" y="1002" width="380" height="56" rx="10"/>
+    <text class="t" x="635" y="1026">simulation.step(n)</text>
+    <text class="m" x="635" y="1045">n = md_steps (mdrun) | s1/s2/s3 (CSP)</text>
+  </g>
+  <g class="node core" data-k="eng-final">
+    <rect x="615" y="1070" width="380" height="58" rx="10"/>
+    <text class="t" x="635" y="1094">finalize_simulation()</text>
+    <text class="m" x="635" y="1114">save checkpoint · write _final.pdb</text>
+  </g>
+
+  <!-- ── nodes: backend / outputs ──────────── -->
+  <g class="node ext" data-k="openmm">
+    <rect x="1120" y="1074" width="320" height="56" rx="10"/>
+    <text class="k blue" x="1140" y="1094">external</text>
+    <text class="t" x="1140" y="1113" style="font-size:12px">OpenMM · LangevinIntegrator · CUDA/CPU</text>
+  </g>
+  <g class="node store" data-k="outputs">
+    <rect x="110" y="1074" width="380" height="64" rx="10"/>
+    <text class="t" x="130" y="1098">outputs</text>
+    <text class="m" x="130" y="1117">.dcd · .log · .psf · _final.pdb · .chk</text>
+    <text class="m" x="130" y="1132">CSP: per-length L_&lt;n&gt;/stage_&lt;1,2,3&gt;/</text>
+  </g>
+
+  <g id="badges"></g>
+</svg>
+
+  <div class="src">topo/mdrun · topo/csp/protocol · topo/csp/core · topo/engine</div>
+
+  <div class="card" id="flowcap">
+    <div class="fname" id="f-name"></div>
+    <ol id="f-steps"></ol>
+  </div>
+
+  <div class="card" id="detail">
+    <h3 id="d-title">Click any function</h3>
+    <div class="meta" id="d-meta">call-flow node</div>
+    <p id="d-body">Two entry points — <code>topo-mdrun</code> (an isolated protein) and <code>topo-csp</code> (co-translational synthesis) — both funnel into <b>one shared per-segment core</b>. Pick a chip to replay a call sequence; the <b>numbered badges</b> show call order.</p>
+  </div>
+</div>
+<script>
+const DETAIL = {
+  "md-cli":   { t:"topo-mdrun", m:"entry · topo/mdrun/mdrun.py", b:"The canonical runner for a plain coarse-grained simulation of an isolated protein. Parses args, prints the OpenMM version, then hands off to the shared build → setup → run → finalize spine." },
+  "md-cfg":   { t:"read_simulation_config()", m:"topo.utils.config", b:"Parses <code>md.ini</code> into a <code>SimulationConfig</code>: input PDB, timestep, temperatures, output cadence, restart flag, n_copies, and the anneal schedule. Everything downstream reads from this object." },
+  "md-driver":{ t:"mdrun()", m:"driver", b:"The orchestrator: <code>build_system()</code>, then <code>setup_simulation()</code>, then the temperature protocol (quench+production or plain production), then <code>finalize_simulation()</code>." },
+  "md-build": { t:"engine.build_system()", m:"topo.engine", b:"Builds the CG model via <code>buildCoarseGrainModel()</code> (see “build model”), optionally replicates it into <code>n_copies</code> non-interacting chains, dumps the PSF topology, and adds a CMMotionRemover if requested." },
+  "md-protocol":{ t:"temperature protocol", m:"topo.mdrun.protocol", b:"Selects the schedule from the config. <b>anneal=yes</b>: a quench phase (holds t_high / cools) writes <code>_quench.*</code>, then the step clock resets and production runs at ref_t. <b>anneal=no</b>: a single constant-ref_t production run. Each phase calls <code>attach_reporters()</code> then <code>run_protocol()</code> → <code>step()</code>." },
+
+  "csp-cli":  { t:"topo-csp", m:"entry · topo/csp/protocol.py", b:"The O'Brien continuous-synthesis runner. Reads the CSP control file and launches <code>run_continuous_synthesis()</code>." },
+  "csp-cfg":  { t:"read_csp_config()", m:"topo.csp.protocol", b:"Parses <code>csp.ini</code> into a <code>CSPConfig</code> + <code>RunParams</code>: full-length PDB, ribosome PDB, mRNA, domain.yaml nscales, and every MD + kinetic knob (scale_factor, per-stage times, dt, restraint constants)." },
+  "csp-driver":{ t:"run_continuous_synthesis()", m:"the synthesis driver", b:"Sets up the fixed scenery once (ribosome, anchors, PTC targets, tunnel plane, contacts, kinetics), then loops <code>L = L0…L_max</code> running three sub-stages per residue, then optional ejection + dissociation." },
+  "csp-ribo": { t:"load_ribosome()", m:"topo.csp.ribosome", b:"Parses the truncated CG ribosome PDB into rigid <b>mass-0</b> scenery — per-bead collision radii and charges from <code>model_parameters</code>. Loaded once; identical at every length." },
+  "csp-anchor":{ t:"anchors + optimal_ptc_targets()", m:"topo.csp.core", b:"Reads the fixed P-/A-anchors from the ribosome's tRNA beads, then places the optimal A-site and P-site <b>target points</b> — one equilibrium peptide bond (0.381 nm) apart and clear of the ribosome — so a rigid AllBonds build seeds and minimizes cleanly." },
+  "csp-precompute":{ t:"precompute_contacts()", m:"topo.csp.core", b:"Runs the TOPO contact builder once on the full native structure → the <code>N×N</code> well-position / well-depth matrices and per-residue K-B Rmin/2. Each length reuses the top-left <code>L×L</code> block, so STRIDE and the heavy-atom analysis never re-run." },
+  "csp-kin":  { t:"build_codon_time_lists()", m:"topo.csp.kinetics", b:"Builds the intrinsic / real per-codon mean-first-passage-time lists from the mRNA (or a uniform time). This is the schedule <code>stage_steps</code> samples from per residue." },
+  "csp-stagesteps":{ t:"kinetics.stage_steps(L)", m:"per residue · FPT sampling", b:"Samples the three stage dwell times for residue L and maps them to integration steps: <code>steps = dwell·1e9 / scale_factor / dt</code>, clamped to [min, max]. Returns (s1, s2, s3)." },
+  "csp-stage1":{ t:"run_length · stage 1", m:"peptidyl-transfer · A-site", b:"Adds the new residue and restrains its C-terminus to the <b>A-site</b> target for <code>s1</code> steps. Cold start lays the initial segment from the P-anchor. Runs one full pass through the shared core." },
+  "csp-stage2":{ t:"run_length · stage 2", m:"translocation · A-site", b:"Continues from stage 1's final structure at the same A-site restraint for <code>s2</code> steps (minimization skipped — the seed is already relaxed)." },
+  "csp-stage3":{ t:"run_length · stage 3", m:"tRNA-binding · A → P", b:"Switches the C-terminus restraint from the A-site to the <b>P-site</b> target — this A→P move reproduces translocation — and runs <code>s3</code> steps. Its final structure (<code>f3</code>) seeds the next residue." },
+  "csp-post": { t:"ejection / dissociation", m:"post-synthesis", b:"After L_max, two sequential free runs with the restraint <b>OFF</b>: ejection then dissociation, each continuing from the previous final structure. The finished protein diffuses out the exit." },
+
+  "ff-build": { t:"build model", m:"topo.core — the force field", b:"<code>buildCoarseGrainModel()</code> (mdrun) or <code>build_length_model()</code> (CSP, injecting the L×L contact block). Same Cα build both ways: <code>getCAlphaOnly → getAtoms → getBonds → getAngles</code>, per-AA mass/charge, bonds/angles/torsions, Yukawa electrostatics, structure-based contacts, then <code>createSystemObject()</code>." },
+  "scenery":  { t:"scenery (CSP only)", m:"topo.csp.core / ribosome", b:"What synthesis adds to a stock system before running: <code>add_cterm_restraint()</code> (harmonic spring to the A- or P-target), <code>append_ribosome()</code> (mass-0 beads + the O'Brien 12-10-6 NC↔ribosome excluded volume), and the one-sided tunnel wall. mdrun skips this entirely." },
+  "eng-setup":{ t:"setup_simulation()", m:"topo.engine — shared", b:"Creates the OpenMM <code>Simulation</code>: platform selection, the Langevin integrator, restart/checkpoint loading (or fresh Boltzmann velocities), and the run-provenance header. Both runners call this exact function." },
+  "eng-min":  { t:"minimizeEnergy() (CSP only)", m:"per segment", b:"CSP minimizes each seeded structure to relax the new residue placement / new peptide bond before stepping. mdrun runs from an already-equilibrated input, so it does not minimize here." },
+  "eng-attach":{ t:"attach_reporters()", m:"topo.engine — shared", b:"(Re)attaches the checkpoint / DCD / <code>topoReporter</code> log for this phase or segment. mdrun swaps file sets between the quench and production phases; CSP writes a fresh set per stage folder." },
+  "eng-step": { t:"simulation.step(n)", m:"the integration", b:"Runs the Langevin dynamics on OpenMM. <code>n</code> is <code>md_steps</code> for mdrun (per phase) or the kinetic <code>s1/s2/s3</code> for CSP (per stage)." },
+  "eng-final":{ t:"finalize_simulation()", m:"topo.engine — shared", b:"Saves the final checkpoint, writes the last conformation as <code>_final.pdb</code>, and closes the run metadata. In CSP the <code>_final.pdb</code> is the seed for the next stage / residue — the loop's carry." },
+
+  "openmm":   { t:"OpenMM", m:"external · MD backend", b:"The actual integrator. topo hands it a fully-built <code>System</code> + <code>Simulation</code>; OpenMM does the Langevin dynamics on the CUDA or CPU platform. topo owns everything up to <code>step()</code>." },
+  "outputs":  { t:"outputs", m:"on-disk artifacts", b:"Each segment writes a DCD, a fixed-width log, the PSF, a <code>_final.pdb</code>, a <code>.chk</code> checkpoint, and a <code>_runinfo.log</code>. CSP fans these out under per-length <code>L_&lt;n&gt;/stage_&lt;1,2,3&gt;/</code> folders plus a <code>dwell_times.dat</code> table." },
+};
+
+const FLOWS = {
+  isolated: {
+    name: "Isolated protein MD — topo-mdrun, end to end",
+    nodes: ["md-cli","md-cfg","md-driver","md-build","ff-build","eng-setup","md-protocol","eng-attach","eng-step","openmm","eng-final","outputs"],
+    edges: ["e-md1","e-md2","e-md3","e-md-build-protocol","e-md-build-ff","e-ff-setup","e-md-protocol-attach","e-setup-attach","e-attach-step","e-step-omm","e-step-final","e-final-out"],
+    steps: [
+      "<code>mdrun()</code> parses <code>md.ini</code> → SimulationConfig",
+      "<code>build_system()</code> builds the CG force-field model once",
+      "<code>setup_simulation()</code> creates the OpenMM Simulation",
+      "The temperature protocol attaches reporters and <code>step()</code>s (quench + production, or just production)",
+      "<code>finalize_simulation()</code> writes the trajectory, checkpoint, and <code>_final.pdb</code>"
+    ]
+  },
+  csp: {
+    name: "CSP synthesis — topo-csp, end to end",
+    nodes: ["csp-cli","csp-cfg","csp-driver","csp-ribo","csp-anchor","csp-precompute","csp-kin","csp-stagesteps","csp-stage1","csp-stage2","csp-stage3","ff-build","scenery","eng-setup","eng-min","eng-attach","eng-step","openmm","eng-final","csp-post","outputs"],
+    edges: ["e-csp1","e-csp2","e-csp3","e-csp4","e-csp5","e-csp6","e-csp7","e-csp8","e-csp9","e-csp10","e-csp-loop","e-csp-post","e-csp-core","e-ff-scenery","e-scenery-setup","e-setup-min","e-min-attach","e-attach-step","e-step-omm","e-step-final","e-final-out"],
+    steps: [
+      "<code>run_continuous_synthesis()</code> loads the rigid ribosome, anchors, PTC targets, contacts, and kinetics — once",
+      "For each residue L, <code>stage_steps()</code> samples the 3 stage dwell times → step counts",
+      "3 × <code>run_length()</code>: each builds the L-length model, adds ribosome/tunnel scenery + the C-term restraint, then runs the shared engine core",
+      "The restraint switches <b>A → P</b> between stages 2 and 3 (translocation); <code>_final.pdb</code> seeds L+1",
+      "After L_max: ejection then dissociation (restraint off)"
+    ]
+  },
+  residue: {
+    name: "One residue — the 3 sub-stages (A → A → P)",
+    nodes: ["csp-stagesteps","csp-stage1","csp-stage2","csp-stage3"],
+    edges: ["e-csp8","e-csp9","e-csp10","e-csp-loop"],
+    steps: [
+      "<code>stage_steps(L)</code> → (s1, s2, s3) integration steps",
+      "Stage 1 (peptidyl-transfer): restrain the C-terminus to the <b>A-site</b>",
+      "Stage 2 (translocation): continue, still held at the A-site",
+      "Stage 3 (tRNA-binding): switch the restraint to the <b>P-site</b> — this A→P move is translocation; <code>f3</code> seeds the next residue"
+    ]
+  },
+  build: {
+    name: "Model build — the CG force field (shared)",
+    nodes: ["ff-build"],
+    edges: [],
+    steps: [
+      "<code>getCAlphaOnly → getAtoms → getBonds → getAngles</code>",
+      "<code>setCAMass/ChargePerResidueType</code> · <code>setBondForceConstants</code>",
+      "<code>addHarmonicBond</code> (flexible) · <code>addGaussianAngle</code> · <code>getTorsions → addPeriodicTorsion</code>",
+      "<code>addYukawaForces</code> · <code>build_nonbonded_interaction</code> (STRIDE + Karanicolas–Brooks contacts)",
+      "<code>addCustomNonBondedForce → createSystemObject</code>. CSP's <code>build_length_model</code> injects the precomputed L×L block instead of recomputing."
+    ]
+  },
+  engine: {
+    name: "Engine step — the shared per-segment core",
+    nodes: ["eng-setup","eng-attach","eng-step","openmm","eng-final"],
+    edges: ["e-setup-attach","e-attach-step","e-step-omm","e-step-final"],
+    steps: [
+      "<code>setup_simulation()</code> — integrator, platform, restart/checkpoint",
+      "<code>attach_reporters()</code> — DCD, log, checkpoint for this phase/segment",
+      "<code>simulation.step(n)</code> — Langevin dynamics on OpenMM",
+      "<code>finalize_simulation()</code> — checkpoint + <code>_final.pdb</code>. Both runners share these exact functions."
+    ]
+  }
+};
+
+const SVGNS = "http://www.w3.org/2000/svg";
+const stage = document.getElementById('stage');
+const nodes = document.querySelectorAll('.node');
+const edges = document.querySelectorAll('.edge');
+const elbls = document.querySelectorAll('.elbl');
+const chips = document.querySelectorAll('.chip');
+const fcap = document.getElementById('flowcap');
+const badges = document.getElementById('badges');
+
+function clearBadges() { while (badges.firstChild) badges.removeChild(badges.firstChild); }
+
+function addBadge(node, n) {
+  const r = node.querySelector('rect');
+  const x = parseFloat(r.getAttribute('x'));
+  const y = parseFloat(r.getAttribute('y'));
+  const g = document.createElementNS(SVGNS, 'g');
+  g.setAttribute('class', 'badge');
+  const c = document.createElementNS(SVGNS, 'circle');
+  c.setAttribute('cx', x); c.setAttribute('cy', y); c.setAttribute('r', 12);
+  const t = document.createElementNS(SVGNS, 'text');
+  t.setAttribute('x', x); t.setAttribute('y', y + 4); t.textContent = n;
+  g.appendChild(c); g.appendChild(t); badges.appendChild(g);
+}
+
+function setFlow(key) {
+  chips.forEach(c => c.classList.toggle('on', c.dataset.flow === key));
+  edges.forEach(e => e.classList.remove('lit'));
+  elbls.forEach(l => l.classList.remove('lit'));
+  nodes.forEach(n => n.classList.remove('lit'));
+  clearBadges();
+  if (key === 'all') { stage.classList.remove('flowing'); fcap.classList.remove('show'); return; }
+  const f = FLOWS[key];
+  stage.classList.add('flowing');
+  f.edges.forEach(id => document.getElementById(id)?.classList.add('lit'));
+  elbls.forEach(l => { if (f.edges.includes(l.dataset.e)) l.classList.add('lit'); });
+  f.nodes.forEach((k, i) => {
+    const node = document.querySelector(`.node[data-k="${k}"]`);
+    if (!node) return;
+    node.classList.add('lit');
+    addBadge(node, i + 1);
+  });
+  document.getElementById('f-name').textContent = f.name;
+  document.getElementById('f-steps').innerHTML = f.steps.map(s => `<li>${s}</li>`).join('');
+  fcap.classList.add('show');
+}
+chips.forEach(c => c.addEventListener('click', () => setFlow(c.dataset.flow)));
+
+nodes.forEach(n => n.addEventListener('click', () => {
+  nodes.forEach(x => x.classList.remove('sel'));
+  n.classList.add('sel');
+  const d = DETAIL[n.dataset.k];
+  if (!d) return;
+  document.getElementById('d-title').textContent = d.t;
+  document.getElementById('d-meta').textContent = d.m;
+  document.getElementById('d-body').innerHTML = d.b;
+}));
+
+document.getElementById('themeToggle').addEventListener('click', () => {
+  const dark = !document.documentElement.classList.contains('dark');
+  document.documentElement.classList.toggle('dark', dark);
+  localStorage.setItem('topo-theme', dark ? 'dark' : 'light');
+});
+</script>
+</body>
+</html>

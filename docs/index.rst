@@ -19,6 +19,7 @@ layout, and :doc:`usage/model_theory` for what the model is.
    :caption: Getting started
 
    overview
+   diagrams
    modules/introduction
 
 .. toctree::
