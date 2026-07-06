@@ -6,6 +6,14 @@ simplest possible configuration.
 
 **Time:** the simulation finishes in ~2 seconds on a CPU.
 
+![P0CX28 300 K trajectory](img/process.gif)
+
+***The run** — 3 000-step Langevin dynamics at 300 K; the calibrated `nscale`
+keeps the fold stable. CA trace coloured N→C (blue→red).*
+
+> The GIF is produced by [`tutorials/_viz/render_cg.py`](../_viz/render_cg.py) (headless VMD + Tachyon)
+> after you run the tutorial — regenerate it any time with the command in [step 5](#5-visualize-optional).
+
 ---
 
 ## Files in this folder
@@ -94,6 +102,16 @@ head traj/traj.log
 The columns are step, time (ps), potential / kinetic / total energy (kJ/mol),
 temperature (K), speed, and remaining time. A stable temperature near 300 K and
 a non-exploding potential energy mean the run is healthy.
+
+### 5. Visualize (optional)
+Regenerate the trajectory GIF at the top of this page straight from your run.
+Needs `vmd` and ImageMagick `convert`:
+```bash
+python ../_viz/render_cg.py --psf traj/traj.psf --dcd traj/traj.dcd --out img
+```
+The GIF animates every frame of `traj.dcd`; the CA chain is drawn as a smooth
+tube coloured N→C. See `python ../_viz/render_cg.py -h` for all options (width,
+stride, colour mode).
 
 ## Try next
 

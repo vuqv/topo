@@ -9,6 +9,13 @@ multidomain enzyme.
 
 **Prerequisite:** do [Tutorial 1](01_single_domain.md) first.
 
+![1AKE 300 K trajectory](img/process.gif)
+
+***The run** — Langevin dynamics at 300 K; per-domain and interface `nscale` keep both domains folded.*
+
+> Regenerate after your run with
+> `python ../_viz/render_cg.py --psf traj/traj.psf --dcd traj/traj.dcd --out img --hero 0 --stride 2`.
+
 ---
 
 ## Files in this folder

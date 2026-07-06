@@ -57,6 +57,35 @@ article table.docutils .literal {
     margin: 0.4rem 0 0.2rem;
 }
 
+/* 3b. Tutorial figure pairs — one row, two columns.
+      Each tutorial embeds two images (a static structure + a process GIF) in a
+      single Markdown paragraph. Furo styles article images as block, which
+      stacks them; make paragraph images inline-block and cap each at ~half the
+      column so the pair sits side by side and reflows to stacked only on very
+      narrow screens. */
+article p img:not(:only-child) {
+    display: inline-block;
+    vertical-align: top;
+    max-width: 49%;
+    height: auto;
+}
+
+/* A lone figure (tutorials 6 and 7 ship only the process GIF): centre it and
+   let it run large, capped so it doesn't become oversized on wide screens. */
+article p img:only-child {
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+    max-width: min(100%, 720px);
+    height: auto;
+}
+
+/* Centre the italic caption under a lone figure to match. */
+article p:has(> img:only-child) + p em {
+    display: block;
+    text-align: center;
+}
+
 /* 4. Version switcher (sphinx-polyversion) — a dropdown pinned to the bottom of
       the sidebar, below Furo's light/dark toggle (see _templates/versions.html
       and html_sidebars in conf.py). */

@@ -11,6 +11,22 @@ by `topo.csp.ribosome.load_ribosome`) — no external `.cor`/`.psf`/`.prm` files
 The nascent chain grows N→C through the exit region and is ejected once
 complete.
 
+![residue-by-residue synthesis of 4c5c](4c5c/img/process.gif)
+
+***Synthesis on the ribosome** — the chain (coloured beads) grows through TOPO's coarse-grained ribosome (translucent grey); already-emerged N-terminal residues fold while the C-terminus is still being added inside.*
+
+> The GIF is for the `4c5c/` system. After a run, stitch the per-length frames into one
+> movie and render it (beads + the translucent ribosome as context):
+> ```bash
+> topo-csp-movie -o synth_out                    # -> synth_out/movie.{psf,dcd}
+> python ../_viz/ribosome_scenery_tcl.py -p ribosome_trunc.pdb -o synth_out/ribo.tcl
+> python ../_viz/render_cg.py --psf synth_out/movie.psf --dcd synth_out/movie.dcd \
+>        --out img --hero last --no-align --rep beads --fit-main-only \
+>        --select "name CA and x < 9000" --selupdate --extra-tcl synth_out/ribo.tcl
+> ```
+> (the growing chain parks not-yet-synthesized beads at a far sentinel, which
+> `--select … --selupdate` hides.)
+
 **Prerequisite:** the coarse-grained model of
 [Tutorial 1](01_single_domain.md) and
 the domain-scaling idea of

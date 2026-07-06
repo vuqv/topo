@@ -18,6 +18,9 @@
 **/analysis*.err
 **/output/
 **/traj/
+**/traj_jump/
+**/traj_linear/
+**/opt_out/
 **/test_run_bak/
 **/*.out
 **/ribosome_traffic

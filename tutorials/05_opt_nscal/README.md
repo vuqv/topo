@@ -17,6 +17,13 @@ production-length protocol.
 (what `nscale` does) and [Tutorial 4](04_multicopy.md)
 (the multi-copy runs the optimizer uses to collect independent trajectories).
 
+![stability trajectory at a candidate nscale](img/process.gif)
+
+***One stability trajectory** — each round runs 10 of these; the fraction that stay folded (via Q) decides whether the current `nscale` passes or is raised.*
+
+> Regenerate from any round's output, e.g.
+> `python ../_viz/render_cg.py --psf opt_out/round_1/traj/traj.psf --dcd opt_out/round_1/traj/traj_0.dcd --out img --hero 0 --stride 10`.
+
 ---
 
 ## Files in this folder

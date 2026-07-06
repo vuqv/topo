@@ -13,6 +13,15 @@ trajectories**, and how the schedule interacts with restarts.
 first — this reuses the same single-domain protein (`P0CX28`) and its calibrated
 `domain.yaml`.
 
+![unfold then refold trajectory](img/process.gif)
+
+***Temperature protocol (unfold → refold).** The quench phase at 600 K unfolds the chain (native contacts break), then the T-jump back to 300 K lets it refold. CA trace coloured N→C (blue→red).*
+
+> The GIF stitches the quench trajectory (`traj_quench.dcd`) ahead of the production
+> trajectory (`traj.dcd`); regenerate with
+> `python ../_viz/render_cg.py --psf traj_jump/traj.psf --dcd traj_jump/process.dcd --out img --hero 0`
+> (build `process.dcd` by joining the two DCDs — see the [visualization note](#visualizing-the-unfold--refold)).
+
 ---
 
 ## The idea: a temperature *protocol* in two phases
@@ -207,6 +216,22 @@ want.)
 - **`jump` for kinetics, `linear` for yield.**
 - **Match `anneal_steps` to your `tau_t`** — the hold must be many thermal
   relaxation times, and long enough to actually unfold.
+
+## Visualizing the unfold → refold
+
+The two phases write two DCDs. Join them into one trajectory (quench first, then
+production) so the GIF at the top of this page reads as a single unfold → refold
+movie:
+```python
+import mdtraj as md
+q = md.load('traj_jump/traj_quench.dcd', top='traj_jump/traj.psf')  # 600 K: unfolds
+p = md.load('traj_jump/traj.dcd',        top='traj_jump/traj.psf')  # 300 K: refolds
+q.join(p).save_dcd('traj_jump/process.dcd')
+```
+then render it:
+```bash
+python ../_viz/render_cg.py --psf traj_jump/traj.psf --dcd traj_jump/process.dcd --out img --hero 0
+```
 
 ## Try next
 

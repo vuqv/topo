@@ -9,6 +9,13 @@ for long production runs that exceed a wall-clock limit or get interrupted — a
 **Prerequisite:** do [Tutorial 1](01_single_domain.md) first. This
 tutorial reuses the same single-domain protein (`P0CX28`).
 
+![P0CX28 continued trajectory](img/process.gif)
+
+***The run** — stage 1 (0→5 000 steps) **continued** from the checkpoint to 10 000 steps: one seamless trajectory.*
+
+> Regenerate after both runs with
+> `python ../_viz/render_cg.py --psf traj/traj.psf --dcd traj/traj.dcd --out img --hero 0`.
+
 ---
 
 ## Files in this folder
