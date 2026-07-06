@@ -1,4 +1,4 @@
-"""Co-translational synthesis through an analytic exit tunnel (``topo.csp.cylinder``).
+"""Protein synthesis through an analytic exit tunnel (``topo.csp.cylinder``).
 
 A parallel of :mod:`topo.csp.protocol` for the **cylinder ribosome model**. Instead of
 explicit rigid CG ribosome beads, the ribosome is a pure boundary condition -- an analytic
@@ -58,6 +58,7 @@ from topo.csp.core import (
 )
 from topo.utils.config import strtobool
 from topo.csp import kinetics
+from topo.csp import synth_mrna
 
 # Default tunnel wall stiffness (kJ/mol/nm^2 = 20 kcal/mol/A^2): the radial +
 # exit-face + PTC-end "infinite wall" is a stiff finite harmonic.
@@ -452,8 +453,9 @@ def read_cylinder_config(config_file: str, verbose: bool = True) -> CylinderConf
     - ``outdir`` -- root output directory (per-length subfolders ``L_<L>/``).
     - ``domain_def`` -- domain YAML for contact ``nscale`` (one-time precompute).
     - ``stride_output_file`` -- precomputed STRIDE (else STRIDE runs once if on PATH).
-    - **Kinetics** (same as CSP): ``mrna`` (per-codon sequence), ``codon_times`` (a codon
-      table path for per-codon timing -- required, no bundled default; pick one under
+    - **Kinetics** (same as CSP): ``mrna`` (per-codon sequence, or ``fastest``/``slowest``
+      to auto-build a synonymous-codon mRNA), ``codon_times`` (a codon table path for
+      per-codon timing -- required, no bundled default; pick one under
       ``assets/csp/codon_dwell_times/`` -- or a positive number of seconds for a uniform
       codon time), ``scale_factor``,
       ``time_stage_1``, ``time_stage_2``, ``random_seed``, ``max_steps_per_stage``,
@@ -510,6 +512,24 @@ def read_cylinder_config(config_file: str, verbose: bool = True) -> CylinderConf
     mrna = opt("mrna")
     # codon_times: a table path (per-codon) OR a positive number of seconds (uniform).
     _uniform_codon_time, codon_time_table_path = kinetics.parse_codon_times(opt("codon_times"))
+    # mrna = "fastest"/"slowest": one-shot prep -- write the synonymous-codon mRNA next
+    # to the PDB and hand that file to the normal per-codon path. Reserved keywords, so a
+    # real mRNA filename must not be "fastest"/"slowest".
+    if mrna is not None and mrna.strip().lower() in synth_mrna.SYNTHETIC_MRNA_MODES:
+        _mode = mrna.strip().lower()
+        if _uniform_codon_time is not None:
+            raise ValueError(
+                f"{config_file}: mrna={_mode} is incompatible with a uniform "
+                f"'codon_times' (a number, {_uniform_codon_time:g} s): fastest/slowest "
+                f"picks the per-amino-acid extreme codon, which needs a codon-time "
+                f"*table* (e.g. one under assets/csp/codon_dwell_times/), not a single "
+                f"uniform time.")
+        if codon_time_table_path is None:
+            raise ValueError(
+                f"{config_file}: mrna={_mode} needs a 'codon_times' table path -- it "
+                f"defines which synonymous codon is {_mode}.")
+        mrna = synth_mrna.write_synthetic_mrna(pdb_file, codon_time_table_path, _mode)
+        log(f"  mrna={_mode}: wrote synonymous-codon mRNA -> {mrna}")
 
     p = CylinderParams()
     # --- integrator / MD knobs ---
@@ -623,7 +643,7 @@ def cylinder(argv: Optional[List[str]] = None) -> None:
     """Console entry point: ``topo-cylinder -f cylinder.ini``."""
     parser = argparse.ArgumentParser(
         prog="topo-cylinder",
-        description="Co-translational synthesis through an analytic exit tunnel (the "
+        description="Protein synthesis through an analytic exit tunnel (the "
                     "cylinder ribosome model). Grows the nascent chain N->C, restraining "
                     "the C-terminus on the tunnel axis at the PTC; an analytic cylindrical "
                     "bore (hole in an infinite wall) confines the in-tunnel segment. One MD "

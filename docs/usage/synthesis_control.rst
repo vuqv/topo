@@ -54,7 +54,8 @@ Example ``csp.ini``:
         L_max = 306          ; final nascent length (default: full residue count)
 
         ; --- codon-resolved kinetics ---
-        mrna         = 4c5c_mrna.txt   ; one codon per residue (required for per-codon timing)
+        mrna         = 4c5c_mrna.txt   ; one codon per residue (required for per-codon timing);
+                                       ; or "fastest"/"slowest" to auto-build a synonymous-codon mRNA
         codon_times  = trans_times.txt  ; table path = per-codon (required, no bundled default);
                                           ; a positive number of s = uniform instead
         scale_factor = 216564650       ; in-vivo seconds -> in-silico ns compression (larger = faster)
@@ -133,7 +134,7 @@ Inputs & length schedule
      - str
      - for per-codon timing
      - ``—``
-     - mRNA sequence file (raw nucleotides; one codon per residue plus one stop). Drives the per-codon timing, so it is required unless ``codon_times`` is set to a number (uniform timing).
+     - mRNA sequence file (raw nucleotides; one codon per residue plus one stop), **or** the keyword ``fastest`` / ``slowest`` to auto-build a synonymous-codon mRNA (each residue encoded by its fastest/slowest codon per the ``codon_times`` table, written next to the PDB as ``mrna_<mode>.txt``). Drives the per-codon timing, so it is required unless ``codon_times`` is set to a number (uniform timing). A real filename must not be ``fastest``/``slowest``.
    * - ``codon_times``
      - str or float
      - for per-codon timing
@@ -239,7 +240,7 @@ consumed by :func:`~topo.csp.core.run_length`).
    * - ``ref_t``
      - float [K]
      - ``310``
-     - Langevin temperature. Defaults to **310 K** — the temperature of the bundled codon-time table — so the kinetics and the thermostat are consistent by default.
+     - Langevin temperature. Defaults to **310 K** — the temperature of the E. coli 310 K codon-time table — so the kinetics and the thermostat are consistent by default. Set it to match your ``codon_times`` table's temperature.
    * - ``tau_t``
      - float [ps⁻¹]
      - ``0.05``
@@ -310,12 +311,19 @@ Per-codon vs. uniform timing (``mrna`` / ``codon_times``)
     * **A positive number of seconds** (e.g. ``codon_times = 0.05``) → **uniform**
       timing: every codon gets that mean dwell and no ``mrna`` is needed — a
       control/testing mode.
-    * **Omitted** → per-codon timing with the bundled *E. coli* 310 K table (the
-      table is organism-universal, so only the protein-specific ``mrna`` is
-      mandatory).
 
-    Because a numeric value is always read as a uniform time, a codon-time **table
-    filename must not be a bare number** (give it a name like ``trans_times.txt``).
+    There is no bundled default table: per-codon timing needs an explicit path (pick one
+    under ``assets/csp/codon_dwell_times/``). Because a numeric value is always read as a
+    uniform time, a codon-time **table filename must not be a bare number** (give it a
+    name like ``trans_times.txt``).
+
+    **Fastest / slowest mRNA.** Setting ``mrna = fastest`` or ``slowest`` (instead of a
+    file) auto-builds a synonymous-codon mRNA: the protein sequence is read from
+    ``pdb_file`` and each residue is encoded by its fastest / slowest synonymous codon per
+    the ``codon_times`` table (plus a terminating stop), written next to the PDB as
+    ``mrna_<mode>.txt``. This needs a ``codon_times`` **table** (it defines fast/slow); a
+    uniform numeric ``codon_times`` is rejected. Pre-generate one standalone with
+    ``topo-make-mrna --pdb P.pdb --codon-times T.txt --mode fastest``.
 
 Kinetics and step counts (``scale_factor`` / ``time_stage_1`` / ``time_stage_2``)
     Each residue is added over three sub-stages whose dwell times are exponential

@@ -36,6 +36,10 @@ topo-cylinder = "topo.csp.cylinder:cylinder"
 # Console command to stitch the CSP per-residue/-stage trajectories into one VMD
 # movie: `topo-csp-movie -o synth_out`
 topo-csp-movie = "topo.csp.movie:main"
+# Console command to pre-generate a fastest/slowest synonymous-codon mRNA for a protein
+# (same prep the runners do for `mrna = fastest/slowest`):
+# `topo-make-mrna --pdb prot.pdb --codon-times table.txt --mode fastest`
+topo-make-mrna = "topo.csp.synth_mrna:main"
 
 [tool.setuptools.packages.find]
 # Only ship the importable package (not tutorials/docs/etc. at the repo root).

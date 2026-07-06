@@ -1,6 +1,6 @@
 # `topo.csp` — Continuous Synthesis Protocol (O'Brien)
 
-The per-codon, three-stage co-translational synthesis protocol of
+The per-codon, three-stage protein synthesis protocol of
 `continuous_synthesis_v6.py` (Yang Jiang, Dan Nissley, Ed O'Brien), ported to topo.
 `topo.csp` (the CSP runner, `topo-csp`) times every residue from its mRNA codon and
 splits it into the three sub-stages of the elongation cycle. It is a thin outer loop
@@ -73,12 +73,14 @@ A single `[OPTIONS]` section. Required: `pdb_file`, `ribosome`, `domain_def` (th
 protein's contact-nscale definition). `L0` (default `1`) and `L_max` (default = full
 length) are optional. Per-codon timing requires both `mrna` and a `codon_times` table
 path (there is no bundled default -- pick one under `assets/csp/codon_dwell_times/`).
+Setting `mrna = fastest` or `slowest` auto-builds a synonymous-codon mRNA from the
+protein + table (see the `mrna` key below).
 
 **Kinetic keys**
 
 | key | meaning |
 |-----|---------|
-| `mrna` | mRNA sequence file (raw nucleotides; one codon/residue + 1 stop) |
+| `mrna` | mRNA sequence file (raw nucleotides; one codon/residue + 1 stop), **or** `fastest`/`slowest` to auto-generate a synonymous-codon mRNA — every residue encoded by its fastest/slowest codon per the `codon_times` table, written next to the PDB as `mrna_<mode>.txt`. A real filename must not be `fastest`/`slowest`. |
 | `codon_times` | codon-time table path (per-codon; required, no bundled default -- pick one under `assets/csp/codon_dwell_times/`) **or** a positive number of s (uniform codon time). A table filename must not be a bare number. |
 | `scale_factor` | in-vivo seconds → in-silico ns compressor |
 | `time_stage_1` / `time_stage_2` | mean peptidyl-transfer / translocation dwell (s) |

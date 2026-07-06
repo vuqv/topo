@@ -27,13 +27,13 @@ protocols.
 | 5 | [Optimizing the contact nscale](05_opt_nscal.md) | Automatically search the per-domain/interface `nscale` (*n*<sub>scale</sub>) that keeps each domain folded, instead of hard-coding it. |
 | 6 | [Temperature annealing & quenching](06_anneal.md) | Run a temperature protocol — hold the protein hot to unfold it, then T-jump (or slow-cool) back to `ref_t` to study refolding. |
 
-## Part B — Translation (co-translational synthesis)
+## Part B — Translation (protein synthesis)
 
 Grow the nascent chain **residue by residue**, so it can fold *as it is
 synthesized*. Both tutorials build on the Part A model and use codon-resolved
 kinetics; they differ only in how the ribosome exit tunnel is represented — an
 analytic bore (7) vs an explicit truncated ribosome (8). See the
-[co-translational synthesis overview](../usage/synthesis_overview.md) for the
+[protein synthesis overview](../usage/synthesis_overview.md) for the
 biology and which model to use, and
 [the ribosome structure](../usage/ribosome_preparation.md) for where tutorial 8's
 `ribosome_trunc.pdb` comes from (four organisms ship ready-made).

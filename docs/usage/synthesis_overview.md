@@ -1,4 +1,4 @@
-# Co-translational synthesis: overview
+# Protein synthesis: overview
 
 TOPO can grow a protein **vectorially, N-terminus first**, out of a ribosome while
 the nascent chain folds *as it emerges* — reproducing co-translational folding
@@ -55,6 +55,8 @@ scope".
 
 * {doc}`ribosome_preparation` — get or build the truncated CG ribosome the explicit
   model needs (four ready-made organisms ship with TOPO).
+* {doc}`codon_dwell_times` — the per-codon dwell-time tables that set the timing
+  (E. coli, yeast, human, N. crassa ship with TOPO), and the `fastest`/`slowest` mRNA.
 * {doc}`continuous_synthesis` — the explicit-ribosome runner: the RNC force field,
   the tRNA tether/PTC anchors, the 3-stage mechanics, the codon→MD-step kinetics.
 * {doc}`cylinder_synthesis` — the analytic-tunnel runner.

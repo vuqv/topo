@@ -17,7 +17,7 @@
 ```{toctree}
 :maxdepth: 1
 :hidden:
-:caption: Part B — Co-translational synthesis
+:caption: Part B — Protein synthesis
 
 07_translation_cylinder
 08_ribosome_synthesis

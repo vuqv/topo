@@ -45,10 +45,11 @@ layout, and :doc:`usage/model_theory` for what the model is.
 
 .. toctree::
    :maxdepth: 1
-   :caption: Co-translational synthesis
+   :caption: Protein synthesis
 
    usage/synthesis_overview
    usage/ribosome_preparation
+   usage/codon_dwell_times
    usage/continuous_synthesis
    usage/cylinder_synthesis
    usage/synthesis_control

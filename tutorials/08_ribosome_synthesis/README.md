@@ -1,4 +1,4 @@
-# Tutorial 8 — Co-translational synthesis on a coarse-grained ribosome
+# Tutorial 8 — Protein synthesis on a coarse-grained ribosome
 
 **Goal:** synthesize a protein **residue by residue on TOPO's own coarse-grained
 ribosome**, using codon-resolved kinetics with `topo-csp`. This is the

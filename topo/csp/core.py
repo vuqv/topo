@@ -1,7 +1,7 @@
 """Core nascent-chain MD machinery (``topo.csp.core``).
 
 This module holds the **per-length / per-stage molecular-dynamics building blocks**
-for co-translational synthesis — the foundation that the higher-level runners build
+for protein synthesis — the foundation that the higher-level runners build
 on. It is a *library*, not a runner: it exposes no CLI and no outer loop.
 
 Its consumers are:

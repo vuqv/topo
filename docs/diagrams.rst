@@ -17,7 +17,7 @@ coarse-grained force field, and the outputs. Flow chips trace *Equilibrium*,
 .. rubric:: Call flow — end to end
 
 The end-to-end **function-call sequence** for the two workflows side by side:
-isolated-protein MD (``topo-mdrun``) and co-translational synthesis
+isolated-protein MD (``topo-mdrun``) and protein synthesis
 (``topo-csp``), both funneling into the shared per-segment core
 (``setup_simulation`` → ``attach_reporters`` → ``step`` → ``finalize_simulation``).
 Numbered badges show call order; chips replay *Isolated MD*, *CSP synthesis*, the

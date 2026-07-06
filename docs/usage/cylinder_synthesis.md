@@ -158,7 +158,8 @@ L0    = 1            ; starting nascent length (required)
 L_max =              ; final length (blank -> full residue count)
 
 ; --- kinetics (same O'Brien codon timing as topo-csp) ---
-mrna         = P0CX28_mrna.txt   ; one codon per residue (required for per-codon timing)
+mrna         = P0CX28_mrna.txt   ; one codon per residue (required for per-codon timing);
+                                 ; or "fastest"/"slowest" to auto-build a synonymous-codon mRNA
 codon_times  = ../../assets/csp/codon_dwell_times/ecoli/ecoli_codon_dwell_times_310K.txt  ; table path (required for per-codon; or a number of s = uniform)
 scale_factor = 216564650         ; in-vivo s -> in-silico ns compression (larger = faster)
 random_seed  = 20240629
@@ -201,7 +202,7 @@ outdir = synth_out
 | `stride_output_file` | no | — | Precomputed STRIDE file (skips re-running STRIDE). |
 | `L0` | **yes** | — | Starting nascent-chain length (cold-start layout). |
 | `L_max` | no | full length | Final nascent length (blank = whole chain). Must satisfy `1 ≤ L0 ≤ L_max ≤ N_full`. |
-| `mrna` | for per-codon timing | — | mRNA file (one codon per residue); required unless `codon_times` is a number. |
+| `mrna` | for per-codon timing | — | mRNA file (one codon per residue), **or** `fastest`/`slowest` to auto-build a synonymous-codon mRNA (each residue's fastest/slowest codon per the `codon_times` table, written next to the PDB; see the [CSP docs](#fastest-slowest-synonymous-codon-mrna)). Required unless `codon_times` is a number. A real filename must not be `fastest`/`slowest`. |
 | `codon_times` | for per-codon timing | — | Codon-timing key: a **table path** = per-codon (required, no bundled default -- pick one under `assets/csp/codon_dwell_times/`); a **positive number of seconds** = uniform codon time (no `mrna` needed). A table filename must **not** be a bare number. |
 | `outdir` | no | `synth_out` | Output root; each residue writes `L_<L>/`. |
 

@@ -1,6 +1,6 @@
 """``topo.csp`` -- the O'Brien Continuous Synthesis Protocol, ported to topo.
 
-The per-codon, three-stage co-translational synthesis protocol of
+The per-codon, three-stage protein synthesis protocol of
 ``continuous_synthesis_v6.py`` (Yang Jiang, Dan Nissley, Ed O'Brien), expressed in
 topo style. It is the kinetic upgrade of :mod:`topo.csp.core`: it times
 every residue from its codon and splits each into peptidyl-transfer / translocation /

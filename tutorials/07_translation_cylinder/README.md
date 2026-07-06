@@ -1,4 +1,4 @@
-# Tutorial 7 — Co-translational synthesis through an analytic exit tunnel
+# Tutorial 7 — Protein synthesis through an analytic exit tunnel
 
 This is the **structure-based (topo) twin** of cosmo's tutorial 09. The
 ribosome-based runner ([Tutorial 8](08_ribosome_synthesis.md))
@@ -12,9 +12,9 @@ fast and never jams.
 The chain is a **folded protein** built with topo's structure-based Gō contacts, so
 it can **fold co-translationally** as it extrudes and once it clears the bore.
 
-![full co-translational synthesis and ejection through the tunnel](img/process.gif)
+![full protein synthesis and ejection through the tunnel](img/process.gif)
 
-***Co-translational synthesis → ejection.** The chain (N→C rainbow beads) grows from the PTC (C-terminus, red) and extrudes N-terminus-first down the transparent blue **bore** (with the red closed PTC cap and the translucent grey **exit-face wall**), emerges past the wall, and folds into the ejected protein just outside the tunnel.*
+***Protein synthesis → ejection.** The chain (N→C rainbow beads) grows from the PTC (C-terminus, red) and extrudes N-terminus-first down the transparent blue **bore** (with the red closed PTC cap and the translucent grey **exit-face wall**), emerges past the wall, and folds into the ejected protein just outside the tunnel.*
 
 > The tunnel is a pure force (no beads); the drawn geometry is read from the same
 > `cylinder.ini`. Regenerate after a run:
