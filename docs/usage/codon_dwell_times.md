@@ -21,8 +21,8 @@ UAA       0.005513             STOP
 
 - **RNA alphabet** (`U`), tab-separated, `#` comments ignored; **64 rows** (61 sense +
   3 stop). Larger time = slower codon; stop codons carry the amino acid `STOP`.
-- The **third column (amino acid)** is what `mrna = fastest`/`slowest` uses to pick each
-  residue's extreme synonymous codon — see [Fastest / slowest mRNA](#fastest-slowest-mrna).
+- The **third column (amino acid)** is what `mrna = fastest`/`slowest`/`median` uses to pick
+  each residue's synonymous codon — see [Fastest / slowest / median mRNA](#fastest-slowest-mrna).
 - Every organism directory also has a **`*_dwell_time_methods.md`** with the full
   provenance (source dataset, references, how relative data were scaled to seconds).
 
@@ -68,13 +68,14 @@ Keep the thermostat consistent with the table's temperature: `ref_t` defaults to
 differs. See {doc}`synthesis_control` for the full key reference.
 
 (fastest-slowest-mrna)=
-## Fastest / slowest mRNA
+## Fastest / slowest / median mRNA
 
 Because each table carries the codon→amino-acid mapping (column 3), you can set
-`mrna = fastest` or `slowest` (instead of a sequence file) to auto-build a
-synonymous-codon mRNA that encodes your protein with every residue's fastest/slowest
-codon **for the chosen table** — the extremes of the codon-optimization axis. See
-[Fastest / slowest (synonymous-codon) mRNA](#fastest-slowest-synonymous-codon-mrna),
+`mrna = fastest`, `slowest` or `median` (instead of a sequence file) to auto-build a
+synonymous-codon mRNA that encodes your protein with every residue's fastest/slowest/
+median-dwell-time codon **for the chosen table** — the extremes of the codon-optimization
+axis, or a neutral middle reference. See
+[Fastest / slowest / median (synonymous-codon) mRNA](#fastest-slowest-synonymous-codon-mrna),
 or pre-generate one standalone:
 
 ```bash

@@ -55,7 +55,7 @@ Example ``csp.ini``:
 
         ; --- codon-resolved kinetics ---
         mrna         = 4c5c_mrna.txt   ; one codon per residue (required for per-codon timing);
-                                       ; or "fastest"/"slowest" to auto-build a synonymous-codon mRNA
+                                       ; or "fastest"/"slowest"/"median" to auto-build a synonymous-codon mRNA
         codon_times  = trans_times.txt  ; table path = per-codon (required, no bundled default);
                                           ; a positive number of s = uniform instead
         scale_factor = 216564650       ; in-vivo seconds -> in-silico ns compression (larger = faster)
@@ -134,7 +134,7 @@ Inputs & length schedule
      - str
      - for per-codon timing
      - ``—``
-     - mRNA sequence file (raw nucleotides; one codon per residue plus one stop), **or** the keyword ``fastest`` / ``slowest`` to auto-build a synonymous-codon mRNA (each residue encoded by its fastest/slowest codon per the ``codon_times`` table, written next to the PDB as ``mrna_<mode>.txt``). Drives the per-codon timing, so it is required unless ``codon_times`` is set to a number (uniform timing). A real filename must not be ``fastest``/``slowest``.
+     - mRNA sequence file (raw nucleotides; one codon per residue plus one stop), **or** the keyword ``fastest`` / ``slowest`` / ``median`` to auto-build a synonymous-codon mRNA (each residue encoded by its fastest/slowest/median-dwell-time codon per the ``codon_times`` table, written next to the PDB as ``mrna_<mode>.txt``). Drives the per-codon timing, so it is required unless ``codon_times`` is set to a number (uniform timing). A real filename must not be ``fastest``/``slowest``/``median``.
    * - ``codon_times``
      - str or float
      - for per-codon timing
@@ -317,12 +317,17 @@ Per-codon vs. uniform timing (``mrna`` / ``codon_times``)
     uniform time, a codon-time **table filename must not be a bare number** (give it a
     name like ``trans_times.txt``).
 
-    **Fastest / slowest mRNA.** Setting ``mrna = fastest`` or ``slowest`` (instead of a
-    file) auto-builds a synonymous-codon mRNA: the protein sequence is read from
-    ``pdb_file`` and each residue is encoded by its fastest / slowest synonymous codon per
-    the ``codon_times`` table (plus a terminating stop), written next to the PDB as
-    ``mrna_<mode>.txt``. This needs a ``codon_times`` **table** (it defines fast/slow); a
-    uniform numeric ``codon_times`` is rejected. Pre-generate one standalone with
+    **Fastest / slowest / median mRNA.** Setting ``mrna = fastest``, ``slowest`` or
+    ``median`` (instead of a file) auto-builds a synonymous-codon mRNA that holds the
+    protein sequence fixed and reassigns each residue's codon — a controlled comparison in
+    which only the elongation timing changes. The protein sequence is read from
+    ``pdb_file`` and each residue is encoded by its shortest-``τ`` (``fastest``),
+    longest-``τ`` (``slowest``) or middle-``τ`` (``median``) synonymous codon per the
+    ``codon_times`` table (plus a terminating stop), written next to the PDB as
+    ``mrna_<mode>.txt``. For an amino acid with an even number of synonymous codons,
+    ``median`` takes the faster (shorter-``τ``) of the two central codons. This needs a
+    ``codon_times`` **table** (it defines which codon is fast/slow/median); a uniform
+    numeric ``codon_times`` is rejected. Pre-generate one standalone with
     ``topo-make-mrna --pdb P.pdb --codon-times T.txt --mode fastest``.
 
 Kinetics and step counts (``scale_factor`` / ``time_stage_1`` / ``time_stage_2``)

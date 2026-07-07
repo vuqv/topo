@@ -407,9 +407,10 @@ def read_csp_config(config_file: str, verbose: bool = True) -> CSPConfig:
     ------------
     - ``mrna`` -- mRNA sequence file (raw nucleotides, wrapped ok); one codon per
       residue + 1 stop. Required for per-codon timing (it is protein-specific). May also
-      be the keyword ``fastest`` / ``slowest`` to auto-build a synonymous-codon mRNA
-      (each residue's fastest/slowest codon per the ``codon_times`` table, written next
-      to the PDB); a real filename must not be ``fastest``/``slowest``.
+      be the keyword ``fastest`` / ``slowest`` / ``median`` to auto-build a
+      synonymous-codon mRNA (each residue's fastest/slowest/median-dwell-time codon per
+      the ``codon_times`` table, written next to the PDB); a real filename must not be
+      ``fastest``/``slowest``/``median``.
     - ``codon_times`` -- the codon-timing key. Either a **path** to a per-codon
       mean-time table (``CODON  seconds``; per-codon timing) **or** a **positive number
       of seconds** (uniform codon time for every codon, no ``mrna`` needed). Required for
@@ -545,16 +546,16 @@ def read_csp_config(config_file: str, verbose: bool = True) -> CSPConfig:
     # codon_times: a table path (per-codon timing) OR a positive number of seconds
     # (uniform codon time). Resolved here; applied to `p` in the kinetics section below.
     _uniform_codon_time, codon_time_table_path = kinetics.parse_codon_times(opt("codon_times"))
-    # mrna = "fastest"/"slowest": one-shot prep -- write the synonymous-codon mRNA next
-    # to the PDB and hand that file to the normal per-codon path. Reserved keywords, so a
-    # real mRNA filename must not be "fastest"/"slowest".
+    # mrna = "fastest"/"slowest"/"median": one-shot prep -- write the synonymous-codon
+    # mRNA next to the PDB and hand that file to the normal per-codon path. Reserved
+    # keywords, so a real mRNA filename must not be "fastest"/"slowest"/"median".
     if mrna is not None and mrna.strip().lower() in synth_mrna.SYNTHETIC_MRNA_MODES:
         _mode = mrna.strip().lower()
         if _uniform_codon_time is not None:
             raise ValueError(
                 f"{config_file}: mrna={_mode} is incompatible with a uniform "
-                f"'codon_times' (a number, {_uniform_codon_time:g} s): fastest/slowest "
-                f"picks the per-amino-acid extreme codon, which needs a codon-time "
+                f"'codon_times' (a number, {_uniform_codon_time:g} s): {_mode} "
+                f"picks a per-amino-acid synonymous codon, which needs a codon-time "
                 f"*table* (e.g. one under assets/csp/codon_dwell_times/), not a single "
                 f"uniform time.")
         if codon_time_table_path is None:

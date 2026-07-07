@@ -176,19 +176,32 @@ protein-specific sequence) and `codon_times` (the table) are mandatory for per-c
 ```
 
 (fastest-slowest-synonymous-codon-mrna)=
-#### Fastest / slowest (synonymous-codon) mRNA
+#### Fastest / slowest / median (synonymous-codon) mRNA
 
-To study the extremes of the synonymous-mutation (codon-optimization) axis, set `mrna`
-to the keyword **`fastest`** or **`slowest`** instead of a file. The runner then reads the
-protein's amino-acid sequence from `pdb_file` and, for each residue, picks the **fastest**
-(smallest-`τ`) or **slowest** (largest-`τ`) synonymous codon for that amino acid from the
-`codon_times` table — holding the protein fixed while minimizing / maximizing translation
-time. A terminating stop codon is appended, and the result is written next to the PDB as
-`mrna_fastest.txt` / `mrna_slowest.txt`, then fed into the normal per-codon path.
+Instead of supplying an mRNA file, you can have TOPO build one that keeps the **protein
+sequence fixed** but reassigns each residue's **codon** — a controlled walk along the
+synonymous-mutation (codon-optimization) axis. Because the protein, its native structure,
+and its contacts are identical across these mRNAs and only the elongation *timing* changes,
+any difference in the co-translational folding they produce is attributable to codon
+kinetics alone. Set `mrna` to a keyword instead of a filename:
 
-The codon→amino-acid mapping comes from the table's third column (the tables under
-`assets/csp/codon_dwell_times/` are `codon  time  amino_acid`). This needs a `codon_times`
-**table** (it defines which codon is fast/slow); a uniform numeric `codon_times` is
+- **`fastest`** — the shortest-`τ` synonymous codon at every residue → the fastest
+  translation the protein's codons allow (minimises the mean total dwell time).
+- **`slowest`** — the longest-`τ` synonymous codon at every residue → the slowest
+  translation (maximises the mean total dwell); the slow codons act as translational pauses
+  that give each emerging segment more time to fold.
+- **`median`** — the middle-`τ` synonymous codon at every residue → a neutral reference
+  sitting between the two extremes. When an amino acid has an even number of synonymous
+  codons there is no single middle, so TOPO takes the **faster (shorter-`τ`) of the two
+  central** codons; the pick is deterministic.
+
+Here `τ` is the codon's mean per-codon dwell time (introduced above), read from the
+`codon_times` **table** — whose third column also supplies the codon→amino-acid map. The
+runner reads the amino-acid sequence from `pdb_file`, picks one codon per residue as above,
+appends the matching stop codon, and writes the raw-nucleotide mRNA next to the PDB as
+`mrna_fastest.txt` / `mrna_slowest.txt` / `mrna_median.txt`; that file then feeds the normal
+per-codon path. Because the pick is made per amino acid, the mode needs a codon-time
+**table** — a single uniform `codon_times` number carries no synonymous choices and is
 rejected. To pre-generate the file standalone (e.g. to inspect or version it):
 
 ```bash
@@ -355,7 +368,7 @@ repeat the same options with more inline commentary on the physics.
 | `ribosome` | **yes** | — | Truncated CG ribosome PDB (P-/A-anchors + rigid scenery). |
 | `L0` | no | `1` | Start nascent-chain length (omit/blank = start from a single residue). |
 | `L_max` | no | full length | Final nascent length (omit/blank = synthesize the whole chain). |
-| `mrna` | cond. | — | mRNA file (one codon per residue), **or** `fastest`/`slowest` to auto-build a synonymous-codon mRNA (see [Fastest / slowest mRNA](#fastest-slowest-synonymous-codon-mrna)). Required for per-codon timing (unless `codon_times` is a number). A real filename must not be `fastest`/`slowest`. |
+| `mrna` | cond. | — | mRNA file (one codon per residue), **or** `fastest`/`slowest`/`median` to auto-build a synonymous-codon mRNA (see [Fastest / slowest / median mRNA](#fastest-slowest-synonymous-codon-mrna)). Required for per-codon timing (unless `codon_times` is a number). A real filename must not be `fastest`/`slowest`/`median`. |
 | `codon_times` | cond. | — | Codon-timing key. A **table path** = per-codon timing (required, no bundled default -- pick one under `assets/csp/codon_dwell_times/`); a **positive number of seconds** = uniform codon time (every codon, no `mrna` needed). A table filename must **not** be a bare number. |
 | `domain_def` | **yes** | — | `domain.yaml` — the protein's **contact-nscale definition** (per-domain / per-interface Gō well-depth scaling, the structure-based analog of the reference model's `nscal`). |
 | `stride_output_file` | no | — | Precomputed STRIDE file (skips re-running STRIDE). |

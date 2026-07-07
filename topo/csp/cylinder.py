@@ -453,8 +453,9 @@ def read_cylinder_config(config_file: str, verbose: bool = True) -> CylinderConf
     - ``outdir`` -- root output directory (per-length subfolders ``L_<L>/``).
     - ``domain_def`` -- domain YAML for contact ``nscale`` (one-time precompute).
     - ``stride_output_file`` -- precomputed STRIDE (else STRIDE runs once if on PATH).
-    - **Kinetics** (same as CSP): ``mrna`` (per-codon sequence, or ``fastest``/``slowest``
-      to auto-build a synonymous-codon mRNA), ``codon_times`` (a codon table path for
+    - **Kinetics** (same as CSP): ``mrna`` (per-codon sequence, or
+      ``fastest``/``slowest``/``median`` to auto-build a synonymous-codon mRNA),
+      ``codon_times`` (a codon table path for
       per-codon timing -- required, no bundled default; pick one under
       ``assets/csp/codon_dwell_times/`` -- or a positive number of seconds for a uniform
       codon time), ``scale_factor``,
@@ -512,16 +513,16 @@ def read_cylinder_config(config_file: str, verbose: bool = True) -> CylinderConf
     mrna = opt("mrna")
     # codon_times: a table path (per-codon) OR a positive number of seconds (uniform).
     _uniform_codon_time, codon_time_table_path = kinetics.parse_codon_times(opt("codon_times"))
-    # mrna = "fastest"/"slowest": one-shot prep -- write the synonymous-codon mRNA next
-    # to the PDB and hand that file to the normal per-codon path. Reserved keywords, so a
-    # real mRNA filename must not be "fastest"/"slowest".
+    # mrna = "fastest"/"slowest"/"median": one-shot prep -- write the synonymous-codon
+    # mRNA next to the PDB and hand that file to the normal per-codon path. Reserved
+    # keywords, so a real mRNA filename must not be "fastest"/"slowest"/"median".
     if mrna is not None and mrna.strip().lower() in synth_mrna.SYNTHETIC_MRNA_MODES:
         _mode = mrna.strip().lower()
         if _uniform_codon_time is not None:
             raise ValueError(
                 f"{config_file}: mrna={_mode} is incompatible with a uniform "
-                f"'codon_times' (a number, {_uniform_codon_time:g} s): fastest/slowest "
-                f"picks the per-amino-acid extreme codon, which needs a codon-time "
+                f"'codon_times' (a number, {_uniform_codon_time:g} s): {_mode} "
+                f"picks a per-amino-acid synonymous codon, which needs a codon-time "
                 f"*table* (e.g. one under assets/csp/codon_dwell_times/), not a single "
                 f"uniform time.")
         if codon_time_table_path is None:
