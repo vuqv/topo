@@ -29,7 +29,6 @@ Typical use
 >>> # rmin_matrix (well positions), energy_matrix in nm and kJ/mol for OpenMM
 """
 import os
-import shutil
 import subprocess
 import warnings
 import MDAnalysis as mda
@@ -41,6 +40,8 @@ from pathlib import Path
 from collections import defaultdict
 import yaml
 from typing import Dict, List, Tuple, Set, Optional
+
+from topo.utils.external import find_executable
 # import logging
 
 # Configure logging
@@ -883,13 +884,14 @@ def build_nonbonded_interaction(
     # then parse that file.
     stride_path = stride_output_file
     if stride_path is None:
-        stride_exe = shutil.which("stride")
-        if stride_exe is None:
+        try:
+            stride_exe = find_executable("stride")
+        except RuntimeError as exc:
             raise RuntimeError(
-                "stride_output_file was not supplied and the 'stride' program was not found. "
-                "Either provide a precomputed STRIDE output file (stride_output_file=...) or "
-                "install STRIDE and ensure it is on PATH."
-            )
+                "stride_output_file was not supplied and STRIDE could not be located. "
+                "Either provide a precomputed STRIDE output file (stride_output_file=...) "
+                "or make STRIDE available. " + str(exc)
+            ) from None
         prefix = os.path.splitext(os.path.basename(pdb_file))[0]
         stride_path = "{}_stride.dat".format(prefix)
         print("Running STRIDE on structure (stride -h {} -> {}).".format(pdb_file, stride_path))

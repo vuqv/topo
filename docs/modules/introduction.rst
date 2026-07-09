@@ -84,8 +84,9 @@ which are best installed from ``conda-forge``. From the repository root::
 This installs TOPO as an editable package (your source edits take effect
 immediately) and registers the ``topo-mdrun`` and ``topo-optimize`` console
 commands. **STRIDE** must be on your ``PATH`` for the contact potential (or
-supply a precomputed STRIDE file via ``stride_output_file``). See the project
-``README`` for a no-install (``PYTHONPATH``) alternative.
+supply a precomputed STRIDE file via ``stride_output_file``); STRIDE and the
+optional PULCHRA backmapper are covered in :doc:`../usage/external_dependencies`.
+See the project ``README`` for a no-install (``PYTHONPATH``) alternative.
 
 
 Running a simulation

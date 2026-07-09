@@ -132,6 +132,47 @@ set-up → protocol → finalize. Reach for the manual route only for a non-stan
 protocol the config file can't express.
 
 
+Start from a hackable script
+----------------------------
+
+If you want a custom protocol but not a from-scratch OpenMM loop, start from the
+ready-to-edit script in the repository's ``examples/`` directory rather than
+writing one from nothing. ``examples/custom_md.py`` is the *open* version of the
+``topo-mdrun`` command: it reproduces the runner's exact flow using the
+:mod:`topo.engine` building blocks, with the customization points marked
+``# === EDIT: ... ===``.
+
+.. code-block:: bash
+
+   cp examples/custom_md.py my_run.py     # copy, then edit the EDIT sections
+   python my_run.py -f md.ini             # runs like topo-mdrun, reads the same md.ini
+
+The engine layer it composes is the same one :mod:`topo.mdrun` uses, so an edited
+copy behaves exactly like the console command except where you change it:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 34 66
+
+   * - Helper
+     - Does
+   * - :func:`topo.engine.build_system`
+     - Build the (optionally multi-copy) CG model; returns a ``BuiltSystem`` with ``.system`` / ``.topology`` / ``.positions``. Add your own forces to ``built.system`` here, before setup.
+   * - :func:`topo.engine.setup_simulation`
+     - Create the OpenMM ``Simulation`` (integrator, platform, restart, starting coordinates); returns a ``RunContext``.
+   * - :func:`topo.engine.attach_reporters`
+     - Attach the DCD / TOPO-log / checkpoint reporters.
+   * - :func:`topo.mdrun.protocol.run_protocol`
+     - Step the simulation through a schedule -- a list of ``(temperature, n_steps)`` stages you define.
+   * - :func:`topo.engine.finalize_simulation`
+     - Save the final checkpoint and structure and close out run metadata.
+
+The three worked customizations in the script are: adding an OpenMM force to the
+built system (e.g. a restraint), defining your own temperature schedule instead
+of constant-\ *T* production, and running in segments with an analysis callback
+between them. See ``examples/README.md`` for the copy-and-edit workflow.
+
+
 Read a control file
 -------------------
 

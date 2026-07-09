@@ -21,6 +21,7 @@ layout, and :doc:`usage/model_theory` for what the model is.
    overview
    diagrams
    modules/introduction
+   usage/external_dependencies
 
 .. toctree::
    :maxdepth: 2

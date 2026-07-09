@@ -44,3 +44,11 @@ topo-make-mrna = "topo.csp.synth_mrna:main"
 [tool.setuptools.packages.find]
 # Only ship the importable package (not tutorials/docs/etc. at the repo root).
 include = ["topo*"]
+
+[tool.setuptools.package-data]
+# Optional: if third-party binaries are vendored into topo/bin/ (e.g. via
+# `PREFIX=topo/bin scripts/install_deps.sh`), ship them in the wheel. This makes
+# the wheel platform-specific, so it is off by default -- the directory is
+# normally absent and this glob simply matches nothing. topo/utils/external.py
+# resolves TOPO_STRIDE/PATH first and only falls back to topo/bin/ if present.
+topo = ["bin/*"]

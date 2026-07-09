@@ -43,7 +43,6 @@ Residue numbering: STRIDE / segment files use 1-based residue numbers that map t
 from pathlib import Path
 import argparse
 import os
-import shutil
 import subprocess
 import sys
 import warnings
@@ -61,6 +60,7 @@ from .native_contacts import (
     fraction_native_contacts,
 )
 from ..utils.nonbonded import _norm_chain, get_residue_mapping
+from ..utils.external import find_executable
 
 
 # --------------------------------------------------------------------------- #
@@ -203,12 +203,14 @@ def run_stride(pdb_file, out_dir=None, timeout=60):
     secondary-structure records) rather than the exit code -- some STRIDE builds
     return non-zero even on success.
     """
-    stride_exe = shutil.which("stride")
-    if stride_exe is None:
+    try:
+        stride_exe = find_executable("stride")
+    except RuntimeError as exc:
         raise RuntimeError(
-            "No STRIDE output supplied and the 'stride' program was not found. "
-            "Provide --segments or -s <stride output>, or install STRIDE on PATH."
-        )
+            "No STRIDE output supplied and STRIDE could not be located. "
+            "Provide --segments or -s <stride output>, or make STRIDE available. "
+            + str(exc)
+        ) from None
     stem = os.path.splitext(os.path.basename(pdb_file))[0]
     out_dir = Path(out_dir) if out_dir is not None else Path(pdb_file).resolve().parent
     stride_path = out_dir / f"{stem}_stride.dat"
