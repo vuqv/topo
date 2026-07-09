@@ -307,6 +307,77 @@ def resolve_segment_endpoints(reference, u_ref, segments=None, stride_output=Non
 
 
 # --------------------------------------------------------------------------- #
+# Secondary-structure residue SET (all residues inside SS elements)
+# --------------------------------------------------------------------------- #
+# The endpoint helpers above keep only the two ends of each element (for the
+# chirality polyline). Restricting Q to "SS elements only" instead needs EVERY
+# residue inside those same elements, so these companions expand each element's
+# [start, end] range. Same inputs, same precedence -- only the collection differs.
+def segment_residues_from_stride(stride_output_file, key_to_index, min_len=4):
+    """0-based Cα bead indices of ALL residues inside each STRIDE helix/strand
+    element (length >= ``min_len``), as a sorted array. Companion to
+    ``segment_endpoints_from_stride`` (identical parsing; keeps the full range).
+    """
+    residues = []
+    with open(stride_output_file) as fh:
+        for line in fh:
+            if not line.startswith("LOC "):
+                continue
+            sec_name = line[5:17].strip()
+            if "Helix" not in sec_name and "Strand" not in sec_name:
+                continue
+            chain = _norm_chain(line[28])
+            start_resnum = int(line[21:27])
+            end_resnum = int(line[39:45])
+            if (end_resnum - start_resnum + 1) < min_len:
+                continue
+            for resnum in range(start_resnum, end_resnum + 1):
+                key = (chain, resnum)
+                if key not in key_to_index:
+                    raise KeyError(
+                        f"STRIDE residue {key} not found in structure "
+                        f"(check chain/numbering consistency)"
+                    )
+                residues.append(key_to_index[key])
+    if not residues:
+        raise ValueError("no SS (helix/strand) residues found -- SS-only Q undefined")
+    return np.array(sorted(set(residues)), dtype=int)
+
+
+def segment_residues_from_file(segments_file):
+    """0-based Cα bead indices of ALL residues inside each ``<label> <start> <end>``
+    element (1-based, single-chain convention). Companion to
+    ``segment_endpoints_from_file`` (keeps the full range, not just the ends).
+    """
+    residues = []
+    with open(segments_file) as fh:
+        for line in fh:
+            if not line.strip():
+                continue
+            parts = line.split()
+            start, end = int(parts[1]), int(parts[2])
+            residues.extend(range(start - 1, end))     # 1-based [start, end] -> 0-based
+    if not residues:
+        raise ValueError(f"{segments_file}: no SS residues found -- SS-only Q undefined")
+    return np.array(sorted(set(residues)), dtype=int)
+
+
+def resolve_ss_residues(reference, u_ref, segments=None, stride_output=None,
+                        min_len=4, out_dir=None):
+    """Resolve the full set of SS-element residues (0-based bead indices) with the
+    same three-way precedence as ``resolve_segment_endpoints``:
+    explicit ``segments`` file -> precomputed ``stride_output`` -> auto-run STRIDE.
+    Used to restrict Q to native contacts between SS residues only.
+    """
+    if segments is not None:
+        return segment_residues_from_file(segments)
+    if stride_output is None:
+        stride_output = run_stride(reference, out_dir=out_dir)
+    key_to_index, _idx_to_name, _n = get_residue_mapping(u_ref)
+    return segment_residues_from_stride(stride_output, key_to_index, min_len=min_len)
+
+
+# --------------------------------------------------------------------------- #
 # Combined classification
 # --------------------------------------------------------------------------- #
 def classify_mirror(Q, K, rmsd_native, rmsd_reflected,
@@ -369,6 +440,19 @@ def resolve_frame_range(start, end, n_frames):
 # --------------------------------------------------------------------------- #
 # CLI / driver
 # --------------------------------------------------------------------------- #
+def _str2bool(value):
+    """Parse a boolean CLI value so ``--q-ss-only False|0|no`` disables the flag
+    (argparse's ``store_true`` cannot take an explicit value)."""
+    if isinstance(value, bool):
+        return value
+    v = value.strip().lower()
+    if v in ("true", "t", "yes", "y", "1"):
+        return True
+    if v in ("false", "f", "no", "n", "0"):
+        return False
+    raise argparse.ArgumentTypeError(f"expected a boolean value, got {value!r}")
+
+
 def parse_args():
     """Parse command-line arguments for the mirror-detection driver."""
     p = argparse.ArgumentParser(
@@ -403,6 +487,12 @@ def parse_args():
                    help="Heavy-atom distance defining a native contact (Å).")
     p.add_argument("--local-separation", type=int, default=3,
                    help="Minimum sequence separation for Q (abs(i - j) > this).")
+    p.add_argument("--q-ss-only", type=_str2bool, default=True,
+                   metavar="BOOL", nargs="?", const=True,
+                   help="Restrict Q to native contacts whose BOTH residues lie in a "
+                        "secondary-structure element (the same helices/strands used "
+                        "for K). Default: True. Pass '--q-ss-only False' (or 0) to "
+                        "score Q over the whole molecule instead.")
     p.add_argument("--tolerance", type=float, default=1.2,
                    help="Cα-distance stretch factor for a 'formed' contact.")
     # Classification thresholds.
@@ -445,12 +535,26 @@ def main():
     )
     # Whole-molecule Q: every heavy-atom contact (|i-j| > local_separation),
     # NOT restricted to secondary-structure residue pairs. A prior pipeline may
-    # define Q only over SS-SS pairs; that yields different absolute Q values.
-    pairs, dnat = build_native_contacts(None, None, heavy_positions, heavy_res,
-                                        ca_native, args.cutoff, args.local_separation)
-    print(f"=== Native contacts (whole protein, not SS-restricted): "
-          f"{pairs.shape[0]} (heavy-atom <= {args.cutoff} Å, "
-          f"|i-j| > {args.local_separation}) ===")
+    # define Q only over SS-SS pairs; that yields different absolute Q values --
+    # select that variant with --q-ss-only.
+    if args.q_ss_only:
+        ss_residues = resolve_ss_residues(
+            args.reference, u_ref, segments=args.segments,
+            stride_output=args.stride, min_len=args.min_seg_len,
+            out_dir=Path(args.output).resolve().parent,
+        )
+        pairs, dnat = build_native_contacts(
+            set(ss_residues.tolist()), None, heavy_positions, heavy_res,
+            ca_native, args.cutoff, args.local_separation)
+        print(f"=== Native contacts (SS elements only, {ss_residues.size} SS "
+              f"residues): {pairs.shape[0]} (heavy-atom <= {args.cutoff} Å, "
+              f"|i-j| > {args.local_separation}) ===")
+    else:
+        pairs, dnat = build_native_contacts(None, None, heavy_positions, heavy_res,
+                                            ca_native, args.cutoff, args.local_separation)
+        print(f"=== Native contacts (whole protein, not SS-restricted): "
+              f"{pairs.shape[0]} (heavy-atom <= {args.cutoff} Å, "
+              f"|i-j| > {args.local_separation}) ===")
 
     # --- SS segment endpoints for chirality ---
     endpoints = resolve_segment_endpoints(

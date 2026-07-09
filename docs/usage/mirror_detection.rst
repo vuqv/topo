@@ -160,6 +160,56 @@ fit to the reflected reference:
   (``--q-fold``, ``--k-thresh``, ``--rmsd-ratio``).
 
 
+Worked example — a mirror from a CG run
+---------------------------------------
+
+.. figure:: img/mirror.png
+   :width: 65%
+   :align: center
+   :alt: Native (blue) and mirror (red) Cα traces superimposed.
+
+   **Native vs. a mirror-image fold.** Blue: the native Cα reference. Red: the
+   **final conformation** of a coarse-grained folding trajectory (the bundled
+   ``test_case``), superimposed on the native by a proper-rotation (no-reflection)
+   fit. The two share the same chain topology and nearly the same set of
+   contacts, yet pack with **opposite handedness** — the red fold cannot be
+   rotated onto the blue one, only reflected onto it.
+
+The mirror metrics turn that visual impression into numbers. For this frame:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 20 16 64
+
+   * - Metric
+     - Value
+     - Reading
+   * - :math:`Q`
+     - ``0.679``
+     - **Folded** (:math:`> 0.5`) — the SS-core native contacts (default ``--q-ss-only``) are largely intact, so *Q* alone would call this a folded, native-looking structure. (Whole-molecule *Q* for the same frame is ``0.530`` — still folded.)
+   * - :math:`K`
+     - ``0.000``
+     - **Every** local turn is inverted (:math:`\ll 0.3`) — the handedness is completely opposite to native.
+   * - :math:`\mathrm{RMSD}_\mathrm{native}`
+     - ``10.93 Å``
+     - Proper-rotation fit to the native reference.
+   * - :math:`\mathrm{RMSD}_\mathrm{reflected}`
+     - ``8.41 Å``
+     - Fit to the *reflected* native — **tighter** than to the native itself.
+   * - ``RMSD_ratio``
+     - ``0.769``
+     - :math:`< 0.9`: the reflected reference fits clearly better.
+   * - ``is_mirror``
+     - ``True``
+     - All three conditions met.
+
+This is exactly the failure mode the analysis guards against: judged by *Q*
+(0.68) the conformation looks like a folded protein, but :math:`K = 0` and
+``RMSD_ratio = 0.77`` show it is a **mirror image** — folded by contacts, wrong by
+handedness. Counting it as a genuine (mis)fold would misstate the outcome of the
+run.
+
+
 Per-trajectory verdict
 ----------------------
 
@@ -257,6 +307,10 @@ Arguments:
      - —
      - ``4.5`` / ``3`` / ``1.2``
      - Native-contact definition for *Q* (identical to :doc:`native_contacts`).
+   * - ``--q-ss-only``
+     - bool
+     - ``True``
+     - Restrict *Q* to native contacts whose **both** residues lie in a secondary-structure element (the same helices/strands used for *K*). This is the **default**; pass ``--q-ss-only False`` (or ``0``) to score *Q* over the whole molecule instead.
    * - ``--q-fold`` / ``--k-thresh`` / ``--rmsd-ratio``
      - float
      - ``0.5`` / ``0.3`` / ``0.9``
@@ -268,11 +322,15 @@ Arguments:
 
 .. important::
 
-   *Q* here is **whole-molecule** native contacts — every heavy-atom contact with
-   :math:`|i-j| >` ``local-separation`` — **not** restricted to secondary-structure
-   residue pairs. A pipeline that defines *Q* only over SS–SS pairs will report
-   different absolute *Q* values; the chirality *K* and the RMSD ratio are
-   unaffected.
+   By default *Q* here is **restricted to secondary-structure elements**: only
+   native contacts whose **both** residues lie in a STRIDE helix/strand (the same
+   elements that define *K*) are counted. This focuses *Q* on the folded SS core —
+   exactly the part of the chain whose handedness the mirror question is about — and
+   makes the ``is_mirror`` gate report on the packed scaffold rather than on
+   flexible loops. Pass ``--q-ss-only False`` to recover the **whole-molecule**
+   definition (every heavy-atom contact with :math:`|i-j| >` ``local-separation``),
+   as in :doc:`native_contacts`. The two definitions give different absolute *Q*
+   values; the chirality *K* and the RMSD ratio are unaffected either way.
 
 
 Output CSV
@@ -288,7 +346,8 @@ One row per scored frame:
    26665,0.694,0.091,11.98,5.34,0.446,True
 
 * ``Frame`` — 0-based frame index (respects ``--start-frame``).
-* ``Q`` — whole-protein fraction of native contacts.
+* ``Q`` — fraction of native contacts (secondary-structure elements only by
+  default; whole protein with ``--q-ss-only False``).
 * ``K`` — chirality fraction-agreement (:math:`\to 1` native-handed, :math:`\to 0` mirror).
 * ``RMSD_native`` / ``RMSD_reflected`` — Å, proper-rotation fit to the native /
   reflected reference.
