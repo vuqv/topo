@@ -41,6 +41,7 @@ layout, and :doc:`usage/model_theory` for what the model is.
    usage/simulation_control
    usage/domain_definition
    usage/native_contacts
+   usage/mirror_detection
    usage/outputs
 
 .. toctree::

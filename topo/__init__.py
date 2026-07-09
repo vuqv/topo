@@ -28,7 +28,10 @@ __all__ = ['system', 'models', 'runinfo', 'engine',
            'split_chains',
            'analysis',
            'load_domains', 'reference_residue_geometry', 'build_native_contacts',
-           'fraction_native_contacts']
+           'fraction_native_contacts',
+           'kabsch_proper', 'mirror_rmsd', 'local_chirality',
+           'chirality_agreement', 'segment_endpoints_from_stride',
+           'segment_endpoints_from_file', 'classify_mirror']
 
 from .core import geometry
 from .core import models
@@ -45,6 +48,9 @@ from . import analysis
 from .analysis.native_contacts import (load_domains, reference_residue_geometry,
                                        build_native_contacts,
                                        fraction_native_contacts)
+from .analysis.mirror import (kabsch_proper, mirror_rmsd, local_chirality,
+                             chirality_agreement, segment_endpoints_from_stride,
+                             segment_endpoints_from_file, classify_mirror)
 # engine uses topo.<...> only at call time, so importing it last avoids any
 # circular-import issue while making `topo.engine` available.
 from . import engine
