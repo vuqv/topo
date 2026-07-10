@@ -55,6 +55,7 @@ import topo
 from topo import engine
 from topo.core.system import system as TopoSystem
 from topo.csp.ribosome import (Ribosome, load_ribosome, append_ribosome,
+                                       append_flexible_l24_loop,
                                        add_trna_tether, add_tunnel_wall,
                                        TRNA_TETHER_BOND_NM,
                                        TUNNEL_WALL_K, RIBO_NC_EPS_KJ)
@@ -874,6 +875,16 @@ class RunParams:
     tunnel_wall: bool = True
     tunnel_wall_x0_nm: Optional[float] = None
     tunnel_wall_k: float = TUNNEL_WALL_K
+    # Flexible ribosomal-protein loop (ribo_free_mask). When ribo_free_seg is set,
+    # residues ribo_free_lo..ribo_free_hi (inclusive) of that segment are freed as a
+    # topo-style Go loop (append_flexible_l24_loop); the rest of the ribosome stays
+    # mass-0. ribo_free_pdb is the all-atom PDB of that protein chain (native-contact
+    # source). All None -> whole ribosome frozen (default). Parsed/validated by
+    # read_csp_config from the `ribo_free_mask` + `ribo_free_pdb` INI keys.
+    ribo_free_seg: Optional[str] = None
+    ribo_free_lo: Optional[int] = None
+    ribo_free_hi: Optional[int] = None
+    ribo_free_pdb: Optional[str] = None
     # Note: when a ribosome is present the output is **always nascent-only** -- only the
     # nascent chain is written to the trajectory / PSF / final structure (the rigid
     # ribosome is static, so writing it every frame would waste storage; the checkpoint
@@ -1053,7 +1064,13 @@ def run_length(L: int, *, full_pdb: str, R_full: np.ndarray, eps_full: np.ndarra
     # radii); slice to the current length. If None, append_ribosome falls back to the per-AA
     # table (Option B).
     if ribo is not None:
-        append_ribosome(cgModel, ribo, nascent_rmin_2=nasc_rm)
+        _, ribo_idx = append_ribosome(cgModel, ribo, nascent_rmin_2=nasc_rm)
+        # Optional: free a loop of one ribosomal protein (ribo_free_mask) as a
+        # topo-style Go loop; the rest of the ribosome stays mass-0 scenery.
+        if params.ribo_free_seg is not None:
+            append_flexible_l24_loop(cgModel, ribo, ribo_idx,
+                                     params.ribo_free_seg, params.ribo_free_lo,
+                                     params.ribo_free_hi, params.ribo_free_pdb)
         positions = np.vstack([nascent_pos, ribo.coords_nm])
     else:
         positions = nascent_pos

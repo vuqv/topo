@@ -84,9 +84,13 @@ Severity: ⚠️ = correctness / could bite silently · 📌 = decision needed �
 
 ## Doc / accuracy notes (📝)
 
-- [ ] 📝 **L24 free-loop residue range was wrong in the original DIFFERENCES.md.** It said
-  42–**59**; the O'Brien reference is `ribo_free_mask = L24 : 42-56` (line 37). Corrected in
-  the revised doc — propagate the fix if the number appears elsewhere.
+- [ ] 📝 **L24 free-loop residue range is 42–59** (18 residues; `parse_mask` inclusive both ends).
+  Confirmed against the O'Brien reference itself: the run log prints `Free part of ribosome:
+  L24 : 42 - 59` (`example/continuous_synthesis/output/info.log:18`), matching the executed
+  `cont_synth_ecoli.cntrl:19` and code comments `continuous_synthesis_v6.py:664-665`. A prior
+  revision of this doc set changed it to 42–**56** and labelled 42–59 a "mis-statement" — that
+  reviewer copied a **stale example in the `usage` help-text string** (`v6.py:37`), not the
+  executed value. Reverted; do not "re-correct" to 42–56.
 - [ ] 📝 **"Placement geometry" is superseded, not matched.** topo's `optimize_ptc_geometry`
   solves for a least-buried seed rather than reproducing O'Brien's fixed 4.27 Å + 10° tilt.
   Same intent, different mechanism → listed as "still different" but not a regression to
@@ -160,7 +164,7 @@ or consciously declined.
 ### Docs
 - [ ] 🔧 **Consolidate the overlapping doc set.** `DESIGN.md`, `FILES.md`, `PROMPT.md`,
   `TODO.md`, `README.md`, plus per-tutorial `TASK.md`/`NOTES.md` and the top-level
-  `CHANGELOG.md` carry overlapping state that drifts (the 42-56 vs 42-59 error is a symptom).
+  `CHANGELOG.md` carry overlapping state that drifts (the 42-56 vs 42-59 L24-mask mixup is a symptom).
   Pick one canonical status doc per concern and cross-link rather than duplicate.
 
 ### Science

@@ -27,6 +27,15 @@ files each: `*_model_cg.pdb` (the full CG large subunit — a re-truncation mast
 Per-organism provenance (chain→segID maps, landmark confirmation, grafts) is in each
 `structures/<organism>/PROVENANCE.md`; the full catalog is `MANIFEST.md`.
 
+An all-atom copy of the exit-tunnel protein chain (`L24_atomistic.pdb` for *E. coli*,
+`L26_atomistic.pdb` for the eukaryotes) also ships under `structures/<organism>/`. It
+is only needed if you free that loop with `ribo_free_mask` (see
+[synthesis control](synthesis_control.rst)): the native-contact model runs STRIDE and
+a heavy-atom analysis, which the Cα-only ribosome cannot supply. Carve a fresh one
+from a deposited CIF with
+`helpers/carve_flexible_protein.py <cif> <auth_chain> <out.pdb>`; the recommended
+per-organism mask ranges are tabulated in `MANIFEST.md`.
+
 ```{note}
 **Caveats to cite when you use these.** The **yeast A-site tRNA is a cross-species
 graft** from the human 8G61 decoding complex (6Q8Y has only P/E tRNAs); its acceptor

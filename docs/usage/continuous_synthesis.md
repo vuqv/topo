@@ -117,6 +117,11 @@ them as **three MD sub-stages per residue**.
   so it never goes stale; for Tutorial 8's `ribosome_trunc.pdb` it is **x₀ ≈ 1.05 nm**.
 - **Thermostat.** Langevin dynamics at `ref_t = 310 K`, friction `tau_t = 0.05 /ps`,
   timestep `dt = 0.015 ps`.
+- **Optional flexible exit-tunnel loop.** The ribosome is rigid by default, but
+  `ribo_free_mask` can free a portion of the exit-tunnel protein (E. coli L24 /
+  eukaryotic L26) as a mobile structure-based Go loop — the β-hairpin lining the tunnel
+  can then breathe and contact the nascent chain. See
+  {ref}`the flexible-loop notes <flexible-loop>`.
 
 **Build-once-subset contacts.** The contact map is computed **once** on the full native
 structure (`R_full`, `eps_full`, `N×N`). For nascent length `L`, the model uses the

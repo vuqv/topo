@@ -45,8 +45,11 @@ ORGS = {
     ),
 }
 
-# uL24 homolog = eukaryotic RPL26; force its segID to L26 for the exit landmark.
-UL24_CHAIN = {"yeast": "AK", "ncrassa": "a1", "human": "LY"}
+# Author chain of the exit-tunnel protein per organism. This is the uL24 family
+# (universal nomenclature): E. coli protein L24, eukaryotic RPL26. Its segID is
+# forced to L26 below so the exit landmark is exact. The name describes the role
+# (exit-tunnel protein), not the E. coli-specific "L24".
+EXIT_PROTEIN_CHAIN = {"yeast": "AK", "ncrassa": "a1", "human": "LY"}
 
 
 # Non-ribosomal polypeptides that may sit near the large subunit but must be
@@ -171,12 +174,12 @@ def main():
         A("")
     # 60S proteins
     taken = {s["big_rrna"][1], s["rrna_5_8"][1], s["rrna_5"][1], "PtR", "AtR"}
-    ul24 = UL24_CHAIN[org]
+    exit_chain = EXIT_PROTEIN_CHAIN[org]
     prots_key = big_protein_chains(cif_read, s["big_rrna"][0], s["small_rrna"])
-    # force uL24 chain -> L26 first so the landmark segID is exact
-    ordered = sorted(prots_key, key=lambda cd: (cd[0] != ul24,))
+    # force the exit-tunnel protein chain -> L26 first so the landmark segID is exact
+    ordered = sorted(prots_key, key=lambda cd: (cd[0] != exit_chain,))
     for chain, desc in ordered:
-        if chain == ul24:
+        if chain == exit_chain:
             seg = "L26"; taken.add(seg)
         else:
             seg = segid_for(desc, taken)

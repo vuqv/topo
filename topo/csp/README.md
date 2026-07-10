@@ -90,8 +90,14 @@ the protein + table (see the `mrna` key below).
 
 **MD / ribosome keys** (configure the shared `RunParams`; `n_steps` is **not** used — step
 counts come from the kinetics): `dt`, `ref_t`, `tau_t`, `nstout`, `device`, `ppn`,
-`constraints`, `restraint_k`, `buffer`, `minimize`, `tunnel_wall`,
-`ptc_offset`. (Output is always nascent-only; `tunnel_wall_x0` and `tunnel_wall_k` are not keys -- the plane is auto-derived from the structure and the stiffness is a fixed model constant.)
+`constraints`, `restraint_k`, `minimize`, `tunnel_wall`, `nascent_ev_radii`,
+`ribo_free_mask`, `ribo_free_pdb`. (Output is always nascent-only; `tunnel_wall_x0` and `tunnel_wall_k` are not keys -- the plane is auto-derived from the structure and the stiffness is a fixed model constant.)
+
+**Flexible exit-tunnel loop.** `ribo_free_mask = SEG : lo - hi` frees a portion of one
+ribosomal protein (E. coli `L24` / eukaryotic `L26`) as a topo-style Go loop while the
+rest of the ribosome stays mass-0 (`append_flexible_l24_loop`); `ribo_free_pdb` gives the
+all-atom chain its native contacts are built from. See the usage guide's *Flexible
+exit-tunnel loop* section.
 
 **Units:** OpenMM defaults — nm, ps, kJ/mol, K, kJ/mol/nm². In-vivo dwell times are
 in **seconds**.

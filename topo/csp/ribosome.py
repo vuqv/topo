@@ -310,6 +310,9 @@ def append_ribosome(nascent_model, ribo: Ribosome,
     nc.setSwitchingDistance(1.8 * unit.nanometer)
     nc.setCutoffDistance(2.0 * unit.nanometer)
     nc.addInteractionGroup(nascent_idx, ribo_idx)
+    # Stash a handle so append_flexible_l24_loop can extend this force's interaction
+    # groups (mobile loop <-> frozen ribosome / loop self-EV) after the fact.
+    nascent_model._ribo_nc_force = nc
     # OpenMM (CPU platform) requires every CustomNonbondedForce to share an
     # identical exclusion list. The contact / Yukawa forces carry the nascent
     # bonded (1-2, 1-3) exclusions, so copy them here. They concern nascent-nascent
@@ -529,3 +532,227 @@ def add_tunnel_wall(system, nascent_indices, x0_nm: float,
         force.addParticle(int(i), [])
     system.addForce(force)
     return force
+
+
+# --------------------------------------------------------------------------
+# Flexible ribosomal-protein loop (ribo_free_mask)
+# --------------------------------------------------------------------------
+# 12-10-6 native-contact well as an explicit per-pair bond (min = -eps at r = R).
+# Same functional form as the NC<->ribosome EV, but per-pair R/eps from topo's
+# own contact-energy model (build_nonbonded_interaction) -- "topo-style" native
+# contacts, not O'Brien's NBFIX values. A CustomBondForce (not CustomNonbonded)
+# sidesteps the shared-exclusion-list constraint OpenMM imposes across all
+# CustomNonbondedForces.
+_NC_BOND_126_ENERGY = "eps*(13*(R/r)^12 - 18*(R/r)^10 + 4*(R/r)^6)"
+
+# Native contacts are those whose well depth sits above the non-native repulsive
+# floor (ENERGY_PARAMS['non_native'] = 0.000132 kcal/mol). Use a safe margin.
+_NON_NATIVE_EPS_KJ = 0.000132 * 4.184
+
+
+def _existing_exclusions(force) -> set:
+    """Set of ``(min,max)`` particle-index pairs already excluded on a force."""
+    out = set()
+    for k in range(force.getNumExclusions()):
+        a, b = force.getExclusionParticles(k)
+        out.add((min(a, b), max(a, b)))
+    return out
+
+
+def append_flexible_l24_loop(nascent_model, ribo: Ribosome, ribo_idx: List[int],
+                             seg: str, lo: int, hi: int, atomistic_pdb: str,
+                             model: str = "topo") -> List[int]:
+    """Free residues ``lo..hi`` (inclusive) of ribosome protein ``seg`` as a Go loop.
+
+    Must be called **after** :func:`append_ribosome`. Upgrades the masked residue
+    range from inert mass-0 scenery to a mobile, topo-style structure-based loop:
+
+    1. **Bonded terms** (harmonic bond, Gaussian angle, periodic torsion) built the
+       topo way -- a throwaway :class:`~topo.core.system.system` on ``atomistic_pdb``
+       reduced to Cα -- and transplanted (index-remapped by residue id) for every
+       term that touches the freed range. Terms crossing the mask boundary
+       (``lo-1 <-> lo`` and ``hi <-> hi+1``) are included, so the freed loop is
+       **self-anchored** to the still-frozen neighbours via flexible bonds (never
+       constraints -- a constraint on a mass-0 particle is illegal).
+    2. **Native contacts** ("nbfix", topo style) from
+       :func:`~topo.utils.nonbonded.build_nonbonded_interaction` on ``atomistic_pdb``
+       (STRIDE H-bonds + Betancourt-Thirumalai side-chain energies), added as an
+       explicit 12-10-6 :class:`~openmm.CustomBondForce` for contacts touching the
+       freed range (including loop<->frozen-anchor contacts).
+    3. **Mass** on the freed Cα beads (per-AA, from ``model_parameters``); the
+       anchors ``lo-1`` / ``hi+1`` stay mass-0.
+    4. **Excluded volume**: the freed beads already see the nascent chain (via
+       :func:`append_ribosome`'s ``{nascent}x{ribosome}`` group). Two interaction
+       groups are added to that force -- ``{free}x{free}`` and ``{free}x{frozen
+       ribosome}`` -- so the mobile loop feels the rest of the ribosome. Bonded
+       (1-2, 1-3) and native-contact pairs are excluded from **all**
+       CustomNonbondedForces (kept identical, per OpenMM's CPU requirement) since
+       those are handled by the bond/angle/native-contact terms.
+
+    Electrostatics for the loop remain nascent-facing only (topo keeps no
+    intra-ribosome electrostatics); this is a deliberate simplification.
+
+    Parameters
+    ----------
+    nascent_model : topo.core.system.system
+        The built model already carrying the appended ribosome (mutated in place).
+    ribo : Ribosome
+        The parsed ribosome (supplies segids/resids and the appended bead order).
+    ribo_idx : list[int]
+        System indices of the ribosome beads (from :func:`append_ribosome`).
+    seg : str
+        Segment id of the flexible protein (``"L24"`` for E. coli, ``"L26"`` for
+        the eukaryotes).
+    lo, hi : int
+        Inclusive residue-id range to free.
+    atomistic_pdb : str
+        All-atom PDB of the protein chain (carve with
+        ``assets/csp/prepare_ribosome/helpers/carve_flexible_protein.py``); the
+        native-contact source. Its residue ids must match the ribosome's ``seg`` ids.
+    model : str
+        Parameter set name (default ``"topo"``).
+
+    Returns
+    -------
+    list[int]
+        System indices of the freed (now-mobile) Cα beads.
+    """
+    # Local imports: heavy, and only needed when this feature is switched on.
+    import MDAnalysis as mda
+    from topo.core.system import system as TopoSystem
+    from topo.utils.nonbonded import build_nonbonded_interaction, get_residue_mapping
+
+    system = nascent_model.system
+    L = nascent_model.n_atoms                       # ribosome beads start at index L
+
+    # resid -> appended-system index for this segment's Cα beads.
+    sysidx = {ribo.resids[i]: L + i for i in range(ribo.n)
+              if ribo.segids[i] == seg and ribo.names[i] == "CA"}
+    if not sysidx:
+        raise ValueError(f"ribo_free_mask: segment {seg!r} has no Cα beads in the "
+                         f"ribosome (available segids: "
+                         f"{sorted(set(ribo.segids))}).")
+    free_resids = list(range(lo, hi + 1))
+    missing = [r for r in free_resids if r not in sysidx]
+    if missing:
+        raise ValueError(f"ribo_free_mask {seg}:{lo}-{hi}: residues {missing} are "
+                         f"absent from the (truncated) ribosome segment {seg!r}.")
+    free_sys = [sysidx[r] for r in free_resids]
+    free_set = set(free_sys)
+
+    # ---- 1. topo-style bonded terms (build once on the atomistic chain) -----
+    l24 = TopoSystem(atomistic_pdb, model)
+    l24.getCAlphaOnly(); l24.getAtoms(); l24.getBonds(); l24.getAngles()
+    l24.getTorsions()
+    l24.setBondForceConstants()
+    l24.addHarmonicBondForces()
+    l24.addGaussianAngleForces()
+    l24.addPeriodicTorsionForce()
+
+    # local Cα index -> appended-system index (by residue id); keep = freed indices.
+    remap, keep = {}, set()
+    for a in l24.atoms:
+        rid = int(a.residue.id)
+        if rid in sysidx:
+            remap[a.index] = sysidx[rid]
+            if lo <= rid <= hi:
+                keep.add(a.index)
+
+    def _touch(idxs):
+        return all(i in remap for i in idxs) and any(i in keep for i in idxs)
+
+    excl_pairs = set()   # 1-2 / 1-3 pairs to remove from EV (main-system indices)
+
+    hb = mm.HarmonicBondForce()
+    src = l24.harmonicBondForce
+    for k in range(src.getNumBonds()):
+        i, j, length, K = src.getBondParameters(k)
+        if _touch((i, j)):
+            hb.addBond(remap[i], remap[j], length, K)
+            excl_pairs.add((min(remap[i], remap[j]), max(remap[i], remap[j])))
+    system.addForce(hb)
+
+    ang = mm.CustomAngleForce(l24.gaussianAngleForce.getEnergyFunction())
+    src = l24.gaussianAngleForce
+    for p in range(src.getNumGlobalParameters()):
+        ang.addGlobalParameter(src.getGlobalParameterName(p),
+                               src.getGlobalParameterDefaultValue(p))
+    for p in range(src.getNumPerAngleParameters()):
+        ang.addPerAngleParameter(src.getPerAngleParameterName(p))
+    for k in range(src.getNumAngles()):
+        i, j, m, params = src.getAngleParameters(k)
+        if _touch((i, j, m)):
+            ang.addAngle(remap[i], remap[j], remap[m], params)
+            excl_pairs.add((min(remap[i], remap[m]), max(remap[i], remap[m])))  # 1-3
+    system.addForce(ang)
+
+    tor = mm.PeriodicTorsionForce()
+    src = l24.periodicTorsionForce
+    for k in range(src.getNumTorsions()):
+        i, j, m, n, period, phase, K = src.getTorsionParameters(k)
+        if _touch((i, j, m, n)):
+            tor.addTorsion(remap[i], remap[j], remap[m], remap[n], period, phase, K)
+    system.addForce(tor)
+
+    # ---- 2. topo-style native contacts (nbfix) ------------------------------
+    R_mat, eps_mat = build_nonbonded_interaction(atomistic_pdb)   # nm, kJ/mol; runs STRIDE
+    u = mda.Universe(atomistic_pdb)
+    key_to_index, _, _ = get_residue_mapping(u)
+    idx_to_resid = {idx: resid for (_c, resid), idx in key_to_index.items()}
+
+    nc_bond = mm.CustomBondForce(_NC_BOND_126_ENERGY)
+    nc_bond.addPerBondParameter("R")     # nm
+    nc_bond.addPerBondParameter("eps")   # kJ/mol
+    n_native = 0
+    for oi in range(R_mat.shape[0]):
+        ri = idx_to_resid.get(oi)
+        si = sysidx.get(ri) if ri is not None else None
+        if si is None:
+            continue
+        for oj in range(oi + 1, R_mat.shape[1]):
+            if eps_mat[oi, oj] <= 2 * _NON_NATIVE_EPS_KJ:   # non-native floor
+                continue
+            rj = idx_to_resid.get(oj)
+            sj = sysidx.get(rj) if rj is not None else None
+            if sj is None:
+                continue
+            if abs(ri - rj) <= 2:                            # keep non-local only
+                continue
+            if not (si in free_set or sj in free_set):       # must touch the loop
+                continue
+            nc_bond.addBond(si, sj, [float(R_mat[oi, oj]), float(eps_mat[oi, oj])])
+            excl_pairs.add((min(si, sj), max(si, sj)))
+            n_native += 1
+    system.addForce(nc_bond)
+
+    # ---- 3. mass on the freed beads (anchors lo-1 / hi+1 stay 0) ------------
+    params = MODEL_PARAMS[model]
+    for r, si in zip(free_resids, free_sys):
+        rn = next(ribo.resnames[i] for i in range(ribo.n)
+                  if ribo.segids[i] == seg and ribo.resids[i] == r
+                  and ribo.names[i] == "CA")
+        system.setParticleMass(si, params[rn]["mass"])
+
+    # ---- 4. excluded volume: loop vs frozen ribosome + loop self ------------
+    nc_ev = getattr(nascent_model, "_ribo_nc_force", None)
+    if nc_ev is None:
+        raise RuntimeError("append_flexible_l24_loop requires append_ribosome to "
+                           "have run first (missing _ribo_nc_force handle).")
+    fixed_ribo = [j for j in ribo_idx if j not in free_set]
+    nc_ev.addInteractionGroup(free_sys, free_sys)
+    nc_ev.addInteractionGroup(free_sys, fixed_ribo)
+
+    # Remove the bonded / native-contact pairs from EV. Mirror onto every
+    # CustomNonbondedForce so their exclusion lists stay identical (OpenMM/CPU).
+    cnb = [system.getForce(i) for i in range(system.getNumForces())
+           if isinstance(system.getForce(i), mm.CustomNonbondedForce)]
+    have = {id(F): _existing_exclusions(F) for F in cnb}
+    for (a, b) in excl_pairs:
+        for F in cnb:
+            if (a, b) not in have[id(F)]:
+                F.addExclusion(a, b)
+                have[id(F)].add((a, b))
+
+    print(f"Flexible loop {seg}:{lo}-{hi} -> {len(free_sys)} mobile beads, "
+          f"{n_native} native contacts, {len(excl_pairs)} EV exclusions.")
+    return free_sys

@@ -78,6 +78,8 @@ Example ``csp.ini``:
         restraint_k = 83680  ; C-terminus harmonic restraint (kJ/mol/nm^2)
         minimize    = yes    ; energy-minimize each seeded structure before its MD
         ; tunnel_wall = yes  ; one-sided tunnel floor (default on; plane auto-derived)
+        ; ribo_free_mask = L24 : 42 - 59                 ; free the L24 exit-tunnel loop (optional)
+        ; ribo_free_pdb  = .../structures/ecoli/L24_atomistic.pdb  ; all-atom chain for native contacts
 
         ; --- post-synthesis phases (steps; 0 = skip) ---
         ejection_steps     = 20000   ; release the tether; chain diffuses out (+x)
@@ -269,6 +271,14 @@ consumed by :func:`~topo.csp.core.run_length`).
      - str
      - ``kb``
      - Nascent per-residue excluded-volume radius (Rmin/2) for the nascent-chain ↔ ribosome force: ``kb`` = per-residue Karanicolas–Brooks radii from the native structure (O'Brien's actual values); ``per_aa`` = per-amino-acid sidechain radii (fallback). Must be one of ``kb`` / ``per_aa``.
+   * - ``ribo_free_mask``
+     - str
+     - *(none)*
+     - Free a portion of one ribosomal protein as a mobile structure-based Go loop, ``SEG : lo - hi`` (inclusive residue range; E. coli ``L24``, eukaryotes ``L26``). The rest of the ribosome stays rigid. Requires ``ribo_free_pdb``. Absent → the whole ribosome is frozen (default). See :ref:`the flexible-loop notes <flexible-loop>`.
+   * - ``ribo_free_pdb``
+     - path
+     - *(none)*
+     - All-atom PDB of the ``ribo_free_mask`` protein chain — the native-contact source (STRIDE H-bonds + heavy-atom contacts), which the Cα-only ribosome cannot supply. Carve it with ``assets/csp/prepare_ribosome/helpers/carve_flexible_protein.py`` (chains ship under ``structures/<org>/``). Required whenever ``ribo_free_mask`` is set; an error is raised if it is missing or the file does not exist.
    * - ``trna_tether``
      - bool
      - ``no``
@@ -384,6 +394,30 @@ Tunnel wall (``tunnel_wall``)
     ribosome PDB you supply, so it can never go stale) and its stiffness is a
     fixed model constant — hence only the ``tunnel_wall`` on/off toggle is a knob.
     Leave it on for any truncated ribosome.
+
+.. _flexible-loop:
+
+Flexible exit-tunnel loop (``ribo_free_mask`` / ``ribo_free_pdb``)
+    By default every ribosome bead is frozen (mass-0). ``ribo_free_mask`` frees a
+    portion of the exit-tunnel protein (the uL24 family: E. coli **L24**,
+    eukaryotic **L26**) as a mobile, topo-style structure-based Go loop —
+    reproducing O'Brien's mobile-L24 setup, where the β-hairpin that lines the
+    tunnel can breathe and contact the nascent chain while the rest of the ribosome
+    stays rigid. Its bonded terms (harmonic bond, Gaussian angle, periodic torsion)
+    and native contacts are built the ordinary topo way from an **all-atom** copy
+    of the chain (``ribo_free_pdb``) — the Cα-only truncated ribosome cannot supply
+    the STRIDE hydrogen bonds and heavy-atom side-chain contacts the native-contact
+    model needs. The freed residues get mass; the two boundary residues just
+    outside the range stay frozen and act as anchors (the loop is self-anchored by
+    flexible boundary bonds, never rigid constraints). Requires ``minimize = yes``
+    (the loop starts strained at the coarse-grained crystal geometry). Prepare the
+    all-atom chain with
+    ``assets/csp/prepare_ribosome/helpers/carve_flexible_protein.py``; ready-carved
+    chains and the recommended per-organism mask ranges are listed in
+    ``assets/csp/prepare_ribosome/MANIFEST.md``. Example::
+
+        ribo_free_mask = L24 : 42 - 59
+        ribo_free_pdb  = assets/csp/prepare_ribosome/structures/ecoli/L24_atomistic.pdb
 
 Post-synthesis phases (``ejection_steps`` / ``dissociation_steps``)
     After the last residue, ``ejection_steps > 0`` runs a phase with the

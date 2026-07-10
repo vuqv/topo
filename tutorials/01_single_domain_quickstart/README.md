@@ -11,7 +11,7 @@ simplest possible configuration.
 ***The run** — 3 000-step Langevin dynamics at 300 K; the calibrated `nscale`
 keeps the fold stable. CA trace coloured N→C (blue→red).*
 
-> The GIF is produced by [`tutorials/_viz/render_cg.py`](../_viz/render_cg.py) (headless VMD + Tachyon)
+> The GIF is produced by `tutorials/_viz/render_cg.py` (headless VMD + Tachyon)
 > after you run the tutorial — regenerate it any time with the command in [step 5](#5-visualize-optional).
 
 ---

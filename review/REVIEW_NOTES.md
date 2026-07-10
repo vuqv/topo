@@ -35,9 +35,13 @@ The original was written before the following commits landed (all `topo/csp/`):
 - **Mobility window** — O'Brien freezes all but C-terminal 15 (`id > L-15`, ref lines
   254-258). topo: grep for `setParticleMass`/freeze/window in `core.py` → none on the
   nascent chain; whole chain 1..L integrates. **Open.**
-- **L24 free loop** — O'Brien `ribo_free_mask = L24 : 42-56` (ref line 37; original doc
-  mis-stated 42–59). topo: ribosome appended mass-0 with no free mask
-  (`core.py:1012`). **Open.**
+- **L24 free loop** — O'Brien `ribo_free_mask = L24 : 42-59` (**definitive**: the reference
+  run's own log prints `Free part of ribosome: L24 : 42 - 59`,
+  `.../Continuous_synthesis_protocol/../example/continuous_synthesis/output/info.log:18`;
+  matching `input/cont_synth_ecoli.cntrl:19` and code comments `continuous_synthesis_v6.py:664-665`;
+  `parse_mask` is inclusive on both ends → residues 42..59 = 18 beads). The "42-56" cited by an
+  earlier reviewer is a **stale example in the `usage` help-text string** (`v6.py:37`), not the
+  executed value. topo: ribosome appended mass-0 with no free mask (`core.py:1012`). **Open.**
 - **Tunnel wall lifetime** — O'Brien adds the x-wall only at `stage == 5` (ref lines
   819-828). topo `add_tunnel_wall(..., range(L))` called every `run_length`
   (`core.py:1046-1053`), default `tunnel_wall = True` (`core.py:859`). **Open (toggleable).**

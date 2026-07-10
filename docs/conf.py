@@ -70,6 +70,10 @@ extensions = [
     'sphinx.ext.githubpages',
     'myst_parser',          # parse Markdown (.md) sources, e.g. the tutorials
 ]
+
+# Generate anchor slugs for Markdown headings up to level 3 so intra-page links
+# like `[step 5](#5-visualize-optional)` in the tutorial READMEs resolve.
+myst_heading_anchors = 3
 try:
     import rst2pdf
     extensions.insert(0, 'rst2pdf.pdfbuilder')
@@ -111,7 +115,13 @@ language = 'en'
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
 # This pattern also affects html_static_path and html_extra_path .
-exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
+exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store',
+                    # sphinx-apidoc (build_docs.sh) regenerates these two package
+                    # pages, but topo.parameters / topo.reporter have curated API
+                    # pages under modules/ and are intentionally omitted from the
+                    # topo.rst toctree. Exclude the apidoc leftovers so they don't
+                    # produce duplicate-object-description / orphan-doc warnings.
+                    'topo.parameters.rst', 'topo.reporter.rst']
 
 # The name of the Pygments (syntax highlighting) style to use.
 pygments_style = 'sphinx'

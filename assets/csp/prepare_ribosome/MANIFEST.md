@@ -38,3 +38,42 @@ confirmations and grafts are in each `structures/<org>/PROVENANCE.md`.
   empty, contrary to some expectations); the bound **nascent peptide is dropped**.
 - **Human P-site tRNA is a 77-nt tRNA** (acceptor A77 in the deposition),
   renumbered so the acceptor is residue 76 like the others.
+
+## Flexible exit-tunnel loop (`ribo_free_mask`)
+
+By default the whole ribosome is rigid (mass-0). The `ribo_free_mask` CSP key frees
+a portion of the exit-tunnel protein (uL24 family: E. coli **L24**, eukaryotic
+**L26**) as a topo-style structure-based Go loop, reproducing O'Brien's mobile-L24
+setup. Native contacts for the loop are built by `build_nonbonded_interaction` from
+an **all-atom** chain carved out of the deposited CIF (the CG truncation is Cα-only
+and cannot supply STRIDE H-bonds / heavy-atom contacts). One carved chain ships per
+organism under `structures/<org>/`:
+
+| Organism | Carved chain | Source CIF : auth chain | Resid range | Default `ribo_free_mask` |
+|----------|--------------|-------------------------|:-----------:|--------------------------|
+| *E. coli* | `structures/ecoli/L24_atomistic.pdb` | `4v9d.cif : DU` | 1–102 | `L24 : 42 - 59` |
+| *S. cerevisiae* | `structures/yeast/L26_atomistic.pdb` | `6q8y.cif : AK` | 2–127 | `L26 : 82 - 99` |
+| *N. crassa* | `structures/ncrassa/L26_atomistic.pdb` | `7r81.cif : a1` | 2–122 | `L26 : 82 - 99` |
+| *H. sapiens* | `structures/human/L26_atomistic.pdb` | `8g61.cif : LY` | 1–134 | `L26 : 84 - 101` |
+
+Each carved chain's residue numbering matches its truncated ribosome exactly, so
+contacts align by resid. The mask ranges are the **same-window offset** of the
+E. coli loop about the exit landmark (E. coli `L24:51` ≡ `L26:91` yeast/N. crassa,
+`L26:93` human): an ~18-residue window centred on the apex. Note the eukaryotic
+L26 β-hairpin is structurally **shorter** than E. coli L24's (a 5-residue turn vs a
+12-residue loop), so this window also frees flanking β-strand residues — a
+deliberate choice to keep the same physical extent across organisms.
+
+Regenerate a carved chain with:
+
+```
+python helpers/carve_flexible_protein.py raw/ecoli/4v9d.cif DU \
+    structures/ecoli/L24_atomistic.pdb
+```
+
+Use it in a CSP control file:
+
+```ini
+ribo_free_mask = L26 : 82 - 99
+ribo_free_pdb  = assets/csp/prepare_ribosome/structures/yeast/L26_atomistic.pdb
+```

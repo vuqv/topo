@@ -605,6 +605,34 @@ def read_csp_config(config_file: str, verbose: bool = True) -> CSPConfig:
     # it *is* the signal to treat it as rigid scenery -- there is no separate flag.
     if opt("tunnel_wall") is not None:
         p.tunnel_wall = bool(strtobool(opt("tunnel_wall")))
+    # Flexible ribosomal-protein loop: `ribo_free_mask = SEG : lo - hi` frees that
+    # residue range (inclusive) of one ribosomal protein as a topo-style Go loop
+    # (E. coli SEG=L24, eukaryotes SEG=L26). Requires `ribo_free_pdb` = an all-atom
+    # PDB of that chain (native-contact source; carve with
+    # assets/csp/prepare_ribosome/helpers/carve_flexible_protein.py). Absent -> whole
+    # ribosome frozen (default).
+    free_mask = opt("ribo_free_mask")
+    if free_mask is not None:
+        try:
+            seg_part, res_part = free_mask.split(":")
+            lo_s, hi_s = res_part.split("-")
+            seg, lo, hi = seg_part.strip(), int(lo_s), int(hi_s)
+        except ValueError:
+            raise ValueError(
+                f"{config_file}: ribo_free_mask must look like 'L24 : 42 - 59' "
+                f"(SEG : lo - hi), got {free_mask!r}.")
+        if lo > hi:
+            raise ValueError(f"{config_file}: ribo_free_mask {free_mask!r} has lo > hi.")
+        free_pdb = opt("ribo_free_pdb")
+        if free_pdb is None or not Path(free_pdb).is_file():
+            raise ValueError(
+                f"{config_file}: ribo_free_mask is set ({free_mask!r}) but ribo_free_pdb "
+                f"{'is missing' if free_pdb is None else f'does not exist: {free_pdb!r}'}. "
+                f"Provide an all-atom PDB of the flexible protein chain (carve it with "
+                f"assets/csp/prepare_ribosome/helpers/carve_flexible_protein.py).")
+        p.ribo_free_seg, p.ribo_free_lo, p.ribo_free_hi = seg, lo, hi
+        p.ribo_free_pdb = free_pdb
+        log(f"  flexible ribosome loop: {seg}:{lo}-{hi} (native contacts from {free_pdb})")
     # Neither tunnel_wall_x0 nor tunnel_wall_k is read from the INI: the wall plane is
     # auto-derived from the ribosome structure (see run_continuous_synthesis), and the
     # stiffness is a fixed model constant (O'Brien's 20 kcal/mol/A^2 = 8368 kJ/mol/nm^2,

@@ -19,7 +19,7 @@ some topo simplifications are deliberate. Each difference is tagged:
 - ✅ **DONE** — aligned since the original doc (new this revision).
 
 Reference (read-only):
-`/storage/home/qzv5006/programs/cg_simtk_protein_folding/Continuous_synthesis_protocol/continuous_synthesis_v6.py`
+`/storage/home/qzv5006/group/programs/cg_simtk_protein_folding/Continuous_synthesis_protocol/continuous_synthesis_v6.py`
 Port: `topo/csp/` (`core.py`, `protocol.py`, `ribosome.py`, `kinetics.py`, `cg_ribosome.py`).
 
 > **Which code path is compared.** The CSP runner (`read_csp_config`) defaults
@@ -39,7 +39,7 @@ Ordered by science impact. "Path" = which restraint path it applies to.
 | # | Difference | O'Brien | topo (current) | Tag | Path |
 |--|--|--|--|--|--|
 | 1 | **Mobility window** | only C-terminal **15** residues integrate (`id > L−15`; rest mass-0) | **entire** nascent chain 1..L mobile — *no freeze mask exists* | 🟢 CLOSE | both |
-| 2 | **Ribosome L24 free loop** | L24 loop residues **42–56** mobile (`ribo_free_mask`) | ribosome **entirely** frozen (mass-0); L24 radii also per-AA-approximated | 🟡 CONSIDER | both |
+| 2 | **Ribosome L24 free loop** | L24 loop residues **42–59** mobile (`ribo_free_mask`) | ribosome **entirely** frozen (mass-0); L24 radii also per-AA-approximated | 🟡 CONSIDER | both |
 | 3 | **Tunnel wall lifetime** | one-sided x-wall only in **stage 5** (dissociation) | wall on **throughout** synthesis + post (now behind `tunnel_wall` toggle, default on) | 🟡 CONSIDER | both |
 | 4 | **Chain chemistry** | peptide bond explicitly **deleted → formed at 3.81 Å**; **rigid `AllBonds`** | peptide bond **always present** (full 1..L each stage); **flexible** harmonic bonds by default | ⚪ KEEP | default |
 | 5 | **Restrain previous AA / orientation** | new AA **and** prev AA restrained, with orienting angles + improper (R/P/PU2 beads) | only residue **L** restrained, **no orientation** | 🟢/⚪ | default path only |
@@ -104,7 +104,7 @@ alignment; and CSP now runs on GPU where available (commit `18af082`).
 | | O'Brien | topo | Tag |
 |--|--|--|--|
 | Mobile nascent atoms | only C-terminal **15** residues (`id > L−15`, ref lines 254-258); rest mass-0 | **entire** chain 1..L mobile — no freeze mask ([`core.py`](../topo/csp/core.py), searched: none) | 🟢 CLOSE |
-| Ribosome | frozen except L24 loop **42–56** (`ribo_free_mask`, ref line 37) | entirely frozen (mass-0, [`core.py:1012`](../topo/csp/core.py)) | 🟡 CONSIDER |
+| Ribosome | frozen except L24 loop **42–59** (`ribo_free_mask`, `cont_synth_*.cntrl:19`) | entirely frozen (mass-0, [`core.py:1012`](../topo/csp/core.py)) | 🟡 CONSIDER |
 
 Highest value/effort ratio and **still not done**: O'Brien integrates only the C-terminal
 15 residues per step (co-translational relaxation is localized + cheap); topo moves the
@@ -178,7 +178,7 @@ The plain default still uses 0.4 nm +x with no tilt.
 3. 🟡 **Placement geometry** — largely superseded by `optimize_ptc_geometry`; only add the
    fixed 4.27 Å + 10° tilt if reproducing O'Brien's *exact* seed is required.
 4. 🟡 **Restrain previous AA in the default path** (already done in the tether path).
-5. 🟡 **Ribosome L24 free loop (42–56)** and traffic correction — only if a study needs them.
+5. 🟡 **Ribosome L24 free loop (42–59)** and traffic correction — only if a study needs them.
 6. ⚪ **Keep + document**: flexible bonds + stability guard, always-bonded chain, persistent
    tunnel wall (now toggleable), A76 / L24 accepted deviations.
 
