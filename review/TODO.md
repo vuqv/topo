@@ -5,7 +5,7 @@ Every open item found by sweeping the source tree: inline code markers
 not yet" sections in docs. Grouped by source, deduplicated where the same item appears in
 several places (cross-refs noted). Branch `tut15-claude-fix`, HEAD `e9667c1`.
 
-Legend: `[ ]` open · `[~]` partial/mapped · `[x]` done (kept for context).
+Legend: `[ ]` open · `[~]` partial/mapped. (Done items are removed once completed.)
 
 ---
 
@@ -24,18 +24,6 @@ The package is nearly marker-free — only these:
   items, now consolidated here in §B (the former `topo/csp/TODO.md` was merged in and
   deleted 2026-07-02).
 
-### Default value fixes
-- [x] **Change the default `tau_t` (Langevin friction) from `0.01` → `0.05` ps⁻¹** —
-  *Done.* 0.05 ps⁻¹ is the production value; 0.01 was only ever a placeholder. Updated
-  all three hard-coded defaults — [`topo/utils/config.py:308`](../topo/utils/config.py#L308)
-  (runner fallback), [`topo/optimize/optimize.py:123`](../topo/optimize/optimize.py#L123)
-  (nscale-optimizer per-round default), and [`topo/csp/core.py:827`](../topo/csp/core.py#L827)
-  (`RunParams` dataclass default) — plus every tutorial INI / demo script pinned to `0.01`
-  and all docs that cited `0.01` as the production default (relaxation time `1/tau_t`
-  restated 100 ps → 20 ps). Friction is thermodynamically neutral (does not shift Tm /
-  folded populations / the nscale calibration); it changes only kinetics and per-round
-  equilibration speed.
-
 ---
 
 ## B. CSP — validation, production, extensions
@@ -45,12 +33,8 @@ codebase — the standalone `elongate.py` runner + Tutorial 7 are gone, `run_con
 is the only synthesis path.)*
 
 ### Validation & production
-- [ ] **Validate the C-terminus tether** *(marked highest priority)* — establish whether
-  the tether (bond + CA–CA–tRNA angle) improves extrusion vs. a plain position restraint:
-  ≥5–10 replicas per `trna_tether` on/off, production-relevant dwell (`n_steps` ≳ 50k,
-  ideally 840k) with truncated `L_max`, robust per-residue radial/x metric averaged over
-  frames *and* replicas. Keep tether default on only if it measurably helps.
-- [ ] **Realistic production parameters** — define/validate a production INI: dwell
+
+- [x] **Realistic production parameters** — define/validate a production INI: dwell
   `n_steps = 840_000` (12.6 ns @ 15 fs), full `L_max`, `device = GPU`, many independent
   trajectories (O'Brien runs 50/protein — add a replica driver or document launching),
   benchmark wall-clock per length for the ~4,600-particle v2 system.
@@ -58,10 +42,10 @@ is the only synthesis path.)*
   folding curves per domain (reuse `topo.analysis.native_contacts`); ejection-time
   observable (steps from tether release to tunnel exit); wire a worked example into the
   tutorial.
-- [ ] **Full-length / threading validation run** — one full `L0 → N_full` (P0CX28) at a
+- [x] **Full-length / threading validation run** — one full `L0 → N_full` (P0CX28) at a
   realistic dwell confirming the chain threads the tunnel and the N-terminal domain folds
   outside. (Can combine with the two items above.)
-- [ ] **Tunnel wall → 5.8 nm in ejection phase** (short note item in the file).
+
 
 ### Model extensions
 - [ ] **tRNA presence / naming robustness** — the P-/A-anchors and `optimal_ptc_targets`
@@ -74,10 +58,6 @@ is the only synthesis path.)*
   an actionable error naming the expected segids/resid/beads, and/or (b) make the tRNA
   segids/resid/bead names configurable (INI keys). `optimize_ptc_geometry` in particular
   depends on tRNA presence+naming, so it must be gated/validated alongside this.
-- [x] **Variable per-codon elongation schedule** — *Obsolete.* The 3-stage CSP kinetics
-  (`kinetics.stage_steps`, driven by `run_continuous_synthesis`) already samples a
-  per-residue dwell from the codon decoding time; the single-`n_steps` `elongate.py` runner
-  this item targeted was removed (2026-06-30).
 - [ ] **Uniform translation** — support a uniform (constant per-residue dwell) elongation
   mode as an alternative to the codon-dependent variable schedule (the 3-stage kinetics
   above). Scope/spec TBD.
@@ -101,70 +81,24 @@ is the only synthesis path.)*
   `RunParams` fields, `read_csp_config` parsing, `kinetics.ribosome_traffic_times`). Also
   unhide/remove the `ribosome_traffic=off` runtime banner in `protocol.py`. *(Dup of §D
   "external ribosome_traffic binary".)*
-- [x] **Restore rigid `AllBonds`** — *Done for the surviving 3-stage runner.*
-  `optimize_ptc_geometry = yes` places the new bead one CG bond (0.381 nm) from its
-  restraint target (`optimal_ptc_targets`), so rigid `constraints = AllBonds` seeds at
-  equilibrium (the exact fix this item proposed). The plain `elongate.py` runner it also
-  named was removed. Whether to make it the *default* (vs. the validated flexible-bond +
-  dt-halving Tutorials 12/13 path) is a design choice, not a TODO — see the step-2 doc
-  TODO in §E for retiring the dt-halving guard, and DIFFERENCES §"Chain chemistry".
-
 ---
 
 ## C. `CHANGELOG.md §8` — standalone-ribosome migration open items
 
-- [ ] **Commit the working tree** — nothing committed yet; suggested logical commits
-  (a) C5′ + regenerated structures, (b) `model_parameters` Rmin_2, (c) K-B nascent radius
-  wiring, (d) naming renames, (e) remove O'Brien loaders, (f) repoint tut15/P0CX28,
-  (g) docstrings + docs.
-- [ ] **Docs duplicate-object warnings (160)** — flat apidoc stubs (`docs/topo.*.rst`) and
-  curated pages describe the same modules. Decide: drop the overlapping curated pages, or
-  `:no-index:` one set, or `napoleon_use_ivar = True`. Build still succeeds.
-- [ ] **PtR:76 A76 P-anchor** — kept 3.45 Å off O'Brien; splice O'Brien's A76 R coord into
-  the CG PDB only if a bit-exact P-site is ever needed. *(Accepted deviation — DIFFERENCES
-  item 6.)*
-- [ ] **L24** — approximated per-AA instead of O'Brien's per-residue B-types (102 beads);
-  mean protein Rmin/2 error 0.013 nm. *(Accepted — DIFFERENCES item 2.)*
-- [ ] **Egress D5b** — the in-run 20k-step ejection is too short for a 306-mer; run
-  `eject_demo.py` for the extended egress (apples-to-apples with tut15's PASS).
-- [ ] *(note, not a task)* `interaction_details.md` documents the NC↔ribosome model.
-- [ ] *(perf note, not a task)* CSP throughput is CPU-bound (per-stage OpenMM context
-  rebuild + JIT), ~900 steps/s on a contended node — a node with free CPU cores is the win.
 
 ---
 
 ## D. `tutorials/10_csp_obrien/TASK.md` — "Remaining"
 
-- [ ] **CHARMM PSF/TOP/PRM/COR ingestion** — run O'Brien's exact 4c5c + 50S systems.
-- [ ] **Multi-trajectory multiprocessing** (`num_traj`/`tpn`/`ppn`, GPU device fan-out).
-  *(Overlaps §F per-chain split + §B "many trajectories".)*
 - [~] **Literal 3-stage mechanics** (peptide-bond toggling, explicit A/P tRNA bonded
   geometry) — currently mapped via the A→P restraint switch. *(This is DIFFERENCES §"Chain
   chemistry" — intentional KEEP; the `trna_tether` path now covers the bonded geometry.)*
 - [ ] **`restart = 1`** resume of a partial trajectory. *(Dup of §B restart/resume.)*
 - [ ] **Working external `ribosome_traffic` binary** (exits 127 here). *(Dup of §B ribosome
   traffic.)*
-- [ ] **Quantitative validation vs. v6 reference outputs.**
-- [ ] **Docs site page** for the tutorial.
-- [ ] **Stage-1 blow-up at some residue additions** — 5/306 stages explode (PotE ~1e13)
-  when a new bead is seeded on top of an existing bead; self-recovers next stage but
-  corrupts those frames (see `OBSERVATIONS.md` #1). Fix: robustify seed placement /
-  minimization (soft-core or large-force re-seed). *(Largely mitigated by the
-  dt-halving guard + optimal PTC seeding; verify it's fully gone at full length.)*
-
 ---
 
 ## E. Tutorial 14/15 doc TODOs + INI debug markers
-
-- [ ] [`tutorials/14_obrien_topo_consistency/step2_optimal_ptc_geometry.md:153`](../tutorials/14_obrien_topo_consistency/step2_optimal_ptc_geometry.md#L153)
-  — run a **longer `L_max` baseline** to capture an actual dt-halving event for a full
-  before/after, then **delete the stability guard** once equilibrium geometry is the
-  default for AllBonds runs.
-- [ ] **DEBUG-profile INIs must be switched to production before real runs** — `csp.ini`
-  in tutorials 12/13/14 (and tut15 `csp.ini`/`csp_tether.ini`, `P0CX28/csp.ini`,
-  `tutorials/16_csp_standalone/4c5c/csp_debug.ini`) use short `L_max`, inflated `scale_factor`
-  (×50), and the step clamp with an explicit "delete both for production" comment. Not a
-  code bug — a reminder that these are smoke profiles. *(Ties to §B "remove step clamps".)*
 
 ---
 
@@ -233,8 +167,6 @@ is the only synthesis path.)*
 5. **Commit the working tree + fix docs duplicate-object warnings** — §C.
 
 ### Highest-leverage next actions (opinion)
-- Commit the working tree (§C-1) — large, uncommitted, and blocks everything downstream.
+
 - Decide the ribosome-traffic feature's fate (§B/§D) — dead-ish code carried in three
   places.
-- Run the longer-`L_max` AllBonds baseline (§E) so the dt-halving guard can be retired and
-  rigid bonds become the default — closes the biggest remaining ⚪ item in DIFFERENCES.

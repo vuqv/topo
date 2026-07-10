@@ -1,10 +1,8 @@
-"""Rigid ribosome scenery + cross-interactions for elongation build step v2.
+"""Rigid ribosome scenery + cross-interactions for the elongating nascent chain.
 
-Build step v1 (:mod:`topo.csp.core`) simulates the **nascent chain
-only** and uses the truncated ribosome merely as two fixed anchor *coordinates*.
-**Build step v2** adds the truncated ribosome to the System as **rigid (mass-0)
-scenery** and wires the two ribosome <-> nascent-chain interactions, following
-the RNC design (see ``topo/csp/README.md`` and ``docs/usage/continuous_synthesis.md``):
+This module adds the truncated ribosome to the System as **rigid (mass-0) scenery**
+and wires the two ribosome <-> nascent-chain interactions, following the RNC design
+(see ``topo/csp/README.md`` and ``docs/usage/continuous_synthesis.md``):
 
 1. **Append** the ribosome beads at indices ``L..N-1`` with **mass = 0** (frozen;
    not integrated), coordinates as-is. The P-/A-anchors are now real beads.
@@ -584,10 +582,14 @@ def append_flexible_l24_loop(nascent_model, ribo: Ribosome, ribo_idx: List[int],
     4. **Excluded volume**: the freed beads already see the nascent chain (via
        :func:`append_ribosome`'s ``{nascent}x{ribosome}`` group). Two interaction
        groups are added to that force -- ``{free}x{free}`` and ``{free}x{frozen
-       ribosome}`` -- so the mobile loop feels the rest of the ribosome. Bonded
-       (1-2, 1-3) and native-contact pairs are excluded from **all**
-       CustomNonbondedForces (kept identical, per OpenMM's CPU requirement) since
-       those are handled by the bond/angle/native-contact terms.
+       ribosome}`` -- so the mobile loop feels the rest of the ribosome. Each freed
+       bead's collision radius Rmin/2 is also replaced with its **structure-derived
+       per-residue** value (from ``build_nonbonded_interaction``), so the mobile loop
+       is structure-consistent on both sides -- native contacts *and* excluded volume;
+       the still-frozen ribosome keeps its per-AA scenery radii. Bonded (1-2, 1-3) and
+       native-contact pairs are excluded from **all** CustomNonbondedForces (kept
+       identical, per OpenMM's CPU requirement) since those are handled by the
+       bond/angle/native-contact terms.
 
     Electrostatics for the loop remain nascent-facing only (topo keeps no
     intra-ribosome electrostatics); this is a deliberate simplification.
@@ -695,10 +697,15 @@ def append_flexible_l24_loop(nascent_model, ribo: Ribosome, ribo_idx: List[int],
     system.addForce(tor)
 
     # ---- 2. topo-style native contacts (nbfix) ------------------------------
-    R_mat, eps_mat = build_nonbonded_interaction(atomistic_pdb)   # nm, kJ/mol; runs STRIDE
+    # return_rmin_2 also yields the per-residue **structure-derived** collision radius
+    # (0.5 * 2^(1/6) * min non-local CA-CA distance) -- used below to give the freed
+    # beads structure-based excluded volume, not the per-AA scenery value.
+    R_mat, eps_mat, rmin_2 = build_nonbonded_interaction(
+        atomistic_pdb, return_rmin_2=True)   # nm, kJ/mol, nm; runs STRIDE
     u = mda.Universe(atomistic_pdb)
     key_to_index, _, _ = get_residue_mapping(u)
     idx_to_resid = {idx: resid for (_c, resid), idx in key_to_index.items()}
+    resid_to_oi = {resid: idx for (_c, resid), idx in key_to_index.items()}
 
     nc_bond = mm.CustomBondForce(_NC_BOND_126_ENERGY)
     nc_bond.addPerBondParameter("R")     # nm
@@ -741,6 +748,15 @@ def append_flexible_l24_loop(nascent_model, ribo: Ribosome, ribo_idx: List[int],
     fixed_ribo = [j for j in ribo_idx if j not in free_set]
     nc_ev.addInteractionGroup(free_sys, free_sys)
     nc_ev.addInteractionGroup(free_sys, fixed_ribo)
+
+    # Replace each freed bead's per-AA scenery Rmin/2 (set by load_ribosome) with its
+    # per-residue **structure-derived** value, so the mobile loop is structure-consistent
+    # on both sides: native contacts (attractive) AND excluded volume (repulsive). The
+    # still-frozen ribosome beads keep their per-AA scenery radii.
+    for r, si in zip(free_resids, free_sys):
+        oi = resid_to_oi.get(r)
+        if oi is not None:
+            nc_ev.setParticleParameters(si, [float(rmin_2[oi])])
 
     # Remove the bonded / native-contact pairs from EV. Mirror onto every
     # CustomNonbondedForce so their exclusion lists stay identical (OpenMM/CPU).

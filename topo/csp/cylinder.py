@@ -206,7 +206,7 @@ def run_length(L: int, *, full_pdb: str, R_full: np.ndarray, eps_full: np.ndarra
                 f"prev_final has {prev_final.shape[0]} residues but L-1 = {L - 1}.")
         nascent_pos = np.vstack([prev_final, cterm_seed[None, :]])
 
-    # 4. v1 output path: write a small seed PDB and feed it via init_position
+    # 4. output path: write a small seed PDB and feed it via init_position
     #    (coords used as-is so the absolute tunnel frame is preserved).
     seed_pdb = str(out_dir / "seed.pdb")
     _write_pdb(cgModel.topology, nascent_pos, seed_pdb)

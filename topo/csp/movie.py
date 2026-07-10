@@ -172,7 +172,7 @@ def stitch_segments(out_root: str, segments: List[Tuple[str, int, str, str]],
 
     log(f"Movie trajectory: {out_dcd}  ({total_frames} frames total)")
 
-    # Optional static ribosome reference (v2): copy it next to the movie so the
+    # Optional static ribosome reference: copy it next to the movie so the
     # generated tcl can load it as fixed scenery the chain grows inside.
     ribo_name = None
     if ribosome_pdb is not None:
@@ -222,11 +222,11 @@ def _write_tcl(path: str, psf_name: str, dcd_name: str, park: str,
         hide_note = ("# 'cterm' parking: future beads are stacked on the "
                      "C-terminus (no hiding).")
 
-    # Optional: load the static ribosome (v2) as a separate molecule for context.
+    # Optional: load the static ribosome as a separate molecule for context.
     ribo_block = ""
     if ribosome_name is not None:
         ribo_block = f"""
-# Static ribosome scenery (v2): a separate molecule the chain grows inside.
+# Static ribosome scenery: a separate molecule the chain grows inside.
 mol new {ribosome_name} type pdb waitfor all
 mol delrep 0 top
 mol representation Points 1.0

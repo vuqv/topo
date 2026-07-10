@@ -383,8 +383,8 @@ C-terminus restraint (``trna_tether`` / ``restraint_k``)
     harmonic position restraint (stiffness ``restraint_k``) to the target point — the
     validated path. ``trna_tether = yes`` replaces it with O'Brien's full tRNA tether
     (bond + two orienting angles + improper), which additionally aims the chain down
-    the tunnel. (Note: the underlying ``RunParams`` field defaults ``trna_tether`` to
-    ``True``, but ``read_csp_config`` makes the effective ``csp.ini`` default ``no``.)
+    the tunnel. The ``RunParams`` dataclass and the ``csp.ini`` runner both default this
+    to ``False`` (position restraint), so direct API callers and ``topo-csp`` agree.
 
 Tunnel wall (``tunnel_wall``)
     A one-sided half-harmonic wall supplies the "floor" that the truncated 50S

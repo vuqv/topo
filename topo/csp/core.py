@@ -610,7 +610,7 @@ def add_cterm_restraint(system: mm.System, particle_index: int,
     -- e.g. the tunnel wall (:func:`topo.csp.ribosome.add_tunnel_wall`). Two
     forces sharing a global parameter name with different default values is an
     OpenMM error; per-particle ``k`` avoids the clash (this combination -- position
-    restraint + tunnel wall in v2 -- is what :mod:`topo.csp` uses).
+    restraint + tunnel wall -- is what :mod:`topo.csp` uses).
 
     Parameters
     ----------
@@ -665,7 +665,7 @@ def _write_pdb(topology, positions_nm: np.ndarray, path: str) -> None:
 class NascentDCDReporter:
     """A DCD reporter that writes only the first ``n_keep`` atoms each frame.
 
-    Used in build step v2 so the (large, static) ribosome beads are **not** written
+    Used so the (large, static) ribosome beads are **not** written
     to the trajectory every frame -- only the nascent chain (indices ``0..n_keep-1``)
     is saved. Mirrors :class:`openmm.app.DCDReporter` but slices the positions and
     uses a fixed ``n_keep``-atom topology, so the DCD header records ``n_keep`` atoms
@@ -749,7 +749,7 @@ def _dump_topology_psf(cgModel, path: str) -> None:
     """Write a PSF for the (nascent + ribosome) system via parmed.
 
     The model's own ``dumpTopology`` keys per-atom mass/charge off its nascent-only
-    lists, so it cannot describe the v2 system. parmed reads masses/bonds straight
+    lists, so it cannot describe the full system. parmed reads masses/bonds straight
     from the OpenMM topology + System instead (charges default to 0 in the PSF --
     cosmetic; the real electrostatics live in the Yukawa force).
 
@@ -772,7 +772,7 @@ def _dump_topology_psf(cgModel, path: str) -> None:
 
 def _finalize_nascent(cfg, ctx, nascent_topology, n_keep: int,
                       start_epoch: float) -> None:
-    """Finalize a v2 length writing a **nascent-only** final structure.
+    """Finalize a length, writing a **nascent-only** final structure.
 
     Like :func:`topo.engine.finalize_simulation` but the written ``_final.pdb`` is
     only the first ``n_keep`` (nascent) atoms -- the rigid ribosome is dropped. The
@@ -856,13 +856,15 @@ class RunParams:
     # longer a flag here -- the CSP runner always loads the supplied ribosome PDB as
     # rigid scenery (passed to run_length via its `ribo` argument). run_length itself
     # keys off that `ribo` argument, not a field.
-    # v2: tether the C-terminus to the P-site tRNA R bead the O'Brien way -- a bond
-    # plus a CA(L-1)-CA(L)-tRNA orienting angle -- instead of a generic position
-    # restraint. The angle aims the nascent chain down the tunnel (toward the exit)
-    # so it extrudes N-first and folds outside, rather than balling up at the PTC.
-    # Only used in v2 (needs the real tRNA bead); ignored in v1.
-    trna_tether: bool = True
-    # v2: O'Brien's one-sided planar tunnel wall on the nascent chain -- keeps beads
+    # C-terminus restraint mode. **Default False = the validated position-restraint path**
+    # (a moving harmonic spring to the A/P target point, a->a->p migration over the 3
+    # stages) -- matches the CSP runner's INI default, so RunParams-direct callers and
+    # `topo-csp` agree. Set True for O'Brien's tRNA tether: a bond + CA(L-1)-CA(L)-tRNA
+    # orienting angle to the P-site tRNA R bead, which aims the nascent chain down the
+    # tunnel (extrudes N-first, folds outside) rather than balling up at the PTC. The
+    # tether needs the real tRNA bead.
+    trna_tether: bool = False
+    # O'Brien's one-sided planar tunnel wall on the nascent chain -- keeps beads
     # at x >= tunnel_wall_x0, so the chain can only extrude forward (+x, toward the
     # exit) and cannot fold back past the synthesis point into the truncated-ribosome
     # void below the PTC. Applied throughout synthesis + post-phase. Neither the plane
@@ -929,7 +931,7 @@ def _make_cfg(out_dir: Path, sub_pdb: str, seed_pdb: str,
     sub_pdb : str
         Length-``L`` native CA PDB (the model's ``pdb_file``).
     seed_pdb : str or None
-        Seed-coordinate PDB fed via ``init_position`` (v1); ``None`` in v2 where
+        Seed-coordinate PDB fed via ``init_position``, or ``None`` where the
         seed coordinates are set directly on ``built.positions``.
     params : RunParams
         Shared per-length run parameters (steps, dt, temperature, device, ...).
@@ -986,7 +988,7 @@ def run_length(L: int, *, full_pdb: str, R_full: np.ndarray, eps_full: np.ndarra
     """Build, seed, (restrain,) minimize and run one length-``L`` system.
 
     Used both for an elongation step and for the post-synthesis phase (§post-
-    synthesis below). When ``ribo`` is given (build step v2), the rigid ribosome is
+    synthesis below). When ``ribo`` is given, the rigid ribosome is
     appended as fixed (mass-0) scenery with the ribosome<->nascent cross-interactions
     (:func:`topo.csp.ribosome.append_ribosome`).
 
@@ -1058,7 +1060,7 @@ def run_length(L: int, *, full_pdb: str, R_full: np.ndarray, eps_full: np.ndarra
         nascent_topology = mm.app.PDBFile(sub_pdb).topology
         cgModel.dumpTopology(str(out_dir / "traj.psf"))
 
-    # 3b. v2: append the rigid ribosome (mass-0 scenery + cross-interactions).
+    # 3b. append the rigid ribosome (mass-0 scenery + cross-interactions).
     # nascent_rmin_2 (per-residue Karanicolas-Brooks Rmin/2, full-structure array) gives the
     # nascent side of the NC<->ribosome excluded volume (Option A: structure-derived per-residue
     # radii); slice to the current length. If None, append_ribosome falls back to the per-AA
@@ -1077,7 +1079,7 @@ def run_length(L: int, *, full_pdb: str, R_full: np.ndarray, eps_full: np.ndarra
 
     # 4. tether the current C-terminus (residue L) ---------------------------
     # (skipped for an ejection run: restrain=False -> the tether is released).
-    # v2 + trna_tether: peptidyl-tRNA linkage (bond + CA-CA-tRNA orienting
+    # trna_tether: peptidyl-tRNA linkage (bond + CA-CA-tRNA orienting
     # angle to the P-site R bead) -- aims the chain down the tunnel. Otherwise a
     # generic harmonic position restraint of residue L to the P-target point.
     if restrain:
@@ -1097,7 +1099,7 @@ def run_length(L: int, *, full_pdb: str, R_full: np.ndarray, eps_full: np.ndarra
         else:
             add_cterm_restraint(cgModel.system, L - 1, p_anchor, params.restraint_k)
 
-    # 4b. v2 tunnel wall: keep nascent beads at x >= x0 (no leaking through the
+    # 4b. tunnel wall: keep nascent beads at x >= x0 (no leaking through the
     # truncated-ribosome cutout). Applied in elongation and post-elongation alike.
     if ribo is not None and params.tunnel_wall:
         if params.tunnel_wall_x0_nm is None:
@@ -1109,8 +1111,8 @@ def run_length(L: int, *, full_pdb: str, R_full: np.ndarray, eps_full: np.ndarra
                         x0_nm=params.tunnel_wall_x0_nm, k=params.tunnel_wall_k)
 
     # 5. set up, minimize, run, finalize (reuse topo.engine) -----------------
-    # v1: write a small seed PDB and feed it via init_position. v2: the full
-    # system includes the (large, static) ribosome, so seed coordinates are set
+    # Write a small seed PDB and feed it via init_position; or, when the full
+    # system includes the (large, static) ribosome, set seed coordinates
     # directly on built.positions instead of writing an N-atom seed PDB.
     if ribo is None:
         seed_pdb = str(out_dir / "seed.pdb")
