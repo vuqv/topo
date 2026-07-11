@@ -140,130 +140,19 @@ gyration) between the two models without accounting for these missing terms.
 
 ---
 
-## Configuration reference (`cylinder.ini`)
+## Configuration
 
 The cylinder reads a single INI control file with one `[OPTIONS]` section
-(`topo.csp.cylinder.read_cylinder_config`). **Units are OpenMM defaults** — nm, ps,
-kJ/mol, K, kJ/mol/nm² — and **dwell times are in seconds**. Integers may use `_` digit
-separators. The kinetics and MD keys share the semantics of the
-{doc}`synthesis control options <synthesis_control>` page; the analytic-tunnel geometry
-and the post-elongation phase are specific to this runner.
+(`topo.csp.cylinder.read_cylinder_config`). **Every control key is documented in one
+place:** {doc}`synthesis_control` — the *shared* keys (inputs, kinetics, integrator,
+post-synthesis, `resume`) plus the **Cylinder-runner-only** `tunnel_*` geometry keys
+(`tunnel_radius`, `tunnel_length`, `tunnel_x_lo`, `tunnel_center`, `tunnel_k`,
+`tunnel_mouth_round`) that define the analytic bore. A runnable `cylinder.ini` example is
+on that page and in `tutorials/07_translation_cylinder/`.
 
-Example `cylinder.ini` (Tutorial 7):
-
-```ini
-[OPTIONS]
-; --- inputs (no `ribosome` PDB: the tunnel is analytic) ---
-pdb_file           = P0CX28_clean.pdb           ; full native PDB of the nascent chain
-domain_def         = domain.yaml                ; contact nscale (one-time precompute)
-stride_output_file = P0CX28_clean_stride.dat    ; optional; else STRIDE is run for you
-
-; --- length schedule ---
-L0    = 1            ; starting nascent length (required)
-L_max =              ; final length (blank -> full residue count)
-
-; --- kinetics (same O'Brien codon timing as topo-csp) ---
-mrna         = P0CX28_mrna.txt   ; one codon per residue (required for per-codon timing);
-                                 ; or "fastest"/"slowest"/"median" to auto-build a synonymous-codon mRNA
-codon_times  = ../../assets/csp/codon_dwell_times/ecoli/ecoli_codon_dwell_times_310K.txt  ; table path (required for per-codon; or a number of s = uniform)
-scale_factor = 216564650         ; in-vivo s -> in-silico ns compression (larger = faster)
-random_seed  = 20240629
-max_steps_per_stage = 2000       ; TEST CLAMP (delete for production)
-min_steps_per_stage = 50
-
-; --- mechanics / integrator ---
-constraints = None   ; flexible harmonic bonds (required for the seeding)
-restraint_k = 83680  ; C-terminus -> PTC restraint (kJ/mol/nm^2)
-minimize    = yes
-dt     = 0.015
-ref_t  = 300
-tau_t  = 0.05
-nstout = 100
-
-; --- analytic exit tunnel ---
-tunnel_radius      = 0.9        ; bore radius r (nm); ~3 CG beads wide
-tunnel_length      = 10.0       ; bore length (nm); x_exit = x_lo + length
-tunnel_x_lo        = 0.0        ; PTC / closed end (nm); C-terminus seeded on-axis here
-tunnel_center      = 0.0, 0.0   ; tunnel axis (y0, z0) (nm); axis = X
-tunnel_k           = 8368       ; wall stiffness (kJ/mol/nm^2 = 20 kcal/mol/A^2)
-tunnel_mouth_round = 0.2        ; mouth-corner fillet radius rho (nm)
-
-; --- post-synthesis free runs (after the chain reaches full length) ---
-ejection_steps     = 300_000    ; release the C-terminus restraint; protein diffuses out (0 -> skip)
-dissociation_steps = 0          ; continued free run; protein drifts off the ribosome (0 -> skip)
-
-; --- hardware / output ---
-device = GPU
-ppn    = 4
-outdir = synth_out
-```
-
-### Inputs & length schedule
-
-| Key | Required | Default | Meaning |
-|-----|----------|---------|---------|
-| `pdb_file` | **yes** | — | **All-atom** native PDB (topo's Gō model needs STRIDE + heavy-atom native contacts; a Cα-only CG structure is not sufficient). The CG model is built from it. |
-| `domain_def` | **yes** | — | `domain.yaml` — the protein's per-domain/per-interface contact-nscale definition. See {doc}`domain_definition`. |
-| `stride_output_file` | no | — | Precomputed STRIDE file (skips re-running STRIDE). |
-| `L0` | **yes** | — | Starting nascent-chain length (cold-start layout). |
-| `L_max` | no | full length | Final nascent length (blank = whole chain). Must satisfy `1 ≤ L0 ≤ L_max ≤ N_full`. |
-| `mrna` | for per-codon timing | — | mRNA file (one codon per residue), **or** `fastest`/`slowest`/`median` to auto-build a synonymous-codon mRNA (each residue's fastest/slowest/median-dwell-time codon per the `codon_times` table, written next to the PDB; see the [CSP docs](#fastest-slowest-synonymous-codon-mrna)). Required unless `codon_times` is a number. A real filename must not be `fastest`/`slowest`/`median`. |
-| `codon_times` | for per-codon timing | — | Codon-timing key: a **table path** = per-codon (required, no bundled default -- pick one under `assets/csp/codon_dwell_times/`); a **positive number of seconds** = uniform codon time (no `mrna` needed). A table filename must **not** be a bare number. |
-| `outdir` | no | `synth_out` | Output root; each residue writes `L_<L>/`. |
-
-### Analytic tunnel geometry
-
-| Key | Default | Meaning |
-|-----|---------|---------|
-| `tunnel_radius` | `0.9` | Bore radius `r` (nm); ~3 CG beads wide. |
-| `tunnel_length` | `10.0` | Bore length (nm). The exit face sits at `x_exit = tunnel_x_lo + tunnel_length` (derived, not a key). |
-| `tunnel_x_lo` | `0.0` | PTC / closed end of the bore (nm); the C-terminus is seeded on-axis here. |
-| `tunnel_center` | `0.0, 0.0` | Tunnel axis `(y0, z0)` (nm). The axis runs along +x. |
-| `tunnel_k` | `8368` | Wall stiffness (kJ/mol/nm² = 20 kcal/mol/Å²). |
-| `tunnel_mouth_round` | `0.2` | Mouth-corner fillet radius `rho` (nm); rounds the 90° inner corner so the potential is continuous. |
-
-### Post-synthesis free runs
-
-Same keys as the CSP runner. Both phases run at full length and **release** the
-C-terminus restraint so the finished protein diffuses out the exit (+x) and folds in the
-cytosol; the analytic tunnel stays on throughout, so the only way out is the exit face.
-
-| Key | Default | Meaning |
-|-----|---------|---------|
-| `ejection_steps` | `0` | Steps of the first free run (restraint OFF); `0` = skip. Use a **long** run so the protein can clear the tunnel. Writes `ejection/`. |
-| `dissociation_steps` | `0` | Steps of a second, continued free run (restraint OFF); `0` = skip. Writes `dissociation/`. |
-
-### Shared kinetics & MD keys
-
-These behave exactly as documented on the {doc}`synthesis control options <synthesis_control>`
-page (they are inherited from the shared `RunParams`). The clamps
-`max_steps_per_stage` / `min_steps_per_stage` are **testing-only** and clamp the
-per-residue step count.
-
-| Key | Default | Meaning |
-|-----|---------|---------|
-| `scale_factor` | `4331293` | In-vivo-seconds → in-silico-ns compression (larger = fewer steps = faster). |
-| `codon_times` | — (required for per-codon) | Table path = per-codon timing (no bundled default -- pick one under `assets/csp/codon_dwell_times/`); a positive number of seconds = uniform codon time (no `mrna` needed). See Inputs above. |
-| `random_seed` | — | Seed for the first-passage-time sampler (reproducible schedule). |
-| `max_steps_per_stage` | — (uncapped) | **Testing only** — upper clamp on the per-residue MD step count. Leave unset in production. |
-| `min_steps_per_stage` | `1` | **Testing only** — lower clamp on the per-residue MD step count. |
-| `constraints` | `AllBonds` | Bond treatment. The equilibrium-bond seed (above) keeps rigid `AllBonds` stable; set `None` for flexible harmonic bonds if you prefer. |
-| `restraint_k` | `83680` | C-terminus → PTC harmonic restraint constant (kJ/mol/nm²). |
-| `minimize` | `yes` | Energy-minimize the seeded structure before each residue's MD. |
-| `dt` / `ref_t` / `tau_t` / `nstout` | `0.015` / `310` / `0.05` / `5000` | Timestep (ps), temperature (K), Langevin friction (1/ps), output interval (steps). |
-| `device` / `ppn` | `CPU` / `1` | Compute platform and CPU thread count. |
-| `resume` | `auto` | Resume policy for interrupted runs: `auto` / `yes` / `no` (CLI `--fresh` forces `no`). Same mechanism as CSP — see {doc}`synthesis_resume`. |
-
-```{warning}
-`time_stage_1` / `time_stage_2` are accepted (inherited from the shared parameters) but
-have **no effect** in the cylinder runner: with a single MD segment per residue, each
-residue's step count comes from its **whole** codon dwell, not a three-way split. They
-matter only for the {doc}`coarse-grained ribosome runner <continuous_synthesis>`.
-```
-
-```{note}
-Boolean options accept `yes`/`no`, `true`/`false`, `1`/`0`.
-```
+Two cylinder-specific points: there is **no `ribosome` PDB** (the tunnel is analytic), and
+`time_stage_1` / `time_stage_2` are accepted but have **no effect** — with a single MD
+segment per residue the whole codon dwell `τ` is one segment, not a three-way split.
 
 ---
 

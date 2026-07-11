@@ -345,96 +345,32 @@ chain (919 stages, zero blow-ups).
 
 ---
 
-## Configuration reference (`csp.ini`)
-
-```{note}
-The tables below cover the keys used on this page. For the **complete, canonical
-per-key reference** (both `csp.ini` and `cylinder.ini`, grouped by concern) see
-{doc}`synthesis_control`.
-```
+## Configuration
 
 CSP reads a single INI control file with one `[OPTIONS]` section
-(`topo.csp.protocol.read_csp_config`). **Units are OpenMM defaults** — nm, ps, kJ/mol, K,
-kJ/mol/nm² — and **dwell times are in seconds**. Integers may use `_` digit separators
-(e.g. `200_000`).
+(`topo.csp.protocol.read_csp_config`). **Every control key — for both `topo-csp` and
+`topo-cylinder` — is documented in one place:** {doc}`synthesis_control` (grouped into
+*shared*, *coarse-grained-ribosome-only*, and *cylinder-only* keys, with types and
+defaults). Units are OpenMM defaults (nm, ps, kJ/mol, K, kJ/mol/nm²) and dwell times are
+in seconds.
 
-```{tip}
-For a compact, single-page tabular reference of every `csp.ini` option (grouped
-by role, with types and defaults) — the synthesis analogue of the single-protein
-{doc}`simulation_control` page — see {doc}`synthesis_control`. The tables below
-repeat the same options with more inline commentary on the physics.
-```
+A few CSP-specific behaviors worth calling out here (the physics behind the keys):
 
-### Inputs & schedule
-
-| Key | Required | Default | Meaning |
-|-----|----------|---------|---------|
-| `pdb_file` | **yes** | — | **All-atom** native PDB — required, because topo's structure-based Gō model derives secondary structure (STRIDE) and the native-contact map from the heavy atoms. (A Cα-only CG structure is *not* enough here; the sibling cosmo IDP model does accept one.) |
-| `ribosome` | **yes** | — | Truncated CG ribosome PDB (P-/A-anchors + rigid scenery). |
-| `L0` | no | `1` | Start nascent-chain length (omit/blank = start from a single residue). |
-| `L_max` | no | full length | Final nascent length (omit/blank = synthesize the whole chain). |
-| `mrna` | cond. | — | mRNA file (one codon per residue), **or** `fastest`/`slowest`/`median` to auto-build a synonymous-codon mRNA (see [Fastest / slowest / median mRNA](#fastest-slowest-synonymous-codon-mrna)). Required for per-codon timing (unless `codon_times` is a number). A real filename must not be `fastest`/`slowest`/`median`. |
-| `codon_times` | cond. | — | Codon-timing key. A **table path** = per-codon timing (required, no bundled default -- pick one under `assets/csp/codon_dwell_times/`); a **positive number of seconds** = uniform codon time (every codon, no `mrna` needed). A table filename must **not** be a bare number. |
-| `domain_def` | **yes** | — | `domain.yaml` — the protein's **contact-nscale definition** (per-domain / per-interface Gō well-depth scaling, the structure-based analog of the reference model's `nscal`). |
-| `stride_output_file` | no | — | Precomputed STRIDE file (skips re-running STRIDE). |
-| `outdir` | no | `synth_out` | Output root. |
-
-### Codon kinetics
-
-| Key | Default | Meaning |
-|-----|---------|---------|
-| `scale_factor` | `4331293` | In-vivo-seconds → in-silico-ns compression (larger = fewer steps = faster). |
-| `time_stage_1` | `0.00034` | Mean peptidyl-transfer (peptide-bond) dwell, **seconds**. |
-| `time_stage_2` | `0.004201` | Mean translocation dwell, **seconds**. |
-| `random_seed` | — | Seed for the FPT sampler (reproducible schedules). |
-| `max_steps_per_stage` | — (uncapped) | **Testing only** — upper clamp on each stage's MD step count (tutorials use a small value for speed). See note below. |
-| `min_steps_per_stage` | `1` | **Testing only** — lower clamp on each stage's MD step count. See note below. |
-| `ejection_steps` | `0` | Post-synthesis ejection-phase length (steps); `0` = skip. |
-| `dissociation_steps` | `0` | Post-synthesis dissociation-phase length (steps); `0` = skip. |
-
-```{warning}
-**`max_steps_per_stage` / `min_steps_per_stage` are testing-only knobs and will be
-removed in production.** They clamp the MD step count per stage so the tutorials finish
-quickly, which **breaks the physical timescale mapping** — the integrated MD per stage no
-longer matches the sampled dwell time. In a production run, leave them **unset** so the
-step count is driven entirely by the kinetics (`scale_factor`, the codon times, and `dt`).
-The sampled dwell **times in seconds** are always written to `dwell_times.dat` regardless
-of the clamp.
-```
-
-### MD / ribosome mechanics (`RunParams` fields)
-
-| Key | Default | Meaning |
-|-----|---------|---------|
-| `dt` | `0.015` | Timestep, ps. |
-| `ref_t` | `310` | Temperature, K. |
-| `tau_t` | `0.05` | Langevin friction, 1/ps. |
-| `nstout` | `5000` | Trajectory/log output interval (steps). |
-| `device` | `CPU` | `GPU` / `CPU`. |
-| `ppn` | `1` | CPU threads (CPU platform). |
-| `constraints` | `AllBonds` | Bond constraints. Equilibrium PTC seeding (always on, below) keeps rigid bonds stable; set `None` for flexible harmonic bonds instead. |
-| `restraint_k` | `83680` | C-terminus harmonic restraint constant, kJ/mol/nm². |
-| `minimize` | `yes` | Energy-minimize the seeded structure before each stage's MD. |
-| `tunnel_wall` | `yes` | Apply the one-sided tunnel wall (floor below the synthesis point); plane auto-placed. |
-
-There is **no `rigid_ribosome` key**: the `ribosome` PDB is required, and supplying it *is*
-the signal to load it as **rigid (mass-0) scenery** (excluded volume + electrostatics on) —
-so it is always treated as rigid, and the tunnel wall defaults on with it. `trna_tether` is
-**forced off** by the CSP runner — CSP needs the switchable A↔P position restraint.
-
-**PTC geometry is always optimized.** Each new residue is seeded at the optimal A-site
-target — one equilibrium peptide bond (0.381 nm) from the previous C-terminus, clear of
-the ribosome excluded volume (`optimal_ptc_targets`) — and those optimized A-/P-site
-points are the restraint targets and the tunnel-wall plane. That equilibrium seeding is
-why `constraints = AllBonds` (rigid) is the default and stable.
+- **PTC geometry is always optimized.** Each new residue is seeded at the optimal A-site
+  target — one equilibrium peptide bond (0.381 nm) from the previous C-terminus, clear of
+  the ribosome excluded volume (`optimal_ptc_targets`) — and those A-/P-site points are
+  the restraint targets and the tunnel-wall plane. Because the peptide bond starts at
+  equilibrium, rigid `constraints = AllBonds` (the default) seeds and minimizes cleanly.
+- **The ribosome is always rigid scenery** — supplying the `ribosome` PDB *is* the signal
+  (no `rigid_ribosome` key), and `trna_tether` defaults off (CSP needs the switchable
+  A↔P position restraint).
 
 ```{note}
 **tRNA presence / naming.** The P-/A-anchors and the `optimal_ptc_targets` solve read the
 ribosome's tRNA beads under fixed names (segids `PtR`/`AtR`, resid 76, beads
 `R`/`P`/`BR2`; the acceptor must be a purine A, which carries the `BR2` bead). A ribosome
 PDB with **no tRNA**, or with **differently-named** tRNA segments, currently fails with a
-generic "expected exactly one bead" error. Handling missing/renamed tRNA (a clear
-up-front error, and/or configurable segid/resid/bead names) is a tracked TODO
+generic "expected exactly one bead" error. Handling missing/renamed tRNA is a tracked TODO
 (`review/TODO.md`).
 ```
 
