@@ -170,7 +170,11 @@ def setup_simulation(cfg, built: BuiltSystem,
         steps_planned = cfg.md_steps - done_steps
     else:
         steps_planned = cfg.total_steps()
-    runinfo_path = cfg.output_path('_runinfo.log')
+    # Runinfo path/mode: normally <outname>_runinfo.log (one per run). A driver may
+    # instead point every phase at one shared file and fold them (cfg.runinfo_path +
+    # cfg.runinfo_append/_section), e.g. the CSP runner writes one traj_runinfo.log per
+    # residue with a section per stage. These cfg attrs are absent for ordinary runs.
+    runinfo_path = getattr(cfg, 'runinfo_path', None) or cfg.output_path('_runinfo.log')
     topo.runinfo.write_run_start(
         runinfo_path,
         control_file=control_file,
@@ -182,6 +186,9 @@ def setup_simulation(cfg, built: BuiltSystem,
         ppn=cfg.ppn,
         coord_source=coord_source,
         vel_source=vel_source,
+        title=getattr(cfg, 'runinfo_title', None),
+        append=getattr(cfg, 'runinfo_append', False),
+        section_label=getattr(cfg, 'runinfo_section', None),
     )
     if not getattr(cfg, 'quiet', False):
         print(f"[tracking] writing run metadata to {runinfo_path}")
@@ -192,7 +199,7 @@ def setup_simulation(cfg, built: BuiltSystem,
 
 
 def attach_reporters(cfg, simulation, suffix='', append=False, total_steps=None,
-                     checkpoint=True):
+                     checkpoint=True, trajectory=True):
     """(Re)attach the checkpoint / trajectory / log reporters for one phase.
 
     Replaces ``simulation.reporters`` so the runner can switch output file sets
@@ -215,6 +222,11 @@ def attach_reporters(cfg, simulation, suffix='', append=False, total_steps=None,
         Whether to write the ``<outname>.chk`` checkpoint. The quench phase sets
         this ``False`` -- it is short and never restarted, so the checkpoint only
         ever holds production state and a restart resumes production cleanly.
+    trajectory : bool
+        Whether to attach the standard full-system ``<outname>.dcd`` reporter. The
+        CSP nascent-only path sets this ``False`` and attaches its own
+        :class:`NascentDCDReporter` afterwards, so the trajectory file is opened once
+        (no double-open of the same path).
     """
     if total_steps is None:
         total_steps = cfg.md_steps
@@ -224,9 +236,10 @@ def attach_reporters(cfg, simulation, suffix='', append=False, total_steps=None,
     simulation.reporters = []
     if checkpoint:
         simulation.reporters.append(mm.app.CheckpointReporter(cfg.checkpoint_path(), cfg.nstchk))
-    simulation.reporters.append(
-        mm.app.DCDReporter(cfg.output_path(suffix + '.dcd'), cfg.nstxout,
-                           enforcePeriodicBox=bool(cfg.pbc), append=append))
+    if trajectory:
+        simulation.reporters.append(
+            mm.app.DCDReporter(cfg.output_path(suffix + '.dcd'), cfg.nstxout,
+                               enforcePeriodicBox=bool(cfg.pbc), append=append))
     # topo.topoReporter writes a clean, fixed-width log: each float column uses
     # log_precision decimals and every column is padded to log_width characters so
     # the columns line up. Columns are separated by two spaces (aligned and still

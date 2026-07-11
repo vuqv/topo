@@ -38,9 +38,9 @@ topo-csp -f csp_debug.ini       # smoke run -> synth_out_debug/  (or csp_val.ini
 topo-csp-movie -o synth_out_debug --ribosome ribosome_trunc.pdb
 ```
 
-`topo-csp` writes, per residue `L` and sub-stage `s`, a standalone trajectory under
-`<outdir>/L_<L>/stage_<s>/`, an optional `ejection/` (and `dissociation/`) phase, and a
-per-residue dwell-time log `<outdir>/dwell_times.dat`.
+`topo-csp` writes one folder per residue `L` under `<outdir>/L_<L>/` (a shared topology
+plus a per-stage trajectory `traj_s<s>.dcd`), an optional `ejection/` (and
+`dissociation/`) phase, and a per-residue dwell-time log `<outdir>/dwell_times.dat`.
 
 ---
 
@@ -133,8 +133,8 @@ fold, and the chain can form native structure as soon as the relevant residues e
 
 Each amino acid is added through **one ribosome elongation cycle**, split into three
 kinetic sub-steps; CSP runs **one MD segment per sub-step**. For nascent length `L`, each
-sub-stage is a standalone short simulation (its own `L_<L>/stage_<s>/` folder); stage 3's
-final structure seeds the next residue's stage 1.
+sub-stage is a short simulation writing its own `traj_s<s>.dcd` in the shared `L_<L>/`
+folder; stage 3's final structure seeds the next residue's stage 1.
 
 | stage | real biological process | what the simulation does | C-terminus restrained to | mean dwell time |
 |-------|-------------------------|--------------------------|--------------------------|-----------------|
@@ -444,16 +444,24 @@ up-front error, and/or configurable segid/resid/bead names) is a tracked TODO
 
 ```text
 <outdir>/
-├── L_<L>/stage_<s>/        # one folder per residue L and sub-stage s ∈ {1,2,3}
-│   ├── traj.dcd            # (nascent-only) trajectory for that stage
-│   ├── traj_final.pdb      # last conformation (seeds the next stage/residue)
-│   ├── traj.log            # energies; column 3 = potential energy (kJ/mol)
-│   └── ...
+├── L_<L>/                  # ONE folder per residue L (consolidated layout)
+│   ├── traj.psf            # nascent topology (shared across the 3 stages; f(L) only)
+│   ├── native_1_<L>.pdb    # length-L native structure (shared; f(L) only)
+│   ├── traj_s1.dcd         # (nascent-only) trajectory, stage 1  (s2/s3 likewise)
+│   ├── traj_s1.log         # energies, stage 1; column 3 = potential energy (kJ/mol)
+│   ├── traj_runinfo.log    # folded run-info: one [run:...]/[result:...] per stage
+│   └── traj_final.pdb      # stage-3 final — seeds L+1 and is the resume-reload target
 ├── ejection/               # post-synthesis ejection phase (if ejection_steps > 0)
 ├── dissociation/           # post-synthesis free run (if dissociation_steps > 0)
 ├── dwell_times.dat         # per-residue dwell-time log / schedule (see below)
 └── progress.log            # append-only DONE/RUNNING resume status (see below)
 ```
+
+Each residue's three kinetic sub-stages share **one** `L_<L>/` directory: `traj.psf` and
+`native_1_<L>.pdb` depend only on `L` (the A/P differences are *forces*, not atoms) and are
+written once; the trajectories stay split per stage (`traj_s{1,2,3}.dcd`) to preserve the
+kinetic-dwell boundaries; and only stage 3 writes `traj_final.pdb`. There is no per-stage
+`.chk` — per-residue resume reloads `traj_final.pdb`, never a checkpoint.
 
 **`dwell_times.dat`** records, per residue, the codon, the three sampled dwell **times in
 seconds** (`t1`/`t2`/`t3`), their nanosecond equivalents, and the integer MD step counts —

@@ -105,10 +105,12 @@ in **seconds**.
 
 ## Output
 
-`<outdir>/L_<L>/stage_<1,2,3>/` per residue (each a standalone topo run: `traj.dcd`,
-`traj.log`, `traj.psf`, `traj.chk`, `traj_final.pdb`, `traj_runinfo.log`,
-`native_1_<L>.pdb`), plus `ejection/` and optional `dissociation/`. Stage 3's
-`traj_final.pdb` seeds the next residue.
+`<outdir>/L_<L>/` — **one folder per residue** (consolidated layout): a shared
+`traj.psf` + `native_1_<L>.pdb` (functions of `L` only, written once), per-stage
+`traj_s{1,2,3}.dcd` + `traj_s{1,2,3}.log`, one folded `traj_runinfo.log` (a section per
+stage), and a single `traj_final.pdb` (the stage-3 final — it seeds the next residue and
+is the resume-reload target). No per-stage `.chk` (per-residue resume reloads
+`traj_final.pdb`). Plus `ejection/` and optional `dissociation/`.
 
 At the output root: `dwell_times.dat` (the **immutable plan** — the full per-residue
 3-stage schedule, drawn once up front, with the PTC restraint geometry in its `#PTC`
@@ -145,8 +147,8 @@ topo-csp-movie -o synth_out --ribosome ribosome_trunc.pdb
 vmd -e synth_out/movie.tcl
 ```
 
-`topo.csp.movie` discovers the nested `L_<L>/stage_<s>/` segments (`stitch_movie`) and
-stitches them with the shared `stitch_segments` core.
+`topo.csp.movie` discovers the per-stage `L_<L>/traj_s<s>.dcd` segments (`stitch_movie`)
+and stitches them with the shared `stitch_segments` core.
 
 ## Not yet ported
 

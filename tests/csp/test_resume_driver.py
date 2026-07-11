@@ -89,11 +89,15 @@ def _install_stubs(monkeypatch, crash_at_L=None):
     def fake_run_length(L, **kw):
         subdir = kw["out_subdir"]
         out_root = kw["out_root"]
-        if crash_at_L is not None and L == crash_at_L and subdir.endswith("stage_1"):
+        outname = kw.get("outname", "traj")
+        # Consolidated layout: all three stages share the L_<L>/ dir, distinguished by
+        # outname (traj_s1/s2/s3). Simulate a crash mid-residue during stage 1.
+        if crash_at_L is not None and L == crash_at_L and outname == "traj_s1":
             raise RuntimeError(f"simulated crash at L={L}")
         calls.append((L, subdir))
-        # Every call writes its final; the stage-3 / phase final is the resume target.
-        _write_final_pdb(out_root / subdir / "traj_final.pdb", L)
+        # Only stage 3 / the post-phases persist traj_final.pdb (the resume target).
+        if kw.get("persist_final", True):
+            _write_final_pdb(out_root / subdir / "traj_final.pdb", L)
         return np.zeros((L, 3))
 
     monkeypatch.setattr(protocol, "load_ribosome", fake_load_ribosome)

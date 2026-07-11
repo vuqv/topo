@@ -771,40 +771,47 @@ def _dump_topology_psf(cgModel, path: str) -> None:
 
 
 def _finalize_nascent(cfg, ctx, nascent_topology, n_keep: int,
-                      start_epoch: float) -> None:
-    """Finalize a length, writing a **nascent-only** final structure.
+                      start_epoch: float, *, final_pdb: Optional[str] = None) -> np.ndarray:
+    """Finalize a nascent stage: append its run-info section, optionally write its final.
 
-    Like :func:`topo.engine.finalize_simulation` but the written ``_final.pdb`` is
-    only the first ``n_keep`` (nascent) atoms -- the rigid ribosome is dropped. The
-    saved checkpoint still holds the **full** system (needed for a correct restart).
+    Returns the final **nascent** ``(n_keep, 3)`` nm coordinates, read directly from the
+    context state -- so the return value is independent of whether ``final_pdb`` is
+    written. Under the consolidated CSP layout there is no per-stage checkpoint (per-
+    residue resume reloads ``traj_final.pdb``), so none is saved here.
 
     Parameters
     ----------
     cfg : topo.SimulationConfig
-        The per-length config (supplies output paths and the runinfo path).
+        The per-stage config (supplies the folded run-info result-section label).
     ctx : topo.engine.SimulationContext
-        The active simulation context (simulation, checkpoint, runinfo paths).
+        The active simulation context (simulation + runinfo path).
     nascent_topology : openmm.app.Topology
-        The ``n_keep``-atom nascent-only topology for the written ``_final.pdb``.
+        The ``n_keep``-atom nascent-only topology for the written final structure.
     n_keep : int
-        Number of leading (nascent) atoms to keep in the final structure.
+        Number of leading (nascent) atoms to keep.
     start_epoch : float
         Wall-clock start time (``time.time()``) for the elapsed-time report.
+    final_pdb : str or None, optional
+        Path to write the nascent final structure to, or ``None`` to skip the write
+        (stages 1/2, whose final already lives as their DCD's last frame).
 
     Returns
     -------
-    None
+    numpy.ndarray
+        The final nascent ``(n_keep, 3)`` nm coordinates.
     """
     sim = ctx.simulation
-    sim.saveCheckpoint(ctx.checkpoint)
-    final_pdb = cfg.output_path("_final.pdb")
     pos = sim.context.getState(getPositions=True).getPositions(asNumpy=True)
-    pos = pos[:n_keep].value_in_unit(unit.nanometer)
-    _write_pdb(nascent_topology, pos, final_pdb)
-    _vprint(f"Wrote last nascent conformation to {final_pdb}")
+    pos = np.asarray(pos[:n_keep].value_in_unit(unit.nanometer))
+    if final_pdb is not None:
+        _write_pdb(nascent_topology, pos, final_pdb)
+        _vprint(f"Wrote last nascent conformation to {final_pdb}")
     topo.runinfo.write_run_end(ctx.runinfo_path, simulation=sim,
-                               start_epoch=start_epoch, final_structure=final_pdb)
+                               start_epoch=start_epoch,
+                               final_structure=(final_pdb if final_pdb else "(not written)"),
+                               section_label=getattr(cfg, 'runinfo_result_section', None))
     _vprint("--- Finished in %s seconds ---" % (time.time() - start_epoch))
+    return pos
 
 
 # --------------------------------------------------------------------------
@@ -919,7 +926,7 @@ class RunParams:
 
 
 def _make_cfg(out_dir: Path, sub_pdb: str, seed_pdb: str,
-              params: RunParams) -> topo.SimulationConfig:
+              params: RunParams, outname: str = "traj") -> topo.SimulationConfig:
     """Build a per-length :class:`SimulationConfig` for the engine helpers.
 
     Each length is a self-contained standalone run (its own output folder), so
@@ -959,7 +966,7 @@ def _make_cfg(out_dir: Path, sub_pdb: str, seed_pdb: str,
     cfg.init_position = seed_pdb
     cfg.constraints = params.constraints
     cfg.output_dir = str(out_dir)
-    cfg.outname = "traj"
+    cfg.outname = outname
     cfg.device = params.device
     cfg.ppn = params.ppn
     cfg.restart = False
@@ -987,6 +994,8 @@ def run_length(L: int, *, full_pdb: str, R_full: np.ndarray, eps_full: np.ndarra
                tether_prev_segid: Optional[str] = None,
                nascent_rmin_2: Optional[np.ndarray] = None,
                minimize_override: Optional[bool] = None,
+               outname: str = "traj",
+               persist_final: bool = True,
                label: Optional[str] = None) -> np.ndarray:
     """Build, seed, (restrain,) minimize and run one length-``L`` system.
 
@@ -1006,11 +1015,23 @@ def run_length(L: int, *, full_pdb: str, R_full: np.ndarray, eps_full: np.ndarra
     - ``out_subdir`` : output folder name under ``out_root`` (default
       ``L_<L>``); e.g. ``ejection`` / ``stall``.
     - ``n_steps_override`` : run this many steps instead of ``params.n_steps``.
+    - ``outname`` : output basename for this call's per-stage files -- the DCD / log
+      (``<outname>.dcd`` / ``.log``). The CSP runner passes ``"traj_s{1,2,3}"`` so a
+      residue's three stages share one directory (§3.5 consolidated layout) with
+      per-stage trajectories, while the **shared** files ``traj.psf`` /
+      ``native_1_L.pdb`` (both functions of ``L`` only) are written once, and the
+      folded ``traj_runinfo.log`` gets one section per stage. Default ``"traj"``.
+    - ``persist_final`` : write ``traj_final.pdb`` (the seed for the next residue /
+      the resume-reload target). The CSP runner sets it True only for the last stage
+      (and the post-synthesis phases); stages 1/2 skip the write -- their final
+      conformation already lives as the last frame of their DCD -- and still return
+      their coords in memory. Default True.
     - ``label`` : short stage tag (e.g. ``"stage 1 peptidyl-transfer"``) shown in
       the concise per-stage summary line and, under ``TOPO_CSP_VERBOSE``, in the
       verbose console banner.
 
-    Returns the final **nascent** ``(L, 3)`` nm coordinate array.
+    Returns the final **nascent** ``(L, 3)`` nm coordinate array (read from the
+    context state, independent of whether ``traj_final.pdb`` was written).
     """
     _vprint()
     _vprint("#" * 66)
@@ -1023,8 +1044,11 @@ def run_length(L: int, *, full_pdb: str, R_full: np.ndarray, eps_full: np.ndarra
     out_dir.mkdir(parents=True, exist_ok=True)
 
     # 1. length-L native structure (bonded terms + per-residue properties) ---
+    # native_1_L.pdb is a pure function of L (identical across a residue's stages), so
+    # under the consolidated layout it is written once and reused by later stages.
     sub_pdb = str(out_dir / f"native_1_{L}.pdb")
-    write_subset_structure(full_pdb, L, sub_pdb)
+    if not os.path.isfile(sub_pdb):
+        write_subset_structure(full_pdb, L, sub_pdb)
 
     # 2. inject the L x L contact subset (build-once-subset) -----------------
     R_L = np.ascontiguousarray(R_full[:L, :L])
@@ -1061,7 +1085,11 @@ def run_length(L: int, *, full_pdb: str, R_full: np.ndarray, eps_full: np.ndarra
     nascent_topology = None
     if nascent_only:
         nascent_topology = mm.app.PDBFile(sub_pdb).topology
-        cgModel.dumpTopology(str(out_dir / "traj.psf"))
+        # traj.psf depends only on L (the A/P differences are forces, not atoms), so it
+        # is shared across the residue's stages -- written once under the consolidated layout.
+        psf_shared = out_dir / "traj.psf"
+        if not psf_shared.is_file():
+            cgModel.dumpTopology(str(psf_shared))
 
     # 3b. append the rigid ribosome (mass-0 scenery + cross-interactions).
     # nascent_rmin_2 (per-residue Karanicolas-Brooks Rmin/2, full-structure array) gives the
@@ -1120,15 +1148,27 @@ def run_length(L: int, *, full_pdb: str, R_full: np.ndarray, eps_full: np.ndarra
     if ribo is None:
         seed_pdb = str(out_dir / "seed.pdb")
         _write_pdb(cgModel.topology, positions, seed_pdb)
-        cfg = _make_cfg(out_dir, sub_pdb, seed_pdb, params)
+        cfg = _make_cfg(out_dir, sub_pdb, seed_pdb, params, outname=outname)
         cgModel.dumpTopology(cfg.output_path(".psf"))
         built_positions = cgModel.positions
     else:
-        cfg = _make_cfg(out_dir, sub_pdb, None, params)
+        cfg = _make_cfg(out_dir, sub_pdb, None, params, outname=outname)
         if not nascent_only:
             # Full-system PSF (nascent-only PSF was already written above).
             _dump_topology_psf(cgModel, cfg.output_path(".psf"))
         built_positions = ([mm.Vec3(*r) for r in positions]) * unit.nanometer
+
+    if nascent_only:
+        # Fold a residue's stages into one traj_runinfo.log (one section per stage): the
+        # first stage writes the banner + software/hardware, later stages append their
+        # own [run: ...]/[result: ...] sections. Keyed off the file's existence so it
+        # composes with the shared-file write-once pattern above.
+        runinfo_shared = out_dir / "traj_runinfo.log"
+        cfg.runinfo_path = str(runinfo_shared)
+        cfg.runinfo_append = runinfo_shared.is_file()
+        cfg.runinfo_title = out_dir.name
+        cfg.runinfo_section = f"run: {label}" if label else "run"
+        cfg.runinfo_result_section = f"result: {label}" if label else "result"
 
     # Post-synthesis phases run for their own step count.
     if n_steps_override is not None:
@@ -1191,12 +1231,24 @@ def run_length(L: int, *, full_pdb: str, R_full: np.ndarray, eps_full: np.ndarra
                 diverged = True
 
         if not diverged:
-            engine.attach_reporters(cfg, ctx.simulation, suffix="", total_steps=cfg.md_steps)
+            # No per-stage checkpoint under the consolidated CSP layout: per-residue
+            # resume reloads traj_final.pdb, never a .chk, so writing one per stage is
+            # dead weight (§3.5). Non-nascent runs keep their checkpoint.
+            # No per-stage checkpoint (per-residue resume reloads traj_final.pdb, §3.5),
+            # and for nascent_only no full-system DCD reporter -- we attach a nascent-only
+            # one directly below, so the DCD file is opened exactly once (no double-open /
+            # orphaned handle across a stability retry).
+            engine.attach_reporters(cfg, ctx.simulation, suffix="", total_steps=cfg.md_steps,
+                                    checkpoint=not nascent_only, trajectory=not nascent_only)
             if nascent_only:
-                # Swap the full-system DCD reporter for a nascent-only one (the rigid
-                # ribosome is static -- no need to write its ~thousands of beads/frame).
-                ctx.simulation.reporters[1] = NascentDCDReporter(
-                    cfg.output_path(".dcd"), cfg.nstxout, nascent_topology, L)
+                # Nascent-only DCD (the rigid ribosome is static -- no need to write its
+                # ~thousands of beads/frame). Cap the output interval at this stage's step
+                # count so even a short stage (n_steps < nstout, common for stage 1) still
+                # records its final conformation; otherwise it would leave a 0-frame,
+                # 0-byte (headerless, unreadable) DCD and the movie would lose that stage.
+                dcd_every = max(1, min(cfg.nstxout, cfg.md_steps))
+                ctx.simulation.reporters.append(NascentDCDReporter(
+                    cfg.output_path(".dcd"), dcd_every, nascent_topology, L))
 
             # Step in chunks so a divergence is caught (and the stage aborted) mid-run.
             chunk = max(cfg.nstxout, cfg.md_steps // 20, 1)
@@ -1235,10 +1287,17 @@ def run_length(L: int, *, full_pdb: str, R_full: np.ndarray, eps_full: np.ndarra
     final_pe = ctx.simulation.context.getState(getEnergy=True).getPotentialEnergy(
         ).value_in_unit(unit.kilojoule_per_mole)
 
+    # 6. finalize + final NASCENT coordinates that seed the next length ------
     if nascent_only:
-        _finalize_nascent(cfg, ctx, nascent_topology, L, start)
+        # Single per-residue final (traj_final.pdb), written only when persist_final
+        # (stage 3 + post-synthesis phases); the coords are taken from the context
+        # state either way, so stages 1/2 still return their final without a file.
+        final_pdb = str(out_dir / "traj_final.pdb") if persist_final else None
+        final = _finalize_nascent(cfg, ctx, nascent_topology, L, start, final_pdb=final_pdb)
     else:
         engine.finalize_simulation(cfg, ctx, built.topology, start)
+        final = mm.app.PDBFile(cfg.output_path("_final.pdb")).getPositions(
+            asNumpy=True).value_in_unit(unit.nanometer)
 
     # One concise, column-aligned line per stage (verbose banners above are gated
     # on VERBOSE). Fixed-width fields so stacked stage lines line up:
@@ -1246,8 +1305,5 @@ def run_length(L: int, *, full_pdb: str, R_full: np.ndarray, eps_full: np.ndarra
     print(f"  L={L:>3d}  {(label or 'run'):<26s}  {base_steps:>5d} steps  "
           f"{time.time() - start:>6.2f} s  PE={final_pe:>+13.4e} kJ/mol")
 
-    # 6. final NASCENT coordinates seed the next length ----------------------
-    final_pdb = cfg.output_path("_final.pdb")
-    final = mm.app.PDBFile(final_pdb).getPositions(asNumpy=True).value_in_unit(unit.nanometer)
     return np.asarray(final)[:L]
 

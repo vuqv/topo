@@ -53,7 +53,7 @@ next, and both are already on disk:
 
 | State | Recovery on resume |
 |---|---|
-| the previous residue's final coordinates (the seed for residue `L`) | **reloaded** from `L_<L-1>/stage_3/traj_final.pdb` |
+| the previous residue's final coordinates (the seed for residue `L`) | **reloaded** from `L_<L-1>/traj_final.pdb` |
 | the per-residue kinetic schedule `(steps₁, steps₂, steps₃)` | **re-read** from the persisted schedule (no RNG redraw) |
 
 Everything else the loop consumes (ribosome load, anchors, native contacts + STRIDE, the

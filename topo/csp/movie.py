@@ -11,16 +11,18 @@ the chain appears to grow N->C.
 It handles **two output layouts** with a shared stitching core
 (:func:`stitch_segments`):
 
-* **CSP (per-stage)** -- ``<out>/L_<L>/stage_<1,2,3>/`` from the Continuous Synthesis
-  Protocol (:mod:`topo.csp.protocol`), plus ``ejection/`` / ``dissociation/``.
-  Use :func:`stitch_movie` / :func:`find_stage_segments`. The movie plays the chain
-  growing **stage by stage** (new residue at the A-site, settle, translocate to P).
-* **Flat (per-length)** -- ``<out>/L_<L>/traj.dcd`` from a fixed-rate per-length loop
-  (e.g. the Tutorial-9 cylinder runner), plus ``ejection/`` / ``dissociation/``.
+* **CSP (3-stage)** -- ``<out>/L_<L>/`` from the Continuous Synthesis Protocol
+  (:mod:`topo.csp.protocol`): one folder per residue with per-stage
+  ``traj_s<1,2,3>.dcd`` and a shared ``traj.psf``, plus ``ejection/`` /
+  ``dissociation/``. Use :func:`stitch_movie` / :func:`find_stage_segments`. The movie
+  plays the chain growing **stage by stage** (new residue at the A-site, settle,
+  translocate to P).
+* **Flat (per-length)** -- ``<out>/L_<L>/traj.dcd`` from a single-segment per-length loop
+  (e.g. the cylinder runner), plus ``ejection/`` / ``dissociation/``.
   Use :func:`stitch_length_movie` / :func:`find_lengths`.
 
-The :func:`main` CLI (``topo-csp-movie``) **auto-detects** the layout (per-stage if any
-``L_<L>/stage_<s>/`` folders exist, else per-length).
+The :func:`main` CLI (``topo-csp-movie``) **auto-detects** the layout (3-stage if any
+``L_<L>/traj_s*.dcd`` exist, else per-length).
 
 Usage::
 
@@ -282,7 +284,7 @@ puts "Loaded $nf frames. Press Play (or run: animate forward) to watch the chain
 
 
 # ==========================================================================
-# CSP layout: <out>/L_<L>/stage_<1,2,3>/  (+ ejection/ dissociation/)
+# CSP layout: <out>/L_<L>/traj_s<1,2,3>.dcd + shared traj.psf  (+ ejection/ dissociation/)
 # ==========================================================================
 def _pick_traj(phase_dir: str, outname: str = "traj") -> Optional[str]:
     """Pick the trajectory file to read for one stage/phase, or ``None`` if absent.
@@ -298,8 +300,8 @@ def _pick_traj(phase_dir: str, outname: str = "traj") -> Optional[str]:
     Parameters
     ----------
     phase_dir : str
-        Directory of a single stage or post-synthesis phase (e.g.
-        ``<out_root>/L_<L>/stage_<s>`` or ``<out_root>/ejection``).
+        Directory of a single-segment phase (e.g. ``<out_root>/ejection`` or a flat
+        per-length ``<out_root>/L_<L>``).
     outname : str, optional
         Per-stage output basename used by the runner (default ``"traj"``); the
         candidate files are ``<outname>.dcd`` and ``<outname>_final.pdb``.
@@ -326,7 +328,7 @@ def find_stage_segments(out_root: str, outname: str = "traj"
                         ) -> List[Tuple[str, int, str, str]]:
     """Return ordered ``[(label, n_atoms, psf, traj), ...]`` for a CSP run.
 
-    Walks ``<out_root>/L_<L>/stage_<1,2,3>/`` in increasing ``L`` then stage order
+    Walks ``<out_root>/L_<L>/`` (per-stage ``traj_s<1,2,3>.dcd``) in increasing ``L`` then stage order
     (only stages with a ``.psf`` and a readable trajectory are kept), then appends any
     ``ejection/`` / ``dissociation/`` phase. ``n_atoms`` is ``L`` for a stage of
     length ``L`` (the nascent-only output) and the post-phase psf's atom count for
@@ -362,14 +364,27 @@ def find_stage_segments(out_root: str, outname: str = "traj"
 
     segments: List[Tuple[str, int, str, str]] = []
     for L, d in lengths:
+        # Consolidated layout (§3.5): one L_<L>/ per residue with a shared traj.psf and
+        # per-stage traj_s{1,2,3}.dcd. Only stage 3 writes a traj_final.pdb.
+        psf = os.path.join(d, "traj.psf")
+        if not os.path.isfile(psf):
+            continue
         for s in STAGES:
-            sd = os.path.join(d, f"stage_{s}")
-            psf = os.path.join(sd, f"{outname}.psf")
-            traj = _pick_traj(sd, outname)
-            if os.path.isfile(psf) and traj is not None:
+            dcd = os.path.join(d, f"traj_s{s}.dcd")
+            traj = None
+            if os.path.isfile(dcd) and os.path.getsize(dcd) > 0:
+                traj = dcd
+            elif s == STAGES[-1] and os.path.isfile(os.path.join(d, "traj_final.pdb")):
+                # Stage 3's single final still contributes its conformation.
+                traj = os.path.join(d, "traj_final.pdb")
+            # A 0-byte (headerless) DCD is skipped quietly: it happens for a stage that
+            # ran fewer steps than nstout in an *older* run (before the min-one-frame fix),
+            # and reading it would only raise a premature-EOF error. Stages 1/2 have no
+            # per-stage final to fall back to, so they are simply dropped for such runs.
+            if traj is not None:
                 segments.append((f"L={L} s{s}", L, psf, traj))
 
-    # Post-synthesis phases (at full length). Read the bead count from the psf.
+    # Post-synthesis phases (at full length; single-segment, outname="traj").
     import MDAnalysis as mda  # heavy; only when post phases are present
     for name in POST_PHASES_CSP:
         pd = os.path.join(out_root, name)
@@ -396,7 +411,7 @@ def stitch_movie(out_root: str, out_prefix: str = "movie",
     Parameters
     ----------
     out_root : str
-        CSP run output root (contains the ``L_<L>/stage_<s>/`` folders).
+        CSP run output root (contains the ``L_<L>/`` folders with ``traj_s<s>.dcd``).
     out_prefix : str, optional
         Basename for the stitched movie files (default ``"movie"``).
     park : str, optional
@@ -426,7 +441,7 @@ def stitch_movie(out_root: str, out_prefix: str = "movie",
     if not segments:
         raise SystemExit(
             f"no per-stage trajectories found under {out_root!r} "
-            f"(expected {out_root}/L_<L>/stage_<1,2,3>/{outname}.dcd + .psf). "
+            f"(expected {out_root}/L_<L>/traj_s<1,2,3>.dcd + a shared traj.psf). "
             f"Did you run `topo-csp -f csp.ini` first?")
     if verbose:
         print(f"Found {len(segments)} CSP segments under {out_root}/ "
@@ -570,7 +585,7 @@ def stitch_length_movie(out_root: str, out_prefix: str = "movie",
 # CLI
 # ==========================================================================
 def _is_csp_layout(out_root: str) -> bool:
-    """Return True if ``out_root`` has the CSP per-stage layout.
+    """Return True if ``out_root`` has the CSP (3-stage) layout.
 
     Parameters
     ----------
@@ -580,18 +595,19 @@ def _is_csp_layout(out_root: str) -> bool:
     Returns
     -------
     bool
-        True if any ``<out_root>/L_<L>/stage_<s>/`` folder exists (CSP), else False
-        (treat as the flat per-length layout).
+        True if any ``<out_root>/L_<L>/traj_s*.dcd`` exists -- the consolidated CSP
+        layout has per-stage trajectories in each residue folder (§3.5). False ->
+        treat as the flat single-segment per-length layout (the cylinder runner).
     """
-    return bool(glob.glob(os.path.join(out_root, "L_*", "stage_*")))
+    return bool(glob.glob(os.path.join(out_root, "L_*", "traj_s*.dcd")))
 
 
 def main(argv: Optional[List[str]] = None) -> None:
     """Command-line entry point for ``topo-csp-movie`` / ``python -m topo.csp.movie``.
 
     Parses arguments and stitches the synthesis trajectories under ``--out-root``
-    into one VMD-playable movie, **auto-detecting** the layout: the per-stage CSP
-    layout (:func:`stitch_movie`) if any ``L_<L>/stage_<s>/`` folders are present,
+    into one VMD-playable movie, **auto-detecting** the layout: the 3-stage CSP
+    layout (:func:`stitch_movie`) if any ``L_<L>/traj_s*.dcd`` are present,
     otherwise the flat per-length layout (:func:`stitch_length_movie`). The parser
     exposes ``-o/--out-root`` (required), ``--prefix``, ``--park``
     (``sentinel``/``cterm``), ``--outname`` and ``--ribosome``. With no arguments it
@@ -611,9 +627,9 @@ def main(argv: Optional[List[str]] = None) -> None:
         prog="topo-csp-movie",
         description="Stitch nascent-chain synthesis trajectories into one "
                     "VMD-playable movie that grows the chain, and write a movie.tcl "
-                    "to view it. Auto-detects the CSP per-stage layout "
-                    "(<out>/L_<L>/stage_<1,2,3>/) or the flat per-length layout "
-                    "(<out>/L_<L>/), plus any ejection/ dissociation/ phase.",
+                    "to view it. Auto-detects the CSP 3-stage layout "
+                    "(<out>/L_<L>/traj_s<1,2,3>.dcd) or the flat per-length layout "
+                    "(<out>/L_<L>/traj.dcd), plus any ejection/ dissociation/ phase.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     p.add_argument("-o", "--out-root", required=True,
                    help="synthesis run output root (contains the L_<L>/ folders).")

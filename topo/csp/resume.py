@@ -28,9 +28,8 @@ RNG state anywhere -- the schedule file *is* the materialized RNG output.
 
 **Layout note.** :func:`residue_final_path` / :func:`phase_final_path` centralize the
 one piece of output-layout knowledge resume needs (where a completed unit's final
-structure lands). They encode the current per-stage layout
-(``L_<L>/stage_3/traj_final.pdb``); the separable output-layout consolidation of
-``F_RESUME.md`` §3.5 would edit only these two functions.
+structure lands). Under the consolidated layout (``F_RESUME.md`` §3.5) that is
+``L_<L>/traj_final.pdb`` (the single per-residue final written by stage 3).
 """
 from __future__ import annotations
 
@@ -54,11 +53,11 @@ PROGRESS_FILENAME = "progress.log"
 def residue_final_path(out_root: Path, L: int) -> Path:
     """Path of the final (stage-3) structure for residue length ``L``.
 
-    Current per-stage layout: ``<out_root>/L_<L>/stage_3/traj_final.pdb``. This final
-    is the seed for residue ``L+1`` and the resume-reload target. (The §3.5 layout
-    consolidation would point this at ``<out_root>/L_<L>/traj_final.pdb``.)
+    Consolidated layout (§3.5): ``<out_root>/L_<L>/traj_final.pdb`` -- the single
+    per-residue final (written by stage 3). It is the seed for residue ``L+1`` and the
+    resume-reload target.
     """
-    return Path(out_root) / f"L_{L:03d}" / "stage_3" / "traj_final.pdb"
+    return Path(out_root) / f"L_{L:03d}" / "traj_final.pdb"
 
 
 def cylinder_final_path(out_root: Path, L: int) -> Path:

@@ -156,7 +156,7 @@ Inputs & length schedule
      - str
      - no
      - ``synth_out``
-     - Output root; each residue writes ``L_<L>/stage_<1,2,3>/`` beneath it.
+     - Output root; each residue writes one ``L_<L>/`` folder beneath it (CSP: shared ``traj.psf`` + per-stage ``traj_s<1,2,3>.dcd``; cylinder: a single ``traj.dcd``).
 
 Kinetics & schedule length
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -433,9 +433,10 @@ Post-synthesis phases (``ejection_steps`` / ``dissociation_steps``)
     output folders; ``0`` skips the phase.
 
 Output layout and progress log
-    Every stage writes a standalone, **nascent-only** trajectory to
-    ``<outdir>/L_<L>/stage_<s>/`` (``traj.dcd``, ``traj_final.pdb``, ``traj.log``,
-    …); different lengths have different bead counts, so they are separate files.
+    Each residue writes one ``<outdir>/L_<L>/`` folder (consolidated layout): a shared
+    ``traj.psf`` + ``native_1_<L>.pdb``, a **nascent-only** per-stage trajectory
+    ``traj_s<1,2,3>.dcd`` (+ ``.log``), one folded ``traj_runinfo.log``, and a single
+    ``traj_final.pdb`` (the stage-3 final that seeds the next residue).
     A per-residue ``<outdir>/dwell_times.dat`` records the codon and the three
     sampled dwell times (seconds, ns, and MD steps) — the physical schedule,
     independent of any step clamp. Stitch the per-stage trajectories into one

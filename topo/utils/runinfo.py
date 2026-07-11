@@ -122,7 +122,7 @@ def _human_time(seconds: float) -> str:
 
 
 def _context_from_path(path: str) -> str:
-    """Short banner context from the output dir, e.g. ``.../L_008/stage_3/x.log`` -> ``L_008/stage_3``."""
+    """Short banner context from the output dir, e.g. ``.../run/prod/x.log`` -> ``run/prod``."""
     parts = [p for p in os.path.dirname(os.path.abspath(path)).split(os.sep) if p]
     return "/".join(parts[-2:]) if parts else ""
 
@@ -145,10 +145,19 @@ def write_section(path: str, section_name: str, kv_pairs: dict, mode: str = "a")
 
 def write_run_start(path: str, *, control_file, checkpoint_file, restart,
                     steps_planned, simulation, use_gpu, ppn,
-                    coord_source=None, vel_source=None, title=None) -> None:
+                    coord_source=None, vel_source=None, title=None,
+                    append=False, section_label=None) -> None:
     """
     Write the banner + ``[run]``/``[software]``/``[hardware]`` (and ``[gpu]``)
     provenance sections, overwriting any existing file.
+
+    ``append`` / ``section_label`` support a **folded, multi-phase** run-info file
+    (one file per residue, one section group per stage -- used by the CSP runner). When
+    ``append`` is True the banner is not re-written and the run-invariant
+    ``[software]``/``[hardware]``/``[gpu]`` sections are skipped (they were written by
+    the first phase); only the ``[<section_label>]`` run section is appended.
+    ``section_label`` names that section (default ``"run"``), so successive stages read
+    as e.g. ``[run: stage 2 translocation]``.
 
     Records timing, input/checkpoint paths, planned step count, the source of the
     initial coordinates/velocities, package versions (Python/NumPy/ParmEd/OpenMM),
@@ -189,7 +198,8 @@ def write_run_start(path: str, *, control_file, checkpoint_file, restart,
     except Exception:
         parmed_version = "not installed"
 
-    write_banner(path, title if title is not None else _context_from_path(path))
+    if not append:
+        write_banner(path, title if title is not None else _context_from_path(path))
 
     run = {
         "started": datetime.now().astimezone().isoformat(timespec="seconds").replace("T", " "),
@@ -200,7 +210,11 @@ def write_run_start(path: str, *, control_file, checkpoint_file, restart,
         "init_coords": coord_source if coord_source is not None else "unknown",
         "init_velocities": vel_source if vel_source is not None else "unknown",
     }
-    write_section(path, "run", run)
+    write_section(path, section_label or "run", run)
+
+    # Run-invariant provenance: written once (skipped for appended stages).
+    if append:
+        return
 
     software = {
         "python": py_platform.python_version(),
@@ -227,9 +241,12 @@ def write_run_start(path: str, *, control_file, checkpoint_file, restart,
 
 
 def write_run_end(path: str, *, simulation, start_epoch: float,
-                  final_structure=None) -> None:
+                  final_structure=None, section_label=None) -> None:
     """
     Append the ``[result]`` section (status + wall-clock timing + final state).
+
+    ``section_label`` renames the section for a folded multi-phase file (e.g.
+    ``"result: stage 2 translocation"``); defaults to ``"result"``.
 
     Parameters
     ----------
@@ -255,4 +272,4 @@ def write_run_end(path: str, *, simulation, start_epoch: float,
     }
     if final_structure is not None:
         info["final_structure"] = final_structure
-    write_section(path, "result", info)
+    write_section(path, section_label or "result", info)

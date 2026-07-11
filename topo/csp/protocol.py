@@ -91,7 +91,9 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
     L_max : int or None, optional
         Final nascent length (default ``None`` -> the full residue count of the protein).
     out_root : str
-        Root output directory; each residue writes ``L_<L>/stage_<1,2,3>/``.
+        Root output directory; each residue writes one ``L_<L>/`` folder (shared
+        ``traj.psf`` / ``native_1_L.pdb``, per-stage ``traj_s{1,2,3}.dcd``, one
+        ``traj_final.pdb`` and folded ``traj_runinfo.log``).
     mrna : str, optional
         mRNA sequence file (one codon per residue) -- the codon-resolved kinetics.
         Required for per-codon timing; not needed for uniform timing
@@ -111,8 +113,8 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
     Returns
     -------
     None
-        Side-effecting: writes per-residue/-stage trajectories under
-        ``out_root/L_<L>/stage_<1,2,3>/``, the immutable schedule + PTC-geometry table
+        Side-effecting: writes per-residue trajectories under
+        ``out_root/L_<L>/`` (per-stage ``traj_s{1,2,3}.dcd``), the immutable schedule + PTC-geometry table
         ``dwell_times.dat``, an append-only ``progress.log`` (resume status), and (if
         requested) ``ejection/`` and ``dissociation/`` phases. If ``params.resume`` is
         ``auto``/``yes`` and an interrupted run is present under ``out_root``, continues
@@ -311,11 +313,16 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
         # Stage 1: deliver the new residue at the A-site (cold-start lays the
         # initial segment from the P-anchor instead) and restrain there.
         stage1_anchor = p_target if cold else a_target
+        # Consolidated layout (§3.5): all three stages share one L_<L>/ directory --
+        # shared traj.psf + native_1_L.pdb (functions of L only), per-stage
+        # traj_s{1,2,3}.dcd, one folded traj_runinfo.log, and a single traj_final.pdb
+        # (stage 3 only; stages 1/2 hand their final off in memory via f1/f2).
         f1 = run_length(L, full_pdb=full_pdb, R_full=R_full, eps_full=eps_full,
                         p_anchor=stage1_anchor, a_anchor=a_anchor,
                         prev_final=prev_final, out_root=out_path, params=ep,
                         ribo=ribo, restrain=True,
-                        out_subdir=f"{ldir}/stage_1", n_steps_override=s1,
+                        out_subdir=ldir, outname="traj_s1", persist_final=False,
+                        n_steps_override=s1,
                         seed_point=seed_point, tether_segid=stage1_segid,
                         tether_prev_segid=stage1_prev_segid, nascent_rmin_2=nascent_rmin_2_arg,
                         label="stage 1 peptidyl-transfer")
@@ -325,7 +332,8 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
                         p_anchor=stage1_anchor, a_anchor=a_anchor,
                         prev_final=None, seed_override=f1, out_root=out_path,
                         params=ep, ribo=ribo, restrain=True,
-                        out_subdir=f"{ldir}/stage_2", n_steps_override=s2,
+                        out_subdir=ldir, outname="traj_s2", persist_final=False,
+                        n_steps_override=s2,
                         tether_segid=stage1_segid, nascent_rmin_2=nascent_rmin_2_arg,
                         # Stage 2 continues from stage 1's relaxed final at the SAME (A-site)
                         # restraint target, so the seeded structure is already minimized ->
@@ -333,12 +341,14 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
                         minimize_override=False,
                         label="stage 2 translocation")
 
-        # Stage 3: translocate A->P (restrain the C-terminus to the P-anchor).
+        # Stage 3: translocate A->P (restrain the C-terminus to the P-anchor). Its final
+        # is the one persisted traj_final.pdb -- the seed for L+1 and the resume target.
         f3 = run_length(L, full_pdb=full_pdb, R_full=R_full, eps_full=eps_full,
                         p_anchor=p_target, a_anchor=a_anchor,
                         prev_final=None, seed_override=f2, out_root=out_path,
                         params=ep, ribo=ribo, restrain=True,
-                        out_subdir=f"{ldir}/stage_3", n_steps_override=s3,
+                        out_subdir=ldir, outname="traj_s3", persist_final=True,
+                        n_steps_override=s3,
                         tether_segid="PtR", nascent_rmin_2=nascent_rmin_2_arg,
                         label="stage 3 tRNA-binding")
         prev_final = f3
@@ -346,7 +356,7 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
         resume_mod.append_progress(out_path, f"L_{L:03d}", "DONE")
 
     print()
-    print(f"Done. Synthesized {L0} -> {L_max}. Per-residue/-stage outputs under {out_path}/")
+    print(f"Done. Synthesized {L0} -> {L_max}. Per-residue outputs under {out_path}/L_<L>/")
     print(f"Per-residue dwell-time table: {dwell_log}")
 
     # --- post-synthesis: ejection then dissociation (both free runs) --------
