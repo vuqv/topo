@@ -202,7 +202,7 @@ outdir = synth_out
 
 | Key | Required | Default | Meaning |
 |-----|----------|---------|---------|
-| `pdb_file` | **yes** | — | Full native PDB of the target protein; the CG model is built from it. |
+| `pdb_file` | **yes** | — | **All-atom** native PDB (topo's Gō model needs STRIDE + heavy-atom native contacts; a Cα-only CG structure is not sufficient). The CG model is built from it. |
 | `domain_def` | **yes** | — | `domain.yaml` — the protein's per-domain/per-interface contact-nscale definition. See {doc}`domain_definition`. |
 | `stride_output_file` | no | — | Precomputed STRIDE file (skips re-running STRIDE). |
 | `L0` | **yes** | — | Starting nascent-chain length (cold-start layout). |

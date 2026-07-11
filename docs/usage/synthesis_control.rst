@@ -310,7 +310,10 @@ Required inputs (``pdb_file`` / ``ribosome`` / ``domain_def``)
     A synthesis run cannot start without all three. ``pdb_file`` supplies the
     target fold (topology, force field, and the full native contact map, which is
     computed **once** and sliced to the top-left ``L×L`` block per length —
-    STRIDE and the contact analysis are never re-run per length). ``ribosome`` is
+    STRIDE and the contact analysis are never re-run per length). It **must be an
+    all-atom structure** — STRIDE (secondary structure) and the native-contact map are
+    derived from the heavy atoms; a Cα-only CG PDB is not sufficient (the sibling cosmo
+    IDP runner, which has no STRIDE/contacts, does accept one). ``ribosome`` is
     the truncated CG ribosome that provides the P-/A-anchors and the rigid
     scenery; it must carry tRNA beads under the fixed names (segids
     ``PtR``/``AtR``, resid 76, beads ``R``/``P``/``BR2``) or anchor lookup fails.

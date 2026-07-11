@@ -369,7 +369,7 @@ repeat the same options with more inline commentary on the physics.
 
 | Key | Required | Default | Meaning |
 |-----|----------|---------|---------|
-| `pdb_file` | **yes** | — | All-atom native PDB; topo builds the CG model from it. |
+| `pdb_file` | **yes** | — | **All-atom** native PDB — required, because topo's structure-based Gō model derives secondary structure (STRIDE) and the native-contact map from the heavy atoms. (A Cα-only CG structure is *not* enough here; the sibling cosmo IDP model does accept one.) |
 | `ribosome` | **yes** | — | Truncated CG ribosome PDB (P-/A-anchors + rigid scenery). |
 | `L0` | no | `1` | Start nascent-chain length (omit/blank = start from a single residue). |
 | `L_max` | no | full length | Final nascent length (omit/blank = synthesize the whole chain). |
