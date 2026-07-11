@@ -907,6 +907,9 @@ class RunParams:
     ribosome_traffic: bool = False      # apply the external traffic correction if available
     initiation_rate: float = 0.083333   # translation initiation rate (1/s), traffic only
     random_seed: Optional[int] = None   # seed for the FPT sampler (reproducibility)
+    # Resume policy (see topo.csp.resume): "auto" (resume iff a progress.log exists,
+    # else fresh), "yes" (resume; error if no progress.log), "no" (always fresh).
+    resume: str = "auto"
     # --- test clamps (production: leave both at their defaults / None) ---
     max_steps_per_stage: Optional[int] = None  # cap each stage (tutorial: small)
     min_steps_per_stage: int = 1               # floor each stage

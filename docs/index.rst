@@ -62,6 +62,7 @@ see :doc:`citation` for the full list with DOIs.
    usage/codon_dwell_times
    usage/continuous_synthesis
    usage/cylinder_synthesis
+   usage/synthesis_resume
    usage/synthesis_control
 
 .. toctree::

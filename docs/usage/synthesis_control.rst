@@ -210,6 +210,11 @@ Kinetics & schedule length
      - no
      - ``0``
      - Post-synthesis dissociation phase length (steps); ``0`` = skip. A further free run that lets the released protein drift off the ribosome.
+   * - ``resume``
+     - str
+     - no
+     - ``auto``
+     - Resume policy for interrupted runs: ``auto`` (resume iff a ``progress.log`` is present under ``outdir``, else fresh), ``yes`` (require a resumable run, else error), ``no`` (always fresh). CLI ``--fresh`` / ``--no-resume`` forces ``no``. See :doc:`synthesis_resume`.
 
 .. warning::
 

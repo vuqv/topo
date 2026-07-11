@@ -21,6 +21,7 @@ from topo.csp.protocol import (CSPConfig, csp, read_csp_config,
 from topo.csp.cylinder import (CylinderConfig, CylinderParams, cylinder,
                           read_cylinder_config, run_cylinder_synthesis)
 from topo.csp import kinetics
+from topo.csp import resume
 
 __all__ = [
     "CSPConfig",
@@ -35,4 +36,5 @@ __all__ = [
     "read_cylinder_config",
     "run_cylinder_synthesis",
     "kinetics",
+    "resume",
 ]

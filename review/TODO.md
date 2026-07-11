@@ -61,9 +61,13 @@ is the only synthesis path.)*
 - [ ] **Uniform translation** — support a uniform (constant per-residue dwell) elongation
   mode as an alternative to the codon-dependent variable schedule (the 3-stage kinetics
   above). Scope/spec TBD.
-- [ ] **Restart / resume across lengths** (DESIGN §4) — skip lengths whose
-  `L_<L>/traj_final.pdb` exists; resume an interrupted length from checkpoint. *(Dup of
-  §D "restart=1".)*
+- [x] **Restart / resume across lengths** (DESIGN §4) — DONE via `topo.csp.resume`
+  (`review/F_RESUME.md`): the schedule + PTC geometry are drawn/solved once and persisted
+  to `dwell_times.dat`, progress is tracked in `progress.log`, and re-invoking `topo-csp`
+  continues from the last completed residue (reloading its `traj_final.pdb`). The resume
+  unit is the **residue** by design; intra-length (per-stage) checkpoint resume is
+  explicitly out of scope (F_RESUME §4) — the in-flight residue is re-run from its
+  persisted schedule row (≤ 3 stages). *(Dup of §D "restart=1".)*
 - [ ] **`ejection_steps = auto`** — stop ejection once the C-terminus clears the ribosome
   (`x(Cterm) − max(x_ribosome) > cutoff`, default 2.0 nm), chunked-stepping loop + safety
   cap; add `ejection_cutoff_nm`, `ejection_check_every`; consider same for
@@ -93,12 +97,10 @@ is the only synthesis path.)*
 - [~] **Literal 3-stage mechanics** (peptide-bond toggling, explicit A/P tRNA bonded
   geometry) — currently mapped via the A→P restraint switch. *(This is DIFFERENCES §"Chain
   chemistry" — intentional KEEP; the `trna_tether` path now covers the bonded geometry.)*
-- [ ] **`restart = 1`** resume of a partial trajectory. *(Dup of §B restart/resume.)*
+- [x] **`restart = 1`** resume of a partial trajectory — DONE (per-residue resume via
+  `topo.csp.resume`; the config knob is `resume = auto|yes|no`). *(Dup of §B restart/resume.)*
 - [ ] **Working external `ribosome_traffic` binary** (exits 127 here). *(Dup of §B ribosome
   traffic.)*
----
-
-## E. Tutorial 14/15 doc TODOs + INI debug markers
 
 ---
 
@@ -158,7 +160,8 @@ is the only synthesis path.)*
 
 ## Cross-cutting themes (the same work under several headings)
 
-1. **Restart/resume** — §B, §D.
+1. ~~**Restart/resume** — §B, §D.~~ DONE (`topo.csp.resume`; per-residue resume,
+   `resume = auto|yes|no`).
 2. **Ribosome-traffic correction: finish or delete** — §B, §D.
 3. **Production vs. debug run config** (remove step clamps, real dwell, GPU, many
    replicas) — §B, §E, §D.

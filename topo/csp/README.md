@@ -87,6 +87,7 @@ the protein + table (see the `mrna` key below).
 | `random_seed` | seed for the FPT sampler (reproducible schedules) |
 | `max_steps_per_stage` / `min_steps_per_stage` | clamp each stage's step count (testing) |
 | `ejection_steps` / `dissociation_steps` | post-synthesis free runs (0 = skip) |
+| `resume` | `auto` (default; resume iff an interrupted run is present under `outdir`), `yes` (require a resumable run, else error), `no` (always fresh). See *Resume* below. |
 
 **MD / ribosome keys** (configure the shared `RunParams`; `n_steps` is **not** used — step
 counts come from the kinetics): `dt`, `ref_t`, `tau_t`, `nstout`, `device`, `ppn`,
@@ -109,6 +110,31 @@ in **seconds**.
 `native_1_<L>.pdb`), plus `ejection/` and optional `dissociation/`. Stage 3's
 `traj_final.pdb` seeds the next residue.
 
+At the output root: `dwell_times.dat` (the **immutable plan** — the full per-residue
+3-stage schedule, drawn once up front, with the PTC restraint geometry in its `#PTC`
+header) and `progress.log` (the append-only `L_XXX RUNNING`/`DONE` **status** used by
+resume). A launched run prints its **exact total planned step count** before the first
+MD step.
+
+## Resume
+
+A production run is hours to days and today survives no interruption. Re-invoking
+`topo-csp` on an interrupted `outdir` **continues from the last completed residue** with
+a kinetic schedule *identical* to the uninterrupted run — the schedule and PTC geometry
+are re-read from `dwell_times.dat` (no RNG redraw, no SLSQP re-solve), and the seed
+conformation is reloaded from the previous residue's `traj_final.pdb`. The resume unit is
+the **residue**: the one in flight at the crash is dropped and re-run from its persisted
+schedule row (≤ 3 stages of redone work).
+
+Controlled by the `resume` key (`auto`/`yes`/`no`) or the `--no-resume`/`--fresh` CLI
+flag. `auto` (default) resumes iff a `progress.log` is present. Before resuming, every
+prior length's `traj_final.pdb` must be present on disk — a missing one aborts with an
+actionable message rather than silently leaving a hole. **Extending a run** (a larger
+`L_max`) is a fresh run, not a resume: the schedule is fixed at first launch. The MD
+micro-trajectories are *not* bit-reproducible across a restart (the thermostat RNG is
+unseeded); the guarantee is the kinetic schedule + conformational continuity. See
+`topo.csp.resume` and [`review/F_RESUME.md`](../../review/F_RESUME.md).
+
 ## Movie
 
 Stitch the per-stage trajectories into one VMD-playable movie (chain grows stage by
@@ -126,5 +152,5 @@ stitches them with the shared `stitch_segments` core.
 
 CHARMM PSF/TOP/PRM/COR ingestion (O'Brien's exact systems); multi-trajectory
 multiprocessing; literal mid-residue peptide-bond toggling / explicit A/P tRNA bonded
-geometry; `restart = 1`; quantitative validation. See
-[`review/TODO.md`](../../review/TODO.md).
+geometry; quantitative validation. (Cross-length **resume** is now supported — see
+*Resume* above.) See [`review/TODO.md`](../../review/TODO.md).

@@ -451,13 +451,23 @@ up-front error, and/or configurable segid/resid/bead names) is a tracked TODO
 │   └── ...
 ├── ejection/               # post-synthesis ejection phase (if ejection_steps > 0)
 ├── dissociation/           # post-synthesis free run (if dissociation_steps > 0)
-└── dwell_times.dat         # per-residue dwell-time log (see below)
+├── dwell_times.dat         # per-residue dwell-time log / schedule (see below)
+└── progress.log            # append-only DONE/RUNNING resume status (see below)
 ```
 
 **`dwell_times.dat`** records, per residue, the codon, the three sampled dwell **times in
 seconds** (`t1`/`t2`/`t3`), their nanosecond equivalents, and the integer MD step counts —
 the physical schedule, independent of any step clamp. This is the file to compare against a
-reference run for quantitative validation (Tutorial 8).
+reference run for quantitative validation (Tutorial 8). It is drawn **once** before the run
+and doubles as the **immutable plan** for resume (its `#PTC` header pins the restraint
+geometry); see {doc}`synthesis_resume`.
+
+**Resuming an interrupted run.** A production synthesis is hours to days of wall time.
+Re-invoking `topo-csp` on an interrupted `outdir` **continues from the last completed
+residue** rather than restarting — the schedule and PTC geometry are re-read from
+`dwell_times.dat` and the seed is reloaded from the last residue's `traj_final.pdb`, tracked
+by `progress.log`. Resume is on by default (`resume = auto`). See {doc}`synthesis_resume`
+for the full mechanism, guarantees, and an HPC requeue pattern.
 
 ### Console progress log
 

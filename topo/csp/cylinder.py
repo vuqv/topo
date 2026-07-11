@@ -46,6 +46,7 @@ from topo import engine
 # Reuse the *unchanged* topo.csp.core per-length building blocks -- the cylinder driver
 # swaps only the confinement (analytic tunnel) and the timing (single segment / residue).
 from topo.csp.core import (
+    CG_BOND_LENGTH_NM,
     TUNNEL_AXIS,
     RunParams,
     add_cterm_restraint,
@@ -58,6 +59,7 @@ from topo.csp.core import (
 )
 from topo.utils.config import strtobool
 from topo.csp import kinetics
+from topo.csp import resume as resume_mod
 from topo.csp import synth_mrna
 
 # Default tunnel wall stiffness (kJ/mol/nm^2 = 20 kcal/mol/A^2): the radial +
@@ -145,6 +147,7 @@ def run_length(L: int, *, full_pdb: str, R_full: np.ndarray, eps_full: np.ndarra
                prev_final: Optional[np.ndarray], out_root: Path,
                params: CylinderParams, cterm_seed: np.ndarray,
                x_lo: float, x_exit: float,
+               seed_point: Optional[np.ndarray] = None,
                seed_override: Optional[np.ndarray] = None,
                restrain: bool = True, out_subdir: Optional[str] = None,
                n_steps_override: Optional[int] = None,
@@ -158,6 +161,13 @@ def run_length(L: int, *, full_pdb: str, R_full: np.ndarray, eps_full: np.ndarra
     The same routine drives both an elongation step and the post-synthesis phases
     (ejection / dissociation); these arguments tailor it to the latter:
 
+    - ``seed_point`` : where to place the **new** C-terminal residue ``L`` when continuing
+      from ``prev_final`` (default ``cterm_seed``). The kinetic driver passes a point one
+      equilibrium peptide bond (0.381 nm) *deeper* than ``cterm_seed`` (toward the closed
+      PTC end) so the new ``L-1<->L`` bond starts at its equilibrium length rather than
+      collapsed onto the previous C-terminus; the harmonic restraint (to ``cterm_seed``)
+      plus the tunnel wall then lift residue ``L`` back onto the PTC while the older chain
+      ratchets out. Unused for cold start / ``seed_override``.
     - ``seed_override`` : use these ``(L, 3)`` nm coordinates directly (the fully
       synthesized structure) instead of cold-start / new-residue placement.
     - ``restrain`` : if False, drop the C-terminus restraint (ejection/dissociation --
@@ -192,7 +202,8 @@ def run_length(L: int, *, full_pdb: str, R_full: np.ndarray, eps_full: np.ndarra
     #    as-is. Cold start (L == L0): lay residues 1..L0 extended along +x from the PTC
     #    (C-terminus at cterm_seed = (x_lo, y0, z0), N-terminus toward the exit). L > L0:
     #    keep 1..L-1 from the previous final structure and seed the new C-terminal residue
-    #    at its rest point cterm_seed.
+    #    at seed_point (default cterm_seed; the driver offsets it one equilibrium bond
+    #    deeper so the new L-1<->L bond does not start collapsed -- see the docstring).
     if seed_override is not None:
         if seed_override.shape[0] != L:
             raise ValueError(
@@ -204,7 +215,8 @@ def run_length(L: int, *, full_pdb: str, R_full: np.ndarray, eps_full: np.ndarra
         if prev_final.shape[0] != L - 1:
             raise ValueError(
                 f"prev_final has {prev_final.shape[0]} residues but L-1 = {L - 1}.")
-        nascent_pos = np.vstack([prev_final, cterm_seed[None, :]])
+        new_residue = cterm_seed if seed_point is None else np.asarray(seed_point, float)
+        nascent_pos = np.vstack([prev_final, new_residue[None, :]])
 
     # 4. output path: write a small seed PDB and feed it via init_position
     #    (coords used as-is so the absolute tunnel frame is preserved).
@@ -266,8 +278,10 @@ def run_cylinder_synthesis(full_pdb: str, *, L0: int = 1, L_max: Optional[int] =
     confinement and **a single MD segment per residue** (no A/P sub-stages). Each residue's
     segment length is its codon dwell time mapped to integration steps -- the same O'Brien
     kinetics (:mod:`topo.csp.kinetics`) the explicit protocol uses, just not split three
-    ways. Writes per-length trajectories under ``out_root/L_<L>/`` and a per-residue
-    ``dwell_times.dat`` table.
+    ways. Writes per-length trajectories under ``out_root/L_<L>/``, the immutable
+    ``dwell_times.dat`` schedule and an append-only ``progress.log``. If ``params.resume``
+    is ``auto``/``yes`` and an interrupted run is present under ``out_root``, continues
+    from the last completed residue instead of restarting (see :mod:`topo.csp.resume`).
 
     Parameters
     ----------
@@ -303,17 +317,27 @@ def run_cylinder_synthesis(full_pdb: str, *, L0: int = 1, L_max: Optional[int] =
 
     # Analytic tunnel geometry (no ribosome PDB). x_exit = the infinite exit wall; the
     # C-terminus rests on the axis at the PTC (cold start lays the chain on-axis from here,
-    # and each new residue is seeded here).
+    # and the harmonic restraint holds each new residue here).
     x_lo = params.tunnel_x_lo_nm
     x_exit = x_lo + params.tunnel_length_nm
     y0, z0 = params.tunnel_center_nm
     cterm_seed = np.array([x_lo, y0, z0], dtype=float)
+    # Placement point for each *new* C-terminal residue: one equilibrium peptide bond
+    # (0.381 nm) DEEPER than the rest/restraint point (toward the closed PTC end, -x). The
+    # previous C-terminus rests at cterm_seed, so seeding the new residue here starts the
+    # new L-1<->L bond at its equilibrium length instead of collapsed onto its neighbour
+    # (the A/P-site offset the explicit protocol gets from optimal_ptc_targets, minus the
+    # ribosome). The restraint (to cterm_seed) + the tunnel wall then lift residue L back
+    # onto the PTC while the older chain ratchets outward. This equilibrium-bond seed is
+    # what lets a rigid AllBonds build stay stable in the cylinder too.
+    seed_point = cterm_seed - CG_BOND_LENGTH_NM * TUNNEL_AXIS
 
     print(f"Analytic exit tunnel: bore radius r = {params.tunnel_radius_nm} nm, "
           f"length {params.tunnel_length_nm} nm (x in [{x_lo:.2f}, {x_exit:.2f}]), "
           f"axis (y,z) = ({y0}, {z0}) nm, mouth fillet {params.tunnel_mouth_round_nm} nm, "
           f"k = {params.tunnel_k} kJ/mol/nm^2.")
-    print(f"C-terminus seeded + restrained on-axis at the PTC {np.round(cterm_seed, 3)} nm "
+    print(f"C-terminus restrained on-axis at the PTC {np.round(cterm_seed, 3)} nm; new "
+          f"residues seeded one equilibrium bond deeper at {np.round(seed_point, 3)} nm "
           f"(k = {params.restraint_k} kJ/mol/nm^2; no tRNA tether).")
 
     # Build-once-subset contacts on the full native structure (STRIDE at most once).
@@ -325,16 +349,68 @@ def run_cylinder_synthesis(full_pdb: str, *, L0: int = 1, L_max: Optional[int] =
         raise ValueError(f"require 1 <= L0 <= L_max <= N_full; got L0={L0}, "
                          f"L_max={L_max}, N_full={N_full}.")
 
-    # Kinetics: per-codon mean-first-passage times. Need intrinsic[L_max] valid ->
-    # at least L_max + 1 codons. Single stage -> each residue's whole codon dwell is one
-    # MD segment (the explicit protocol instead splits it into peptidyl-transfer /
-    # translocation / tRNA-binding; the cylinder has no A/P translocation to model).
-    intrinsic, real, codons = kinetics.build_codon_time_lists(
-        L_max + 1, uniform_codon_time=params.uniform_codon_time,
-        mrna_path=mrna, codon_time_table_path=codon_time_table_path,
-        ribosome_traffic=params.ribosome_traffic,
-        initiation_rate=params.initiation_rate)
-    rng = random.Random(params.random_seed)
+    dwell_log = out_path / "dwell_times.dat"
+
+    # --- decide fresh vs. resume --------------------------------------------
+    # The per-residue schedule is the immutable plan: drawn once from the seeded RNG,
+    # persisted to dwell_times.dat, and re-read verbatim on resume so an interrupted run
+    # continues with a kinetic schedule identical to the uninterrupted run. The tunnel
+    # geometry is deterministic from the params (no expensive solve to persist). See
+    # topo.csp.resume and the "Resuming long synthesis runs" doc.
+    if params.resume not in ("auto", "yes", "no"):
+        raise ValueError(f"resume must be 'auto', 'yes' or 'no'; got {params.resume!r}.")
+    if params.resume == "yes":
+        if not resume_mod.progress_exists(out_path):
+            raise SystemExit(
+                f"[resume] resume = yes but no {resume_mod.PROGRESS_FILENAME} in "
+                f"{out_path}/ (nothing to resume). Use resume = no to start fresh.")
+        do_resume = True
+    elif params.resume == "auto":
+        do_resume = resume_mod.progress_exists(out_path) and dwell_log.is_file()
+    else:   # "no"
+        do_resume = False
+
+    prog = None
+    resume_L = L0
+    prev_final: Optional[np.ndarray] = None
+    if do_resume:
+        # Re-read the immutable schedule; recover progress; drop the <=1 in-flight unit.
+        schedule = resume_mod.read_cylinder_schedule(dwell_log)
+        resume_mod.schedule_covers(schedule, L0, L_max)
+        prog = resume_mod.read_progress(out_path)
+        resume_mod.verify_completed_units(out_path, prog, L0,
+                                          final_path_fn=resume_mod.cylinder_final_path)
+        dropped = resume_mod.drop_running_units(out_path, prog)
+        resume_L = max(prog.last_done_residue + 1, L0)
+        if prog.last_done_residue >= L0:
+            prev_final = resume_mod.load_final_pdb(
+                resume_mod.cylinder_final_path(out_path, prog.last_done_residue))
+        print(f"[resume] {prog.last_done_residue} length(s) complete on disk"
+              + (f"; dropped in-flight {dropped}" if dropped else "")
+              + f"; continuing from L={resume_L}.")
+    else:
+        # Fresh start: draw the full schedule from the seeded RNG, persist it + progress.
+        # Need intrinsic[L_max] valid -> at least L_max + 1 codons. Single stage -> each
+        # residue's whole codon dwell is one MD segment (the explicit protocol instead
+        # splits it three ways; the cylinder has no A/P translocation to model).
+        intrinsic, real, codons = kinetics.build_codon_time_lists(
+            L_max + 1, uniform_codon_time=params.uniform_codon_time,
+            mrna_path=mrna, codon_time_table_path=codon_time_table_path,
+            ribosome_traffic=params.ribosome_traffic,
+            initiation_rate=params.initiation_rate)
+        rng = random.Random(params.random_seed)
+        schedule = []
+        for L in range(L0, L_max + 1):
+            dwell_s = kinetics.sample_fpt(intrinsic[L], rng)
+            n_steps = kinetics.seconds_to_steps(dwell_s, params.scale_factor, params.dt_ps)
+            if params.max_steps_per_stage is not None:
+                n_steps = min(n_steps, int(params.max_steps_per_stage))
+            n_steps = max(n_steps, int(params.min_steps_per_stage))
+            codon = codons[L - 1] if codons is not None else "uniform"
+            schedule.append(resume_mod.CylSchedRow(L=L, codon=codon,
+                                                   dwell_s=dwell_s, steps=n_steps))
+        resume_mod.write_cylinder_schedule(dwell_log, schedule, params)
+        resume_mod.write_progress_header(out_path)
 
     print()
     print("=" * 66)
@@ -345,46 +421,30 @@ def run_cylinder_synthesis(full_pdb: str, *, L0: int = 1, L_max: Optional[int] =
     if params.max_steps_per_stage is not None:
         print(f"  TEST CLAMP: <= {params.max_steps_per_stage} steps/residue. "
               f"Remove for production.")
+
+    # --- up-front cost report: exact step total, nominal wall-time ----------
+    total_steps = (sum(r.steps for r in schedule)
+                   + max(params.ejection_steps, 0) + max(params.dissociation_steps, 0))
+    print(f"[schedule] {L_max - L0 + 1} residues, {total_steps:,} planned MD steps"
+          f"{resume_mod.est_walltime(total_steps, params)}")
+    print(f"Per-residue dwell-time table: {dwell_log}")
     print(f"Synthesizing {full_pdb}: L = {L0} .. {L_max} (N_full = {N_full}), analytic tunnel.")
 
-    # Per-residue dwell-time log: one machine-parsable row per residue (sampled dwell in
-    # seconds, its in-silico ns mapping, the integration steps run, and the codon).
-    dwell_log = out_path / "dwell_times.dat"
-    dwell_fh = open(dwell_log, "w")
-    dwell_fh.write(
-        "# cylinder continuous-synthesis per-residue dwell times (topo.csp.cylinder)\n"
-        f"#   scale_factor={params.scale_factor:g}  dt={params.dt_ps} ps  "
-        f"timing={'uniform' if params.uniform_codon_time is not None else 'per-codon'}  "
-        f"random_seed={params.random_seed}\n"
-        "#   t_dwell = sampled codon dwell (s); ns = in-silico ns; steps = integration "
-        "steps actually run (single MD segment)\n"
-        "# L  codon  t_dwell_s  ns  steps\n")
-    dwell_fh.flush()
+    # --- main loop: one MD segment per residue ------------------------------
+    for L in range(resume_L, L_max + 1):
+        row = schedule[L - L0]
+        n_steps, codon = row.steps, row.codon
+        print(f"L={L:>3d}  {codon:>5s}  dwell {row.dwell_s:>9.4g} s  steps {n_steps:>7d}")
 
-    prev_final: Optional[np.ndarray] = None
-    for L in range(L0, L_max + 1):
-        # Single stage: sample the codon's total dwell, map to integration steps, clamp.
-        dwell_s = kinetics.sample_fpt(intrinsic[L], rng)
-        n_steps = kinetics.seconds_to_steps(dwell_s, params.scale_factor, params.dt_ps)
-        if params.max_steps_per_stage is not None:
-            n_steps = min(n_steps, int(params.max_steps_per_stage))
-        n_steps = max(n_steps, int(params.min_steps_per_stage))
-
-        codon = codons[L - 1] if codons is not None else "uniform"
-        print(f"L={L:>3d}  {codon:>5s}  dwell {dwell_s:>9.4g} s  steps {n_steps:>7d}")
-
-        ns = dwell_s * 1e9 / params.scale_factor
-        dwell_fh.write(f"{L:4d}  {codon:>5s}  {dwell_s:.6e}  {ns:.6e}  {n_steps:8d}\n")
-        dwell_fh.flush()
-
+        resume_mod.append_progress(out_path, f"L_{L:03d}", "RUNNING")
         prev_final = run_length(
             L, full_pdb=full_pdb, R_full=R_full, eps_full=eps_full,
             prev_final=prev_final, out_root=out_path, params=params,
-            cterm_seed=cterm_seed, x_lo=x_lo, x_exit=x_exit,
+            cterm_seed=cterm_seed, x_lo=x_lo, x_exit=x_exit, seed_point=seed_point,
             n_steps_override=n_steps,
             label=f"L={L}  {codon}  ({n_steps} steps, analytic tunnel)")
+        resume_mod.append_progress(out_path, f"L_{L:03d}", "DONE")
 
-    dwell_fh.close()
     print()
     print(f"Done. Synthesized {L0} -> {L_max}. Per-length outputs under {out_path}/")
     print(f"Per-residue dwell-time table: {dwell_log}")
@@ -395,31 +455,45 @@ def run_cylinder_synthesis(full_pdb: str, *, L0: int = 1, L_max: Optional[int] =
     # runners share the `ejection_steps` / `dissociation_steps` control keys. Each phase
     # continues the length-L_max system from the previous final structure; the analytic
     # tunnel stays on throughout (the only way out is the exit face).
+    # Each phase is its own progress unit; on resume a completed phase is skipped and its
+    # final structure reloaded to seed the next phase.
     if params.ejection_steps > 0:
-        print()
-        print(f"=== Ejection (L = {L_max}, {params.ejection_steps} steps, "
-              f"restraint OFF -> free diffusion) -> {out_path / 'ejection'}/ ===")
-        prev_final = run_length(
-            L_max, full_pdb=full_pdb, R_full=R_full, eps_full=eps_full,
-            prev_final=None, out_root=out_path, params=params,
-            cterm_seed=cterm_seed, x_lo=x_lo, x_exit=x_exit,
-            seed_override=prev_final, restrain=False, out_subdir="ejection",
-            n_steps_override=params.ejection_steps,
-            label=f"ejection (L = {L_max})")
-        print(f"Done. Ejection written to {out_path / 'ejection'}/")
+        if do_resume and prog.is_done("ejection"):
+            prev_final = resume_mod.load_final_pdb(
+                resume_mod.phase_final_path(out_path, "ejection"))
+            print("[resume] ejection already complete; skipping.")
+        else:
+            print()
+            print(f"=== Ejection (L = {L_max}, {params.ejection_steps} steps, "
+                  f"restraint OFF -> free diffusion) -> {out_path / 'ejection'}/ ===")
+            resume_mod.append_progress(out_path, "ejection", "RUNNING")
+            prev_final = run_length(
+                L_max, full_pdb=full_pdb, R_full=R_full, eps_full=eps_full,
+                prev_final=None, out_root=out_path, params=params,
+                cterm_seed=cterm_seed, x_lo=x_lo, x_exit=x_exit,
+                seed_override=prev_final, restrain=False, out_subdir="ejection",
+                n_steps_override=params.ejection_steps,
+                label=f"ejection (L = {L_max})")
+            resume_mod.append_progress(out_path, "ejection", "DONE")
+            print(f"Done. Ejection written to {out_path / 'ejection'}/")
 
     if params.dissociation_steps > 0:
-        print()
-        print(f"=== Dissociation (L = {L_max}, {params.dissociation_steps} steps, "
-              f"restraint OFF -> free diffusion) -> {out_path / 'dissociation'}/ ===")
-        run_length(
-            L_max, full_pdb=full_pdb, R_full=R_full, eps_full=eps_full,
-            prev_final=None, out_root=out_path, params=params,
-            cterm_seed=cterm_seed, x_lo=x_lo, x_exit=x_exit,
-            seed_override=prev_final, restrain=False, out_subdir="dissociation",
-            n_steps_override=params.dissociation_steps,
-            label=f"dissociation (L = {L_max})")
-        print(f"Done. Dissociation written to {out_path / 'dissociation'}/")
+        if do_resume and prog.is_done("dissociation"):
+            print("[resume] dissociation already complete; skipping.")
+        else:
+            print()
+            print(f"=== Dissociation (L = {L_max}, {params.dissociation_steps} steps, "
+                  f"restraint OFF -> free diffusion) -> {out_path / 'dissociation'}/ ===")
+            resume_mod.append_progress(out_path, "dissociation", "RUNNING")
+            run_length(
+                L_max, full_pdb=full_pdb, R_full=R_full, eps_full=eps_full,
+                prev_final=None, out_root=out_path, params=params,
+                cterm_seed=cterm_seed, x_lo=x_lo, x_exit=x_exit,
+                seed_override=prev_final, restrain=False, out_subdir="dissociation",
+                n_steps_override=params.dissociation_steps,
+                label=f"dissociation (L = {L_max})")
+            resume_mod.append_progress(out_path, "dissociation", "DONE")
+            print(f"Done. Dissociation written to {out_path / 'dissociation'}/")
 
 
 # --------------------------------------------------------------------------
@@ -471,6 +545,9 @@ def read_cylinder_config(config_file: str, verbose: bool = True) -> CylinderConf
       ``dissociation_steps`` -- two sequential free runs at full length (each releases
       the C-terminus restraint so the finished protein diffuses out the exit and folds
       in the cytosol; 0 = skip that phase).
+    - ``resume`` -- resume policy (same as CSP): ``auto`` (default; resume iff an
+      interrupted run is present under ``outdir``), ``yes`` (require a resumable run,
+      else error) or ``no`` (always fresh). See :mod:`topo.csp.resume`.
 
     Inline ``#``/``;`` comments are ignored. **Units:** OpenMM defaults.
     """
@@ -600,6 +677,13 @@ def read_cylinder_config(config_file: str, verbose: bool = True) -> CylinderConf
         p.ejection_steps = as_int(opt("ejection_steps"))
     if opt("dissociation_steps") is not None:
         p.dissociation_steps = as_int(opt("dissociation_steps"))
+    # Resume policy (same as CSP): auto (default) / yes / no. See topo.csp.resume.
+    if opt("resume") is not None:
+        r = opt("resume").strip().lower()
+        if r not in ("auto", "yes", "no"):
+            raise ValueError(f"{config_file}: resume must be 'auto', 'yes' or 'no', "
+                             f"got {opt('resume')!r}.")
+        p.resume = r
 
     # Validation: per-codon timing needs both the (protein-specific) mRNA and an explicit
     # codon-time table -- there is no bundled default (pick one under
@@ -657,6 +741,9 @@ def cylinder(argv: Optional[List[str]] = None) -> None:
                         help="override the output directory from the config file.")
     parser.add_argument("--device", default=None, choices=["CPU", "GPU"],
                         help="override the compute device from the config file.")
+    parser.add_argument("--no-resume", "--fresh", dest="no_resume", action="store_true",
+                        help="ignore any interrupted run and start fresh "
+                             "(overrides resume in the config file).")
 
     if argv is None and len(sys.argv) == 1:
         parser.print_help()
@@ -672,6 +759,8 @@ def cylinder(argv: Optional[List[str]] = None) -> None:
         cfg.outdir = args.outdir
     if args.device:
         cfg.params.device = args.device
+    if args.no_resume:
+        cfg.params.resume = "no"
 
     run_cylinder_synthesis(cfg.pdb_file, L0=cfg.L0, L_max=cfg.L_max, out_root=cfg.outdir,
                            mrna=cfg.mrna, codon_time_table_path=cfg.codon_time_table_path,

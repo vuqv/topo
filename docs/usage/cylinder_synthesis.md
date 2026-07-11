@@ -80,11 +80,16 @@ a +x push), so a bead in the cytosol can only re-enter the tunnel **through the 
 never off-axis. The 90° inner corner at the mouth is rounded by a fillet of radius
 `rho = tunnel_mouth_round` so the potential stays continuous and the MD stays stable.
 
-The C-terminus is **seeded and position-restrained on the tunnel axis at the PTC**
-`(x_lo, y0, z0)` (stiffness `restraint_k`); each new residue is seeded there. There is
-no A/P tRNA tether and no translocation switch — the chain simply extrudes forward as
-it grows. Because the chain carries TOPO's native Gō contacts, it folds
-co-translationally once residues clear the bore.
+The C-terminus is **position-restrained on the tunnel axis at the PTC** `(x_lo, y0, z0)`
+(stiffness `restraint_k`). Each new residue is *seeded* one equilibrium peptide bond
+(0.381 nm) **deeper** than that rest point — toward the closed PTC end — so the new
+`L-1↔L` bond starts at its equilibrium length instead of collapsed onto the previous
+C-terminus; the restraint and the closed-end wall then lift the new residue back onto the
+PTC while the older chain ratchets forward. (This is the analytic-tunnel analogue of the
+explicit protocol's A/P-site offset, without the ribosome.) There is no A/P tRNA tether
+and no translocation switch — the chain simply extrudes forward as it grows. Because the
+chain carries TOPO's native Gō contacts, it folds co-translationally once residues clear
+the bore.
 
 ```{note}
 **How it differs from the {doc}`coarse-grained ribosome model <continuous_synthesis>`.**
@@ -242,11 +247,12 @@ per-residue step count.
 | `random_seed` | — | Seed for the first-passage-time sampler (reproducible schedule). |
 | `max_steps_per_stage` | — (uncapped) | **Testing only** — upper clamp on the per-residue MD step count. Leave unset in production. |
 | `min_steps_per_stage` | `1` | **Testing only** — lower clamp on the per-residue MD step count. |
-| `constraints` | `None` | Bond treatment; the cylinder needs flexible bonds — leave `None`. |
+| `constraints` | `AllBonds` | Bond treatment. The equilibrium-bond seed (above) keeps rigid `AllBonds` stable; set `None` for flexible harmonic bonds if you prefer. |
 | `restraint_k` | `83680` | C-terminus → PTC harmonic restraint constant (kJ/mol/nm²). |
 | `minimize` | `yes` | Energy-minimize the seeded structure before each residue's MD. |
 | `dt` / `ref_t` / `tau_t` / `nstout` | `0.015` / `310` / `0.05` / `5000` | Timestep (ps), temperature (K), Langevin friction (1/ps), output interval (steps). |
 | `device` / `ppn` | `CPU` / `1` | Compute platform and CPU thread count. |
+| `resume` | `auto` | Resume policy for interrupted runs: `auto` / `yes` / `no` (CLI `--fresh` forces `no`). Same mechanism as CSP — see {doc}`synthesis_resume`. |
 
 ```{warning}
 `time_stage_1` / `time_stage_2` are accepted (inherited from the shared parameters) but
@@ -272,8 +278,14 @@ Boolean options accept `yes`/`no`, `true`/`false`, `1`/`0`.
 │   └── ...
 ├── ejection/               # post-synthesis free run (if ejection_steps > 0)
 ├── dissociation/           # continued free run (if dissociation_steps > 0)
-└── dwell_times.dat         # per-residue: codon, sampled dwell (s), ns, integration steps
+├── dwell_times.dat         # per-residue: codon, sampled dwell (s), ns, integration steps
+└── progress.log            # append-only DONE/RUNNING resume status
 ```
+
+**Resuming.** Like CSP, an interrupted cylinder run continues from the last completed
+residue when re-invoked (`resume = auto`, on by default) — the schedule is re-read from
+`dwell_times.dat` and the seed reloaded from the last `L_<L>/traj_final.pdb`, tracked by
+`progress.log`. See {doc}`synthesis_resume`.
 
 **Movie.** `make_movie_cylinder.py` stitches the per-length trajectories (reusing the
 shared stitcher in `topo.csp.movie`) **and** draws the analytic tunnel — the bore tube,
