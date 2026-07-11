@@ -162,6 +162,8 @@ html_logo = "_static/logo.svg"
 html_favicon = "_static/logo.svg"
 # Custom CSS: full-width content + wrapping tables (see _static/custom.css).
 html_css_files = ['custom.css']
+# Custom JS: open external links (DOIs, GitHub, OpenMM, ...) in a new tab.
+html_js_files = ['external-links.js']
 # Custom sidebar templates, must be a dictionary that maps document names
 # to template names.
 #

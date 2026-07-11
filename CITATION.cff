@@ -1,0 +1,48 @@
+# Citation File Format — https://citation-file-format.github.io/
+# GitHub reads this to render a "Cite this repository" button.
+#
+# TEMPLATE: replace the [PLACEHOLDER] fields (and remove the leading `# `
+# from `preferred-citation` once a paper/preprint exists). Keep this file in
+# sync with docs/citation.rst.
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "TOPO: a topology-based coarse-grained model for folded proteins"
+abstract: >-
+  TOPO is a Python library and command-line toolkit for coarse-grained
+  molecular dynamics of globular (folded) proteins, built on OpenMM. It builds a
+  one-bead-per-residue structure-based (Go-like) model from a single folded
+  structure and can also run per-codon co-translational synthesis.
+type: software
+authors:
+  - family-names: Vu
+    given-names: Quyen
+    # orcid: "https://orcid.org/[PLACEHOLDER]"
+  # - family-names: "[PLACEHOLDER]"
+  #   given-names: "[PLACEHOLDER]"
+version: "[VERSION]"          # e.g. 2026.1 — see pyproject.toml
+date-released: "[YYYY-MM-DD]"
+license: "[SPDX id, e.g. MIT — see LICENSE]"
+url: "https://github.com/vuqv/topo"
+repository-code: "https://github.com/vuqv/topo"
+keywords:
+  - coarse-grained
+  - molecular-dynamics
+  - structure-based-model
+  - Go-model
+  - protein-folding
+  - co-translational-folding
+  - OpenMM
+# Uncomment and fill in once a paper/preprint describes TOPO. GitHub will then
+# prefer this over the software entry above.
+# preferred-citation:
+#   type: article
+#   title: "[PAPER TITLE]"
+#   authors:
+#     - family-names: Vu
+#       given-names: Quyen
+#   journal: "[JOURNAL]"
+#   year: [YEAR]
+#   volume: [VOL]
+#   start: [FIRST PAGE]
+#   end: [LAST PAGE]
+#   doi: "[DOI]"

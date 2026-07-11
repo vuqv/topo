@@ -14,6 +14,13 @@ unfolding, thermal/mechanical stability, and multidomain motions.
 the right tutorials, :doc:`modules/introduction` for installation and package
 layout, and :doc:`usage/model_theory` for what the model is.
 
+**Lineage.** TOPO implements the models developed in the **O'Brien lab** (E. P.
+O'Brien and co-workers): the coarse-grained structure-based model of O'Brien
+*et al.* (2012) and the per-codon co-translational-synthesis (CSP) protocol of
+Jiang *et al.* (2023). Its physics and elongation kinetics reproduce that work.
+If you publish with TOPO, please cite those references alongside the software —
+see :doc:`citation` for the full list with DOIs.
+
 .. toctree::
    :maxdepth: 1
    :caption: Getting started
@@ -22,6 +29,7 @@ layout, and :doc:`usage/model_theory` for what the model is.
    diagrams
    modules/introduction
    usage/external_dependencies
+   citation
 
 .. toctree::
    :maxdepth: 2
