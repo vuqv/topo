@@ -1,3 +1,9 @@
+# TOPO per-residue-pair dihedral (torsion) parameters (Karanicolas-Brooks-style).
+# Units:
+#   res1, res2 : flanking residue types of the Ca dihedral (3-letter code)
+#   period     : periodicity / multiplicity j -- dimensionless integer (1..4)
+#   delta      : phase angle -- radians
+#   k_D        : force constant -- kJ/mol  (load_dihedral_params() further scales this by 0.756)
 res1,res2,period,delta,k_D
 ALA,ALA,1,5.015287905008577,2.335876992
 ALA,ALA,2,4.741905849068078,5.7563471999999996

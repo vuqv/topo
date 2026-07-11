@@ -28,14 +28,6 @@ topo.utils.nonbonded module
    :show-inheritance:
    :undoc-members:
 
-topo.utils.read\_parms module
------------------------------
-
-.. automodule:: topo.utils.read_parms
-   :members:
-   :show-inheritance:
-   :undoc-members:
-
 topo.utils.runinfo module
 -------------------------
 
