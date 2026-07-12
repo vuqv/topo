@@ -65,6 +65,14 @@ jobs:
 
       - name: Build all documentation versions
         run: |
+          # Compute the release version once here (real checkout: .git + tags) and
+          # export it as SETUPTOOLS_SCM_PRETEND_VERSION. sphinx-polyversion checks
+          # each ref out with `git archive` (no .git), so setuptools-scm in conf.py
+          # can't read git there; the pretend var makes it resolve anyway (e.g.
+          # 2026.1) instead of falling back to YEAR.dev.
+          SETUPTOOLS_SCM_PRETEND_VERSION="$(python -m setuptools_scm)"
+          export SETUPTOOLS_SCM_PRETEND_VERSION
+          echo "docs version -> $SETUPTOOLS_SCM_PRETEND_VERSION"
           # poly.py enumerates LOCAL branches (sphinx-polyversion 2.0.0 mis-parses
           # remote refs), so materialize a local branch for each origin branch.
           # `git branch -f` can't touch the currently checked-out branch -> `|| true`.
