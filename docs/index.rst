@@ -58,10 +58,10 @@ see :doc:`citation` for the full list with DOIs.
    :caption: Protein synthesis
 
    usage/synthesis_overview
+   usage/cylinder_synthesis
    usage/ribosome_preparation
    usage/codon_dwell_times
    usage/continuous_synthesis
-   usage/cylinder_synthesis
    usage/synthesis_resume
    usage/synthesis_visualization
    usage/synthesis_control
