@@ -1,11 +1,11 @@
 """Deterministic unit tests for topo.csp.resume (the CSP resume mechanism).
 
-Covers the parts of ``review/F_RESUME.md`` §6 that need no MD: the schedule
+Covers the parts of the resume mechanism that need no MD: the schedule
 round-trip (write->read reproduces step counts + PTC geometry), the progress-log
 parse (last-status-per-unit), the presence guard, the RUNNING-drop, schedule
 coverage, and the pre-loop schedule draw vs. a sequential legacy draw.
 
-The full end-to-end golden-vs-interrupted MD equivalence run (§6.1-6.4) is an
+The full end-to-end golden-vs-interrupted MD equivalence run is an
 integration test that requires OpenMM + a ribosome PDB + STRIDE and is out of scope
 for this fast unit suite.
 

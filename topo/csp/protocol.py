@@ -172,7 +172,7 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
     # are set below, in the fresh/resume branch: on a fresh start they are solved once
     # (optimal_ptc_targets, SLSQP) and written into the schedule-file header; on resume
     # they are re-read from that header so the restraint geometry is pinned identical to
-    # the residues already on disk (see topo.csp.resume / review/F_RESUME.md §2).
+    # the residues already on disk (see topo.csp.resume).
 
     # --- build-once-subset contacts on the full native structure ------------
     R_full, eps_full, rmin_2_full = precompute_contacts(full_pdb, domain_def, stride_output_file)
@@ -196,7 +196,7 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
     # immutable plan: drawn/solved once at a fresh start, persisted to dwell_times.dat,
     # then re-read verbatim on resume (no RNG, no SLSQP) so an interrupted run continues
     # with a kinetic schedule + restraint geometry identical to the uninterrupted run.
-    # See topo.csp.resume and review/F_RESUME.md.
+    # See topo.csp.resume.
     if ep.resume not in ("auto", "yes", "no"):
         raise ValueError(f"resume must be 'auto', 'yes' or 'no'; got {ep.resume!r}.")
     if ep.resume == "yes":
@@ -361,7 +361,7 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
 
     # --- post-synthesis: ejection then dissociation (both free runs) --------
     # Each phase is its own progress unit; on resume a completed phase is skipped and
-    # its final structure reloaded to seed the next phase (F_RESUME.md §3.4).
+    # its final structure reloaded to seed the next phase (see topo.csp.resume).
     if params.ejection_steps > 0:
         if do_resume and prog.is_done("ejection"):
             prev_final = resume_mod.load_final_pdb(

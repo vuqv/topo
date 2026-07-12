@@ -1,4 +1,4 @@
-"""Driver-level integration tests for CSP resume (F_RESUME.md §6).
+"""Driver-level integration tests for CSP resume.
 
 Exercises the real :func:`topo.csp.protocol.run_continuous_synthesis` control flow --
 fresh start, mid-run crash, resume, presence guard, idempotent completed run -- with

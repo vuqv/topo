@@ -135,7 +135,7 @@ actionable message rather than silently leaving a hole. **Extending a run** (a l
 `L_max`) is a fresh run, not a resume: the schedule is fixed at first launch. The MD
 micro-trajectories are *not* bit-reproducible across a restart (the thermostat RNG is
 unseeded); the guarantee is the kinetic schedule + conformational continuity. See
-`topo.csp.resume` and [`review/F_RESUME.md`](../../review/F_RESUME.md).
+`topo.csp.resume` for the design.
 
 ## Movie
 

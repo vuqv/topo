@@ -2,8 +2,7 @@
 
 A production ``topo-csp`` run is hours to days of wall time and today survives no
 interruption. This module makes the run resumable with three small, human-readable
-on-disk artifacts and no heavyweight simulation checkpoint (see ``review/F_RESUME.md``
-for the full design):
+on-disk artifacts and no heavyweight simulation checkpoint:
 
 1. **The schedule** (``dwell_times.dat``). The per-residue 3-stage step counts are
    drawn from the seeded generator **once, before the main loop**, and persisted. The
@@ -28,7 +27,7 @@ RNG state anywhere -- the schedule file *is* the materialized RNG output.
 
 **Layout note.** :func:`residue_final_path` / :func:`phase_final_path` centralize the
 one piece of output-layout knowledge resume needs (where a completed unit's final
-structure lands). Under the consolidated layout (``F_RESUME.md`` §3.5) that is
+structure lands). Under the consolidated layout that is
 ``L_<L>/traj_final.pdb`` (the single per-residue final written by stage 3).
 """
 from __future__ import annotations
