@@ -27,7 +27,7 @@ kinetics with the explicit ribosome replaced by a cylindrical bore — see
 ## Quick start
 
 All paths in the INI are relative to the working directory; run from the tutorial
-folder. A GPU is recommended (the v2 system has ~4,600 ribosome beads).
+folder. A GPU is recommended (the explicit-ribosome system has ~4,600 ribosome beads).
 
 ```bash
 # Run the CSP on 4c5c (Tutorial 8)
