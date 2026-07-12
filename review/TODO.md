@@ -34,17 +34,10 @@ is the only synthesis path.)*
 
 ### Validation & production
 
-- [x] **Realistic production parameters** — define/validate a production INI: dwell
-  `n_steps = 840_000` (12.6 ns @ 15 fs), full `L_max`, `device = GPU`, many independent
-  trajectories (O'Brien runs 50/protein — add a replica driver or document launching),
-  benchmark wall-clock per length for the ~4,600-particle v2 system.
 - [ ] **Analysis layer** (DESIGN §6 phase 4 — none exists) — Q-vs-length co-translational
   folding curves per domain (reuse `topo.analysis.native_contacts`); ejection-time
   observable (steps from tether release to tunnel exit); wire a worked example into the
   tutorial.
-- [x] **Full-length / threading validation run** — one full `L0 → N_full` (P0CX28) at a
-  realistic dwell confirming the chain threads the tunnel and the N-terminal domain folds
-  outside. (Can combine with the two items above.)
 
 
 ### Model extensions
@@ -58,50 +51,17 @@ is the only synthesis path.)*
   an actionable error naming the expected segids/resid/beads, and/or (b) make the tRNA
   segids/resid/bead names configurable (INI keys). `optimize_ptc_geometry` in particular
   depends on tRNA presence+naming, so it must be gated/validated alongside this.
-- [ ] **Uniform translation** — support a uniform (constant per-residue dwell) elongation
-  mode as an alternative to the codon-dependent variable schedule (the 3-stage kinetics
-  above). Scope/spec TBD.
-- [x] **Restart / resume across lengths** (DESIGN §4) — DONE via `topo.csp.resume`
-  (`review/F_RESUME.md`): the schedule + PTC geometry are drawn/solved once and persisted
-  to `dwell_times.dat`, progress is tracked in `progress.log`, and re-invoking `topo-csp`
-  continues from the last completed residue (reloading its `traj_final.pdb`). The resume
-  unit is the **residue** by design; intra-length (per-stage) checkpoint resume is
-  explicitly out of scope (F_RESUME §4) — the in-flight residue is re-run from its
-  persisted schedule row (≤ 3 stages). *(Dup of §D "restart=1".)*
 - [ ] **`ejection_steps = auto`** — stop ejection once the C-terminus clears the ribosome
   (`x(Cterm) − max(x_ribosome) > cutoff`, default 2.0 nm), chunked-stepping loop + safety
   cap; add `ejection_cutoff_nm`, `ejection_check_every`; consider same for
-  `dissociation_steps`. *(Overlaps §D "quantitative validation / ejection".)*
+  `dissociation_steps`.
 
 ### Revision list
-- [ ] **Remove per-stage step clamps for production** — `max_steps_per_stage` /
-  `min_steps_per_stage` are testing-only and break the physical timescale mapping. Decide:
-  drop the `RunParams` fields + `read_csp_config` parsing + `stage_steps` clamp args, or
-  keep them but loudly warn when set. *(Also flagged inline in tutorials 12/13/14 `csp.ini`
-  "delete both for production" — see §E.)*
 - [ ] **Ribosome-traffic correction** (hidden since 2026-06-30) — decide: (a) finish it
   (vendor/reimplement the `ribosome_traffic` upstream-queue correction, validate the
   intrinsic→real stretch, re-expose in docs+config) or (b) drop it entirely (remove
   `RunParams` fields, `read_csp_config` parsing, `kinetics.ribosome_traffic_times`). Also
-  unhide/remove the `ribosome_traffic=off` runtime banner in `protocol.py`. *(Dup of §D
-  "external ribosome_traffic binary".)*
----
-
-## C. `CHANGELOG.md §8` — standalone-ribosome migration open items
-
-
----
-
-## D. `tutorials/10_csp_obrien/TASK.md` — "Remaining"
-
-- [~] **Literal 3-stage mechanics** (peptide-bond toggling, explicit A/P tRNA bonded
-  geometry) — currently mapped via the A→P restraint switch. *(This is DIFFERENCES §"Chain
-  chemistry" — intentional KEEP; the `trna_tether` path now covers the bonded geometry.)*
-- [x] **`restart = 1`** resume of a partial trajectory — DONE (per-residue resume via
-  `topo.csp.resume`; the config knob is `resume = auto|yes|no`). *(Dup of §B restart/resume.)*
-- [ ] **Working external `ribosome_traffic` binary** (exits 127 here). *(Dup of §B ribosome
-  traffic.)*
-
+  unhide/remove the `ribosome_traffic=off` runtime banner in `protocol.py`.
 ---
 
 ## F. Trajectory output & serialization (general runner, not CSP)
@@ -146,30 +106,7 @@ is the only synthesis path.)*
   - Skip ForceField-template XML (amber14.xml-style): residue templates don't fit a
     structure-based contact model.
 
----
-
-## G. `DESIGN.md §5` — open questions (mostly resolved)
-
-- [~] **Starting length `L0`** — numeric start value still a per-study choice (layout
-  agreed). Not a blocker.
-- [~] **Effective timescale mapping** — marked deferred in DESIGN; now largely addressed by
-  the kinetics module (`scale_factor` × codon time ÷ dt). Superseded by §B "production
-  parameters".
-
----
-
-## Cross-cutting themes (the same work under several headings)
-
-1. ~~**Restart/resume** — §B, §D.~~ DONE (`topo.csp.resume`; per-residue resume,
-   `resume = auto|yes|no`).
-2. **Ribosome-traffic correction: finish or delete** — §B, §D.
-3. **Production vs. debug run config** (remove step clamps, real dwell, GPU, many
-   replicas) — §B, §E, §D.
-4. **Rigid `AllBonds` as default + delete the dt-halving guard** once equilibrium seeding
-   is proven at full length — §B, §E; interacts with DIFFERENCES §"Chain chemistry".
-5. **Commit the working tree + fix docs duplicate-object warnings** — §C.
-
 ### Highest-leverage next actions (opinion)
 
-- Decide the ribosome-traffic feature's fate (§B/§D) — dead-ish code carried in three
+- Decide the ribosome-traffic feature's fate (§B) — dead-ish code carried in three
   places.

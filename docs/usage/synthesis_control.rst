@@ -66,7 +66,7 @@ Example control files
 
         ; --- integrator / ribosome mechanics ---
         dt     = 0.015 ; ref_t = 310 ; tau_t = 0.05 ; nstout = 100
-        constraints = AllBonds ; restraint_k = 83680 ; minimize = yes
+        constraints = AllBonds ; minimize = yes
         ; tunnel_wall = yes                              ; one-sided tunnel floor (default on)
         ; ribo_free_mask = L24 : 42 - 59                 ; free the L24 exit-tunnel loop (optional)
         ; ribo_free_pdb  = .../ecoli/L24_atomistic.pdb   ; all-atom chain for native contacts
@@ -84,12 +84,12 @@ Example control files
         pdb_file   = P0CX28_clean.pdb ; domain_def = domain.yaml   ; (no `ribosome` PDB)
         L0 = 1 ; L_max =              ; mrna = P0CX28_mrna.txt ; codon_times = trans_times.txt
         scale_factor = 216564650 ; random_seed = 20240629
-        constraints = None ; restraint_k = 83680 ; minimize = yes  ; (cylinder allows None or AllBonds)
+        constraints = None ; minimize = yes  ; (cylinder allows None or AllBonds)
         dt = 0.015 ; ref_t = 300 ; tau_t = 0.05 ; nstout = 100
 
         ; --- analytic exit tunnel (cylinder only) ---
         tunnel_radius = 0.9 ; tunnel_length = 10.0 ; tunnel_x_lo = 0.0
-        tunnel_center = 0.0, 0.0 ; tunnel_k = 8368 ; tunnel_mouth_round = 0.2
+        tunnel_center = 0.0, 0.0 ; tunnel_k = 8368
 
         ejection_steps = 300000 ; dissociation_steps = 0 ; resume = auto
         device = GPU ; ppn = 4 ; outdir = synth_out

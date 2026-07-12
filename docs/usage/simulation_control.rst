@@ -28,23 +28,24 @@ Example ``md.ini``:
 .. code-block::
 
         [OPTIONS]
-        md_steps = 500_000   ; number of steps (underscores allowed)
-        dt = 0.01            ; time step in ps
-        nstxout = 1000       ; steps between trajectory (DCD) writes
-        nstlog = 1000        ; steps between log writes
-        nstchk = 5000        ; steps between checkpoint writes (default: nstxout)
-        nstcomm = 100        ; center-of-mass motion removal; omit for multi-chain runs
-        log_precision = 4    ; decimal places for float columns in the .log
-        log_width = 14       ; min column width for aligned, fixed-width .log
+
+        ; --- system input & force field ---
+        pdb_file = 2ww4.pdb
         model = topo         ; TOPO model (only option currently)
+        domain_def = domain.yaml       ; optional
+        stride_output_file = stride.dat ; optional
+
+        ; --- integration & bonds ---
+        md_steps = 500_000   ; number of steps (underscores allowed)
+        dt = 0.015           ; time step in ps
         constraints = AllBonds  ; AllBonds (rigid) or None (flexible bonds)
 
-        ; temperature coupling
+        ; --- thermostat (temperature coupling) ---
         tcoupl = yes
         ref_t = 310          ; Kelvin (also the low/refold temperature when annealing)
         tau_t = 0.05         ; ps^-1
 
-        ; temperature protocol (annealing / quenching) -- off by default.
+        ; --- temperature protocol (anneal / quench) -- off by default ---
         ; Two phases: a quench (-> <outname>_quench.dcd/.log) then production
         ; (md_steps at ref_t -> <outname>.dcd/.log). anneal_steps is SEPARATE
         ; from md_steps; grand total = anneal_steps (+ ramp) + md_steps.
@@ -55,29 +56,35 @@ Example ``md.ini``:
         ; anneal_ramp_steps = 500_000      ; linear only: quench-phase ramp t_high -> ref_t
         ; anneal_ramp_increments = 20      ; linear only: discrete T steps in the ramp
 
-        ; pressure coupling
+        ; --- periodic boundaries & pressure ---
+        pbc = yes
+        box_dimension = 30   ; cubic 30 nm; or [30, 30, 60] for a box
         pcoupl = no
         ref_p = 1
         frequency_p = 25
 
-        ; periodic boundary condition
-        pbc = yes
-        box_dimension = 30   ; cubic 30 nm; or [30, 30, 60] for a box
+        ; --- multi-copy replication (off by default) ---
+        ; n_copies = 10      ; independent, non-interacting copies in one run
+        ; copy_shift = 5.0   ; nm, initial x-offset between copies
 
-        ; input
-        pdb_file = 2ww4.pdb
-        ; init_position = traj/traj_final.pdb   ; optional starting coordinates
-        domain_def = domain.yaml      ; optional
-        stride_output_file = stride.dat ; optional
-        ; output  (all files -> <output_dir>/<outname>.*, default traj/traj.*)
+        ; --- output & reporting  (all files -> <output_dir>/<outname>.*, default traj/traj.*) ---
         output_dir = traj
         outname = traj
-        ; hardware
-        device = GPU
-        ppn = 4
-        ; restart
+        nstxout = 1000       ; steps between trajectory (DCD) writes
+        nstchk = 5000        ; steps between checkpoint writes (default: nstxout)
+        nstlog = 1000        ; steps between log writes
+        nstcomm = 100        ; center-of-mass motion removal; omit for multi-chain runs
+        log_precision = 4    ; decimal places for float columns in the .log
+        log_width = 14       ; min column width for aligned, fixed-width .log
+
+        ; --- initial state, restart & minimization ---
+        ; init_position = traj/traj_final.pdb   ; optional starting coordinates
         restart = no
         minimize = no
+
+        ; --- hardware ---
+        device = GPU
+        ppn = 4
 
 
 Parameter summary
@@ -97,6 +104,36 @@ description).
      - Required
      - Default
      - Description
+   * - **System input & force field**
+     -
+     -
+     -
+     -
+   * - ``pdb_file``
+     - str
+     - **yes**
+     - ``—``
+     - Input structure (``.pdb`` / ``.cif``) used to build the model (topology, force field) and, by default, the initial coordinates.
+   * - ``model``
+     - str
+     - no
+     - ``topo``
+     - Force-field model. Only ``topo`` is currently supported.
+   * - ``domain_def``
+     - str
+     - no
+     - ``—``
+     - Path to a domain YAML for per-domain sidechain-contact scaling. If omitted, all SS contacts use scale 1.0. See :doc:`domain_definition`.
+   * - ``stride_output_file``
+     - str
+     - no
+     - ``—``
+     - Path to a precomputed STRIDE output. If omitted, STRIDE is run automatically on the structure (and cached to ``{prefix}_stride.dat``).
+   * - **Integration & bonds**
+     -
+     -
+     -
+     -
    * - ``md_steps``
      - int
      - no
@@ -105,43 +142,8 @@ description).
    * - ``dt``
      - float [ps]
      - no
-     - ``0.01``
+     - ``0.015``
      - Integration time step.
-   * - ``nstxout``
-     - int
-     - no
-     - ``10``
-     - Steps between writing the trajectory (DCD).
-   * - ``nstlog``
-     - int
-     - no
-     - ``10``
-     - Steps between writing the energy/temperature log.
-   * - ``nstchk``
-     - int
-     - no
-     - ``nstxout``
-     - Steps between writing the checkpoint. Defaults to ``nstxout`` when unset, so checkpoint and trajectory frequency can be decoupled (e.g. frequent checkpoints, sparser frames).
-   * - ``nstcomm``
-     - int
-     - no
-     - ``—`` (off)
-     - Steps between center-of-mass motion removals. **Unset by default → no COM removal.** COM removal suits a single chain but couples the drift of independent chains, so leave it off for multi-copy runs (``n_copies > 1``).
-   * - ``log_precision``
-     - int
-     - no
-     - ``4``
-     - Decimal places for floating-point columns (energies, time, temperature, ...) in the ``.log``. Set to ``None`` for OpenMM's full ``repr`` precision.
-   * - ``log_width``
-     - int
-     - no
-     - ``14``
-     - Minimum width (characters) of each ``.log`` column, right-justified, so columns line up. Each column uses ``max(header_length, log_width)``. Set to ``None`` to disable fixed-width formatting.
-   * - ``model``
-     - str
-     - no
-     - ``topo``
-     - Force-field model. Only ``topo`` is currently supported.
    * - ``constraints``
      - str
      - no
@@ -152,6 +154,11 @@ description).
      - no
      - ``1e-5``
      - Integrator relative constraint tolerance. Only meaningful with ``constraints = AllBonds``.
+   * - **Thermostat (temperature coupling)**
+     -
+     -
+     -
+     -
    * - ``tcoupl``
      - bool
      - no
@@ -167,6 +174,11 @@ description).
      - no
      - ``0.05``
      - Friction coefficient coupling the system to the heat bath. Used when ``tcoupl = yes``.
+   * - **Temperature protocol (anneal / quench)** — optional, off by default
+     -
+     -
+     -
+     -
    * - ``anneal``
      - bool
      - no
@@ -197,6 +209,21 @@ description).
      - no
      - ``20``
      - Number of discrete temperature steps in the ramp; the last lands exactly on ``ref_t``. Used only when ``anneal_ramp = linear``.
+   * - **Periodic boundaries & pressure** — optional
+     -
+     -
+     -
+     -
+   * - ``pbc``
+     - bool
+     - no
+     - ``no``
+     - Periodic boundary conditions on/off.
+   * - ``box_dimension``
+     - float or [x,y,z] [nm]
+     - if ``pbc = yes``
+     - ``—``
+     - Box size: a scalar ``L`` gives a cubic ``L×L×L`` box; a list ``[x, y, z]`` a rectangular box.
    * - ``pcoupl``
      - bool
      - no
@@ -212,26 +239,26 @@ description).
      - no
      - ``25``
      - Barostat move attempt frequency. Used when ``pcoupl = yes``.
-   * - ``pbc``
-     - bool
+   * - **Multi-copy replication** — optional, off by default
+     -
+     -
+     -
+     -
+   * - ``n_copies``
+     - int
      - no
-     - ``no``
-     - Periodic boundary conditions on/off.
-   * - ``box_dimension``
-     - float or [x,y,z] [nm]
-     - if ``pbc = yes``
-     - ``—``
-     - Box size: a scalar ``L`` gives a cubic ``L×L×L`` box; a list ``[x, y, z]`` a rectangular box.
-   * - ``pdb_file``
-     - str
-     - **yes**
-     - ``—``
-     - Input structure (``.pdb`` / ``.cif``) used to build the model (topology, force field) and, by default, the initial coordinates.
-   * - ``init_position``
-     - str
+     - ``1``
+     - Number of independent, **non-interacting** copies of the input chain to pack into one simulation (better GPU utilization; ``n_copies`` trajectories per run). ``1`` disables replication. See :doc:`../tutorials/04_multicopy`.
+   * - ``copy_shift``
+     - float [nm]
      - no
-     - ``—``
-     - Optional PDB of starting coordinates for a fresh run (atom count must match the system). If unset, the coordinates from ``pdb_file`` are used. Ignored on a successful restart (coordinates come from the checkpoint).
+     - ``5.0``
+     - Initial x-translation between successive copies. Only used when ``n_copies > 1``; since copies never interact, the exact value affects only the starting layout, not the physics.
+   * - **Output & reporting**
+     -
+     -
+     -
+     -
    * - ``output_dir``
      - str
      - no
@@ -247,36 +274,46 @@ description).
      - no
      - ``<output_dir>/<outname>.chk``
      - Explicit checkpoint path override. Normally leave unset so it lands in the run folder.
-   * - ``domain_def``
+   * - ``nstxout``
+     - int
+     - no
+     - ``10``
+     - Steps between writing the trajectory (DCD).
+   * - ``nstchk``
+     - int
+     - no
+     - ``nstxout``
+     - Steps between writing the checkpoint. Defaults to ``nstxout`` when unset, so checkpoint and trajectory frequency can be decoupled (e.g. frequent checkpoints, sparser frames).
+   * - ``nstlog``
+     - int
+     - no
+     - ``10``
+     - Steps between writing the energy/temperature log.
+   * - ``nstcomm``
+     - int
+     - no
+     - ``—`` (off)
+     - Steps between center-of-mass motion removals. **Unset by default → no COM removal.** COM removal suits a single chain but couples the drift of independent chains, so leave it off for multi-copy runs (``n_copies > 1``).
+   * - ``log_precision``
+     - int
+     - no
+     - ``4``
+     - Decimal places for floating-point columns (energies, time, temperature, ...) in the ``.log``. Set to ``None`` for OpenMM's full ``repr`` precision.
+   * - ``log_width``
+     - int
+     - no
+     - ``14``
+     - Minimum width (characters) of each ``.log`` column, right-justified, so columns line up. Each column uses ``max(header_length, log_width)``. Set to ``None`` to disable fixed-width formatting.
+   * - **Initial state, restart & minimization**
+     -
+     -
+     -
+     -
+   * - ``init_position``
      - str
      - no
      - ``—``
-     - Path to a domain YAML for per-domain sidechain-contact scaling. If omitted, all SS contacts use scale 1.0. See :doc:`domain_definition`.
-   * - ``stride_output_file``
-     - str
-     - no
-     - ``—``
-     - Path to a precomputed STRIDE output. If omitted, STRIDE is run automatically on the structure (and cached to ``{prefix}_stride.dat``).
-   * - ``device``
-     - str
-     - no
-     - ``CPU``
-     - Compute platform: ``CPU`` or ``GPU`` (CUDA).
-   * - ``ppn``
-     - int
-     - no
-     - ``1``
-     - Number of CPU threads. Used when ``device = CPU``.
-   * - ``n_copies``
-     - int
-     - no
-     - ``1``
-     - Number of independent, **non-interacting** copies of the input chain to pack into one simulation (better GPU utilization; ``n_copies`` trajectories per run). ``1`` disables replication. See :doc:`../tutorials/04_multicopy`.
-   * - ``copy_shift``
-     - float [nm]
-     - no
-     - ``5.0``
-     - Initial x-translation between successive copies. Only used when ``n_copies > 1``; since copies never interact, the exact value affects only the starting layout, not the physics.
+     - Optional PDB of starting coordinates for a fresh run (atom count must match the system). If unset, the coordinates from ``pdb_file`` are used. Ignored on a successful restart (coordinates come from the checkpoint).
    * - ``restart``
      - bool
      - no
@@ -287,6 +324,21 @@ description).
      - no
      - ``yes``
      - Energy-minimize the input structure before dynamics. Forced ``no`` when ``restart = yes``.
+   * - **Hardware**
+     -
+     -
+     -
+     -
+   * - ``device``
+     - str
+     - no
+     - ``CPU``
+     - Compute platform: ``CPU`` or ``GPU`` (CUDA).
+   * - ``ppn``
+     - int
+     - no
+     - ``1``
+     - Number of CPU threads. Used when ``device = CPU``.
 
 .. note::
 
@@ -297,29 +349,11 @@ description).
 Notes on individual options
 +++++++++++++++++++++++++++
 
-Output layout (``output_dir`` / ``outname``)
-    Every generated file is written to ``<output_dir>/<outname><suffix>``, so a run
-    is one self-contained folder (default ``traj/``): ``traj.dcd`` (trajectory),
-    ``traj.log`` (state log), ``traj.psf`` (single-chain topology), ``traj.chk``
-    (checkpoint), ``traj_final.pdb`` (last conformation — reusable as
-    ``init_position`` for a follow-up run), ``traj_runinfo.log`` (provenance), and
-    ``traj_multi.psf`` for a multi-copy run. ``output_dir`` is created
-    automatically if missing. To keep
-    several runs side by side, point each at its own folder (e.g.
-    ``output_dir = runs/P0CX28_T300``) or change ``outname``.
-
-Output frequency and log formatting (``nstxout`` / ``nstchk`` / ``nstcomm`` / ``log_precision`` / ``log_width``)
-    ``nstxout`` controls trajectory (DCD) frames; ``nstchk`` controls checkpoint
-    writes and defaults to ``nstxout`` when unset, so the two can be decoupled.
-    ``nstcomm`` is **off unless set** — center-of-mass motion removal is only
-    appropriate for a single chain (it couples the drift of independent chains),
-    so leave it unset for multi-copy runs. The log reporter is
-    :class:`topo.topoReporter`, which writes a fixed-width, aligned ``.log``:
-    ``log_precision`` sets the decimals for float columns (default ``4``;
-    ``None`` for full precision) and ``log_width`` sets the minimum column width
-    (default ``14``; ``None`` to disable padding). Columns are separated by two
-    spaces and the header is a ``#`` comment, so the log stays both human-readable
-    and machine-parsable (see :func:`topo.reporter.readOpenMMReporterFile`).
+``domain_def`` and ``stride_output_file``
+    Both are optional inputs to the TOPO structure-based non-bonded potential.
+    Omit ``domain_def`` for no domain scaling (every SS contact scaled by 1.0).
+    Omit ``stride_output_file`` to let the builder run STRIDE for you (STRIDE must
+    be on ``PATH``); supply a path to reuse a precomputed file.
 
 Bond treatment (``constraints``)
     ``AllBonds`` (default) makes every bond a rigid distance constraint and adds
@@ -377,11 +411,45 @@ Periodic boundary conditions
     written to the PDB/DCD (handled internally). ``box_dimension`` must be given
     when ``pbc = yes``; an invalid/empty value silently disables PBC.
 
-``domain_def`` and ``stride_output_file``
-    Both are optional inputs to the TOPO structure-based non-bonded potential.
-    Omit ``domain_def`` for no domain scaling (every SS contact scaled by 1.0).
-    Omit ``stride_output_file`` to let the builder run STRIDE for you (STRIDE must
-    be on ``PATH``); supply a path to reuse a precomputed file.
+Multi-copy runs (``n_copies`` / ``copy_shift``)
+    A single coarse-grained chain (a few hundred beads) badly underuses a GPU.
+    Setting ``n_copies > 1`` packs that many independent copies of the input chain
+    into one ``System`` and yields one trajectory per copy. The copies are
+    guaranteed non-interacting: bonded terms and constraints are duplicated per
+    copy, and every ``CustomNonbondedForce`` (Yukawa electrostatics and the
+    structure-based contacts) is restricted to intra-copy interaction groups, so
+    the total potential energy is exactly ``n_copies ×`` the single-chain energy.
+    ``copy_shift`` sets the initial x-offset between copies (layout only). The
+    runner (:mod:`topo.mdrun`) replicates automatically via
+    :func:`topo.make_noninteracting_copies` whenever ``n_copies > 1``; afterwards
+    split the combined trajectory into per-copy DCDs with
+    :func:`topo.split_chains` (memory-bounded streaming; CLI
+    ``python -m topo.utils.multichain``). See :doc:`../tutorials/04_multicopy` for
+    a complete walkthrough.
+
+Output layout (``output_dir`` / ``outname``)
+    Every generated file is written to ``<output_dir>/<outname><suffix>``, so a run
+    is one self-contained folder (default ``traj/``): ``traj.dcd`` (trajectory),
+    ``traj.log`` (state log), ``traj.psf`` (single-chain topology), ``traj.chk``
+    (checkpoint), ``traj_final.pdb`` (last conformation — reusable as
+    ``init_position`` for a follow-up run), ``traj_runinfo.log`` (provenance), and
+    ``traj_multi.psf`` for a multi-copy run. ``output_dir`` is created
+    automatically if missing. To keep
+    several runs side by side, point each at its own folder (e.g.
+    ``output_dir = runs/P0CX28_T300``) or change ``outname``.
+
+Output frequency and log formatting (``nstxout`` / ``nstchk`` / ``nstcomm`` / ``log_precision`` / ``log_width``)
+    ``nstxout`` controls trajectory (DCD) frames; ``nstchk`` controls checkpoint
+    writes and defaults to ``nstxout`` when unset, so the two can be decoupled.
+    ``nstcomm`` is **off unless set** — center-of-mass motion removal is only
+    appropriate for a single chain (it couples the drift of independent chains),
+    so leave it unset for multi-copy runs. The log reporter is
+    :class:`topo.topoReporter`, which writes a fixed-width, aligned ``.log``:
+    ``log_precision`` sets the decimals for float columns (default ``4``;
+    ``None`` for full precision) and ``log_width`` sets the minimum column width
+    (default ``14``; ``None`` to disable padding). Columns are separated by two
+    spaces and the header is a ``#`` comment, so the log stays both human-readable
+    and machine-parsable (see :func:`topo.reporter.readOpenMMReporterFile`).
 
 ``restart`` and ``minimize``
     ``restart = yes`` loads positions **and** velocities from ``checkpoint`` and
@@ -407,19 +475,3 @@ Initial coordinates and velocities (``init_position``)
 Hardware (``device`` / ``ppn``)
     ``device = GPU`` runs on CUDA (mixed precision). ``device = CPU`` uses ``ppn``
     threads; ``ppn`` is ignored on GPU.
-
-Multi-copy runs (``n_copies`` / ``copy_shift``)
-    A single coarse-grained chain (a few hundred beads) badly underuses a GPU.
-    Setting ``n_copies > 1`` packs that many independent copies of the input chain
-    into one ``System`` and yields one trajectory per copy. The copies are
-    guaranteed non-interacting: bonded terms and constraints are duplicated per
-    copy, and every ``CustomNonbondedForce`` (Yukawa electrostatics and the
-    structure-based contacts) is restricted to intra-copy interaction groups, so
-    the total potential energy is exactly ``n_copies ×`` the single-chain energy.
-    ``copy_shift`` sets the initial x-offset between copies (layout only). The
-    runner (:mod:`topo.mdrun`) replicates automatically via
-    :func:`topo.make_noninteracting_copies` whenever ``n_copies > 1``; afterwards
-    split the combined trajectory into per-copy DCDs with
-    :func:`topo.split_chains` (memory-bounded streaming; CLI
-    ``python -m topo.utils.multichain``). See :doc:`../tutorials/04_multicopy` for
-    a complete walkthrough.

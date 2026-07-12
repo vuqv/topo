@@ -47,7 +47,7 @@ class SimulationConfig:
     # run control
     md_steps: int = 1000
     # default_factory: a Quantity is treated as a mutable default by dataclasses
-    dt: Any = field(default_factory=lambda: 0.01 * unit.picoseconds)
+    dt: Any = field(default_factory=lambda: 0.015 * unit.picoseconds)
     nstxout: int = 10
     nstlog: int = 10
     # Checkpoint-write frequency. When None it falls back to ``nstxout`` so that
@@ -266,7 +266,7 @@ def read_simulation_config(config_file: str, verbose: bool = True) -> Simulation
 
     cfg.md_steps = int(str(params.get('md_steps', cfg.md_steps)).replace('_', ''))
     log(f'Setting number of simulation steps to: {cfg.md_steps}')
-    cfg.dt = float(params.get('dt', 0.01)) * unit.picoseconds
+    cfg.dt = float(params.get('dt', 0.015)) * unit.picoseconds
     log(f'Setting timestep for integration of equations of motion to: {cfg.dt}')
     cfg.nstxout = int(params.get('nstxout', cfg.nstxout))
     log(f'Setting number of steps to write trajectory frame: {cfg.nstxout}')
