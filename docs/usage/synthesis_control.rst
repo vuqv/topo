@@ -313,7 +313,7 @@ per residue the whole codon dwell is one segment, not a three-way split.)
    * - ``trna_tether``
      - bool
      - ``no``
-     - C-terminus restraint mode. ``no`` (default) uses the position restraint to the A/P target (a→a→p migration). ``yes`` uses O'Brien's full tRNA tether (bond + 2 orienting angles + improper).
+     - How the growing C-terminus is held at the PTC. ``no`` (default) pins the C-terminal bead to a **fixed point in space** (the A-/P-site target, harmonic, stiffness ``restraint_k``) — position only, no orientation. ``yes`` instead couples it to the actual tRNA beads with O'Brien's full peptidyl-tRNA linkage (bond + 2 orienting angles + improper + a backbone angle), which controls **position *and* orientation** so the chain threads out N-first instead of balling up at the PTC. See the note below.
    * - ``ribo_free_mask``
      - str
      - *(none)*
@@ -416,12 +416,45 @@ Bond treatment and PTC geometry (``constraints``)
     ``None`` for flexible harmonic bonds.
 
 C-terminus restraint (``trna_tether`` / ``restraint_k``)
-    The nascent C-terminus is held at the PTC and translocated A→P each residue. The
-    default ``trna_tether = no`` uses a harmonic position restraint (stiffness
-    ``restraint_k``) to the target point. ``trna_tether = yes`` replaces it with O'Brien's
-    full tRNA tether (bond + two orienting angles + improper), which additionally aims the
-    chain down the tunnel. (``topo-cylinder`` has no tRNA tether — it restrains the
-    C-terminus to the on-axis PTC point.)
+    Each new residue is added at the PTC and translocated A→P over the three stages
+    (A-site in stages 1–2, P-site in stage 3). ``trna_tether`` selects **how** the
+    growing C-terminus is held there — the two modes differ in whether they control the
+    chain's *orientation* as well as its *position*:
+
+    * ``trna_tether = no`` **(default) — position restraint to a fixed point.** The
+      C-terminal bead is pulled by a single harmonic spring (stiffness ``restraint_k``,
+      default 83680 kJ/mol/nm² = 200 kcal/mol/Å²) toward a **fixed point in space** — the
+      A-site or P-site target computed once per residue by ``optimal_ptc_targets``
+      (the two points sit one equilibrium peptide bond, 0.381 nm, apart and clear of the
+      ribosome). This constrains only *where* the C-terminus sits, not which way the
+      residue faces; it is simpler, needs no tRNA orientation data, and is the right
+      choice for routine runs.
+
+    * ``trna_tether = yes`` **— full O'Brien peptidyl-tRNA linkage.** Instead of a fixed
+      point, the C-terminus is coupled to the **actual tRNA beads** of the loaded
+      ribosome, reproducing ``continuous_synthesis_v6.py``. Four terms act on the
+      restrained bead ``N`` and the current-site tRNA beads (``R`` = acceptor, ``P`` =
+      R−1, ``PU2`` = R+2):
+
+      - a **bond** ``N–R`` (sets the tRNA–residue distance);
+      - two **orienting angles** ``N–R–P`` and ``N–R–PU2`` (fix the residue's bearing in
+        the tRNA frame);
+      - an **improper** ``N–R–P–PU2`` (fixes the out-of-plane sense);
+      - a **backbone orienting angle** ``prev–N–R`` (aims the chain down the tunnel).
+
+      Together these control **position *and* orientation**, so the nascent chain
+      extrudes N-terminus-first down the exit tunnel rather than curling up at the PTC —
+      the behaviour to pick when faithfully reproducing O'Brien's directional mechanism.
+      It requires the tRNA beads to be present in the ``ribosome`` PDB (segids
+      ``PtR``/``AtR``, resid 76, beads ``R``/``P``/``BR2``). The always-present peptide
+      bond ``N-1↔N`` stays in place either way (topo keeps the chain permanently bonded —
+      a deliberate deviation, see :doc:`continuous_synthesis`).
+
+    ``restraint_k`` sets the spring stiffness of the **position restraint only** (the
+    ``no`` mode). The tether-mode ``N–R`` bond uses a fixed internal constant of the same
+    magnitude (200 kcal/mol/Å²) and does **not** read ``restraint_k``, so changing that
+    key has no effect under ``trna_tether = yes``. (``topo-cylinder`` has no tRNA tether —
+    it always restrains the C-terminus to the on-axis PTC point.)
 
 Tunnel wall vs. analytic tunnel (``tunnel_wall`` / ``tunnel_*``)
     ``topo-csp`` uses a one-sided half-harmonic **wall** (``tunnel_wall``) that supplies
