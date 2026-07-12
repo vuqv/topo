@@ -3,9 +3,10 @@
 All notable changes to TOPO are documented here. The format is loosely based on
 [Keep a Changelog](https://keepachangelog.com/); releases correspond to git tags.
 
-## [v1.4] — 2026-07-12
+## [2026.1] — 2026-07-12
 
-**Initial tagged release.** Version `v1.4` is used to keep TOPO in lockstep with its
+**Initial tagged release.** Releases use CalVer `YEAR.N`; this first 2026 release
+(`2026.1`) keeps TOPO in lockstep with its
 sibling project [COSMO](https://github.com/vuqv/cosmo) (whose `cosmo.csp` mirrors
 `topo.csp`). This entry summarizes TOPO's feature set at first release.
 

@@ -24,14 +24,33 @@ project = u'TOPO'
 copyright = u'2026, Quyen Vu'
 author = u'Quyen Vu'
 
-# Version: auto year.month when building from a tag push (CI); else defaults
+# Release version — CalVer YEAR.N (see scripts/next_version.sh). Auto-derived, never
+# hand-edited per release: on a CI tag build use the pushed tag; otherwise the newest
+# YEAR.N tag in git; else a YEAR.dev marker.
+import subprocess
 import datetime
-_github_ref = os.environ.get('GITHUB_REF', '')
-if _github_ref.startswith('refs/tags/'):
-    version = release = datetime.datetime.utcnow().strftime('%Y.%m')
-else:
-    version = '2026.1'
-    release = 'rc1'
+
+
+def _release_version():
+    ref = os.environ.get('GITHUB_REF', '')
+    if ref.startswith('refs/tags/'):
+        return ref[len('refs/tags/'):]
+    try:
+        tags = subprocess.check_output(
+            ['git', 'tag', '--list', '[0-9][0-9][0-9][0-9].[0-9]*'],
+            cwd=os.path.dirname(os.path.abspath(__file__)),
+            text=True, stderr=subprocess.DEVNULL).split()
+        cal = sorted((t for t in tags if t.count('.') == 1
+                      and t.split('.')[0].isdigit() and t.split('.')[1].isdigit()),
+                     key=lambda t: (int(t.split('.')[0]), int(t.split('.')[1])))
+        if cal:
+            return cal[-1]
+    except Exception:
+        pass
+    return datetime.datetime.utcnow().strftime('%Y') + '.dev'
+
+
+version = release = _release_version()
 
 
 # -- General configuration ---------------------------------------------------
