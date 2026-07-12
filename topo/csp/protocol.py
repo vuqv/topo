@@ -30,8 +30,11 @@ stage       biology                                restraint target / seed
 
 Stage 3's final structure seeds the next residue's stage 1. The cold-start segment
 (``L == L0``) is laid down the tunnel from the P-anchor (no A-site delivery yet).
-Because CSP needs the restraint target to switch A<->P, it drives the **position
-restraint** path (``trna_tether`` is forced off); the supplied ribosome is always
+The C-terminus restraint follows one of two paths, selected by ``trna_tether`` (from
+the INI): the **position restraint** to the A/P target *point* (default; the target
+switches a->a->p over the three stages) or O'Brien's full **tRNA tether** (bond +
+orienting angles + improper; ``trna_tether = yes``), whose A<->P switch is by tether
+*site* (A-site stages 1-2, P-site stage 3). Either way the supplied ribosome is always
 rigid scenery and the tunnel wall + excluded volume + electrostatics are on.
 
 Drive it with an INI control file (see :func:`read_csp_config`)::
