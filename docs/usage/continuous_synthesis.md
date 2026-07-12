@@ -85,7 +85,9 @@ them as **three MD sub-stages per residue**.
   residue at the Cα position. Native contacts (residue pairs close in the folded crystal
   structure) get attractive wells; everything else is repulsive — so **the native
   structure is the energy minimum** and the growing chain folds *toward* its native fold.
-  Bonds are **flexible harmonic** (not rigid constraints — see §7).
+  Bonds default to **rigid `AllBonds` constraints** (stable because each residue is seeded
+  at its equilibrium bond length — see §6); set `constraints = None` for flexible harmonic
+  bonds instead.
 - **Ribosome — rigid scenery.** The truncated CG 50S + tRNAs (~4,600 mass-0 beads) is
   fixed in space, but its **excluded-volume and electrostatic interactions with the
   nascent chain are on**, so the chain feels the tunnel walls and ribosome surface. The
@@ -94,11 +96,16 @@ them as **three MD sub-stages per residue**.
   **P-anchor** (P-site tRNA residue-76 "R" bead) and the **A-anchor** (A-site tRNA
   residue-76 "R" bead). They stand in for where the peptidyl-tRNA (P) and incoming
   aminoacyl-tRNA (A) hold the chain's C-terminus.
-- **C-terminus tether — a harmonic restraint.** The current C-terminal bead is restrained
-  to one of the anchors with `U = k·|r − r₀|²`, `k = restraint_k = 83680 kJ/mol/nm²`
-  (= 200 kcal/mol/Å²), reproducing the covalent attachment of the C-terminus to the tRNA
-  in the A or P site. **Switching the restraint target A→P is how translocation is
-  reproduced.**
+- **C-terminus restraint — two modes.** The current C-terminal bead is held at the A- or
+  P-site, and **switching that hold A→P is how translocation is reproduced**. There are
+  two mechanisms, selected by `trna_tether` (see §3a for the full details):
+  - *Position restraint* (`trna_tether = no`, **default**): a single harmonic spring to
+    the A/P target **point**, `U = k·|r − r₀|²`, `k = restraint_k = 83680 kJ/mol/nm²`
+    (= 200 kcal/mol/Å²).
+  - *O'Brien tRNA tether* (`trna_tether = yes`): the full covalent attachment to the
+    tRNA — a **bond + two orienting angles + an improper + a backbone angle** to the
+    actual A-/P-site tRNA beads, which also fixes the chain's **orientation** in the
+    tRNA frame (aiming it down the tunnel), not just its position.
 - **Tunnel wall — a one-sided plane on the nascent beads.** The rigid ribosome we
   supply is **truncated** to a shell around the exit tunnel (§8), so the model has no
   density on the **−x (synthesis-interface) side of the PTC**. In the real ribosome that
@@ -143,14 +150,121 @@ folder; stage 3's final structure seeds the next residue's stage 1.
 | **3** | **Translocation completes + wait for next aa-tRNA** | **switch the restraint A→P** (this geometric move *is* the translocation), then run MD while the chain relaxes/folds | **P-anchor** | remainder = (next codon's total) − stage 1 − stage 2 |
 
 ```{note}
-**Mechanics vs. timing.** The restraint switch (an instantaneous A→P geometric move)
-happens at the **start of stage 3**, while the **duration** charged to translocation is
-**stage 2** and the duration charged to the decoding wait is **stage 3** — so the physical
-move and the time labelled "translocation" are slightly decoupled. Likewise the peptide
-bond is present in the bonded model from stage 1 rather than toggled on mid-stage, and
-explicit A/P tRNA bonded geometry is not modelled. The **timing** (three codon-resolved
-dwell times per residue) is faithful to the reference protocol; the per-stage
-**mechanics** are a reduced model.
+**Mechanics vs. timing.** The restraint switch (an A→P re-hold applied at the **start of
+stage 3**) is decoupled from the durations: the time charged to translocation is **stage
+2** and the decoding wait is **stage 3**. The peptide bond is present in the bonded model
+from stage 1 rather than toggled on mid-stage. Explicit A/P tRNA *bonded* geometry (bond +
+angles + improper to the tRNA beads) **is** modelled when `trna_tether = yes` (§3a); with
+the default position restraint only the C-terminus *point* is held. The **timing** (three
+codon-resolved dwell times per residue) is faithful to the reference protocol; the
+per-stage **mechanics** are a reduced model.
+```
+
+### 3a. C-terminus restraint: position restraint vs. tRNA tether
+
+The C-terminus must be held at the PTC and translocated A→P each residue. topo offers two
+mechanisms, chosen by the `trna_tether` key (see {doc}`synthesis_control`); both drive the
+*same* A→P schedule across the three stages, but the tether additionally controls the
+chain's **orientation**.
+
+**Position restraint (`trna_tether = no`, default).** A single harmonic spring pins the
+C-terminal bead to the A/P target *point* (the equilibrium-optimized A- or P-site location),
+`U = k·|r − r₀|²`. Stages 1–2 target the A-point, stage 3 targets the P-point; the A→P
+switch is just changing `r₀`. This is the validated default — simplest, and it needs no
+particular tRNA beads.
+
+```{figure} img/csp_restraint_position.svg
+:alt: A single harmonic spring holds the C-terminus at the A- or P-site target point; sites read E, P, A left to right.
+:width: 560px
+:align: center
+
+**Position restraint** (`trna_tether = no`). A single harmonic spring pins the C-terminal
+bead to the A- or P-site target *point*; translocation is just moving the target `r₀` from
+the A-point (stages 1–2) to the P-point (stage 3) — right→left in the E–P–A frame.
+```
+
+**O'Brien tRNA tether (`trna_tether = yes`).** Reproduces the covalent attachment of the
+nascent C-terminus to the tRNA with the full bonded geometry — not a point restraint but a
+set of bonded terms to the **tRNA's 3′-terminal nucleotide, residue 76 (A76)**.
+
+*Which residue?* The truncated ribosome keeps only the acceptor-stem 3′ end of each tRNA
+(a handful of residues: `AtR` 73–76, `PtR` 72–76), each nucleotide represented by a few CG
+beads — `P` (phosphate), `R` (ribose), `BR1`/`BR2` (base). **The tether attaches to residue
+76 only** — the 3′-terminal adenosine A76, which is exactly the CCA-3′ site where the amino
+acid esterifies to the tRNA. The other tRNA residues are rigid excluded-volume scenery,
+*not* part of the tether. It uses three beads *of A76*:
+
+- `R` — the **ribose** of A76: the C-terminus **bonds** to it.
+- `P` — the **phosphate** of A76: used in the orienting angle `N–R–P`.
+- `BR2` — the second **base** bead of A76 (present only because A76 is a purine): used in
+  `N–R–BR2` and the improper.
+
+For the current C-terminus `N` (the newest residue) it adds:
+
+| term | force | connectivity (beads of A76) | A-site (`AtR`) | P-site (`PtR`) |
+|------|-------|-----------------------------|----------------|----------------|
+| bond | harmonic | `N → R` | 0.427 nm | 0.476 nm |
+| angle | harmonic | `N–R–P` | 106° | 117° |
+| angle | harmonic | `N–R–BR2` | 127° | 130° |
+| improper | periodic (`CustomTorsion`) | `N–R–P–BR2` | 128° | −161° |
+| backbone | Gaussian angle | `prev–N–R` | aims the chain down the tunnel |
+
+(bond/angle stiffness = 200 kcal/mol/Å²; angle/improper = 25 kcal/mol/rad².) The two
+orienting angles + the improper fix the residue's **bearing in the A76 frame** — this is
+what the plain point restraint cannot do.
+
+```{figure} img/csp_restraint_tether_geom.svg
+:alt: The C-terminus bonds to the ribose R of tRNA A76, with orienting angles to the phosphate P and base BR2, plus an improper dihedral.
+:width: 560px
+:align: center
+
+**tRNA tether geometry** (`trna_tether = yes`). The C-terminus (`N`) **bonds** to the
+**ribose (`R`)** of A76; two orienting angles (`N–R–P`, `N–R–BR2`) and the improper
+(`N–R–P–BR2`) fix its bearing in the A76 frame, and a backbone angle (`prev–N–R`) aims the
+chain down the tunnel. Values shown are the P-site (`PtR`) set; A-site (`AtR`) values are
+in the table above. Only A76 is tethered — the rest of the tRNA is rigid scenery.
+```
+
+**Per-stage tethering (tRNA-tether mode).** Each stage rebuilds the length-`L` system and
+re-attaches the tether to the appropriate site — there is **no sliding spring**; the A→P
+"switch" is realized by the tether referencing the P-site beads (`PtR`) instead of the
+A-site beads (`AtR`):
+
+| stage | C-terminus (residue `L`) | previous residue (`L−1`) |
+|-------|--------------------------|--------------------------|
+| **1** | A-site (`AtR`) | **P-site (`PtR`)** |
+| **2** | A-site (`AtR`) | — free — |
+| **3** | **P-site (`PtR`)** | — free — |
+
+- **Stage 1** double-tethers *both* ends of the freshly-formed peptide bond (the new
+  residue at A, the previous one at P), so the new bond starts at its equilibrium PTC
+  geometry the instant the residue appears.
+- **Stage 2** keeps the new residue at A; the previous residue is released (held only by
+  the nascent-chain backbone + the tunnel wall).
+- **Stage 3** re-tethers the new residue A→P — starting from stage 2's coordinates, the
+  minimize + MD carries it from the A-site to the P-site: **this is the translocation.**
+- **Cold start** (the first residue `L0`, no previous residue): tethered to the P-site in
+  all three stages.
+
+```{figure} img/csp_restraint_ap_stages.svg
+:alt: tRNA sites drawn E, P, A left to right; across the three stages the new residue moves from the A-site to the P-site, right to left.
+:width: 600px
+:align: center
+
+**The A→P switch across the three stages.** Each stage rebuilds the system and re-attaches
+the tether (no sliding spring). Stage 1 double-tethers both ends of the new peptide bond
+(new residue `N` at A, previous at P); stage 2 keeps `N` at A (previous released); stage 3
+re-tethers `N` to the P-site — the minimize + MD carry it A→P (right→left), **this is the
+translocation.** Sites are drawn E–P–A per convention; CSP models only the P- and A-site
+tRNAs (no E-site tRNA).
+```
+
+```{note}
+The tRNA tether requires a **well-formed A/P tRNA** in the ribosome PDB (segids `AtR`/`PtR`,
+resid 76, beads `R`/`P`/`BR2`; the acceptor must be a purine, which carries `BR2`). A site
+missing its `P` or `BR2` bead simply skips that angle/improper. The A/P target *points*
+(used by both modes, and for the tunnel-wall plane) come from the always-on PTC-geometry
+optimization.
 ```
 
 ### 4. From codon to MD steps (the kinetics)
@@ -319,29 +433,37 @@ wall biases motion forward) and clears the ribosome. An optional **dissociation*
 dedicated egress demonstration, raise `ejection_steps` (and `dissociation_steps`) in the
 Tutorial 8 `csp_val.ini`.
 
-### 6. Numerical integration and the stability guard
+### 6. Numerical integration, equilibrium seeding, and the stability guard
 
-The chain is integrated with **flexible harmonic bonds** at `dt = 0.015 ps`. Flexible
-(rather than rigid `AllBonds`) bonds are required because stage 1 seeds the new bead
-~1 nm from its bond partner (A-site delivery), which a rigid distance constraint cannot
-represent — a harmonic bond absorbs the stretch and the minimizer relaxes it.
+**The default is rigid `AllBonds` at `dt = 0.015 ps`, and it is stable by construction.**
+This works because the always-on **PTC-geometry optimization never pre-stretches a bond**.
+`optimal_ptc_targets` places the A- and P-site target points **exactly one equilibrium
+peptide bond apart** — `0.381 nm`, which is precisely the `AllBonds` constraint length —
+and each new residue is seeded *at* the A-target, one equilibrium bond from the previous
+C-terminus (which rests at the P-target). So the always-present peptide bond starts at
+its rest length, and a rigid `AllBonds` build seeds and minimizes cleanly at 15 fs.
+(Removing the fast bond-stretch mode is exactly how the reference protocol stays stable —
+topo gets the same benefit by default.)
 
-The cost: at 15 fs the integration is only **marginally stable** for some configurations.
-When a newly added residue forms a **stiff native (Gō) contact**, that contact's
-vibrational period drops below what a 15 fs step can integrate and the dynamics
-**diverge** (potential energy → ~10¹³ kJ/mol), corrupting that stage's frames. This is
-**deterministic in the timestep, not random** (the reference protocol avoids it entirely by
-using rigid `AllBonds`, which remove the fast bond mode).
+```{note}
+This is a change from an earlier design in which the new residue was seeded far (~1 nm)
+from its bond partner and *flexible* bonds were required to absorb the stretch. That is no
+longer the case: the equilibrium-PTC seeding means the bond is never stretched, so **rigid
+`AllBonds` is the stable default**. Flexible bonds (`constraints = None`) remain an
+option — the equilibrium seeding keeps either treatment stable.
+```
 
-**The fix** (`topo.csp.core.run_length`, the per-stage *stability guard*): each stage
-is run in chunks while tracking the **maximum** |PotE|; if a stage diverges
-(max |PotE| > 10⁹ kJ/mol) it is transparently **re-run with the timestep halved and the
-step count doubled**. Because the physical dwell time is `n_steps · dt`, halving `dt` and
-doubling `n_steps` **leaves the dwell time exactly unchanged** while stabilising the
-integration (up to 6 halvings). The common case runs once at 15 fs. Watch for
-`[stability] ...` lines in the log: those are stages auto-stabilised at a halved timestep.
-Tutorial 8's full-length run (`csp_val.ini`, L = 1 → 306) validates this across the whole
-chain (919 stages, zero blow-ups).
+**The stability guard is a safety net, not the primary mechanism.** It mainly matters if
+you switch to flexible bonds (`constraints = None`), where a newly-formed **stiff native
+(Gō) contact** can drive a 15 fs step past stability and the dynamics diverge (potential
+energy → ~10¹³ kJ/mol), corrupting that stage's frames. The guard
+(`topo.csp.core.run_length`) runs each stage in chunks while tracking the **maximum**
+|PotE|; if a stage diverges (max |PotE| > 10⁹ kJ/mol) it is transparently **re-run with
+the timestep halved and the step count doubled** — and because the dwell time is
+`n_steps · dt`, halving `dt` and doubling `n_steps` **leaves the dwell time exactly
+unchanged** (up to 6 halvings). Watch for `[stability] …` lines in the log. With the
+default `AllBonds` seeding the guard essentially never fires: Tutorial 8's full-length run
+(`csp_val.ini`, L = 1 → 306, `AllBonds`) completes all 919 stages with zero blow-ups.
 
 ---
 
