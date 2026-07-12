@@ -43,7 +43,7 @@ cd synth_out && vmd -e movie.tcl        # movie.tcl loads its files by basename
 ```
 
 `topo-cylinder` writes, per residue `L`, a standalone trajectory under
-`<outdir>/L_<L>/`, optional post-synthesis free runs (`ejection/` and `dissociation/`),
+`<outdir>/L_<L>/`, an optional post-synthesis free run (`ejection/`),
 and a per-residue dwell-time log `<outdir>/dwell_times.dat`.
 
 ---
@@ -106,8 +106,7 @@ do not change its total), and the **`ribosome_traffic` / `initiation_rate`** key
 inter-ribosome traffic correction is added. Set those keys in `cylinder.ini` and they
 are silently ignored. (3) The ribosome-specific knobs (`nascent_ev_radii`,
 `trna_tether`, `tunnel_wall`) do not apply.
-The post-synthesis phases use the **same** `ejection_steps` / `dissociation_steps` keys
-as the CSP runner.
+The post-synthesis phase uses the **same** `ejection_steps` key as the CSP runner.
 ```
 
 ### Physical scope — what the bore captures, and what it omits
@@ -166,7 +165,6 @@ segment per residue the whole codon dwell `τ` is one segment, not a three-way s
 │   ├── traj.log            # energies
 │   └── ...
 ├── ejection/               # post-synthesis free run (if ejection_steps > 0)
-├── dissociation/           # continued free run (if dissociation_steps > 0)
 ├── dwell_times.dat         # per-residue: codon, sampled dwell (s), ns, integration steps
 └── progress.log            # append-only DONE/RUNNING resume status
 ```

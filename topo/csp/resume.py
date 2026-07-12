@@ -69,7 +69,7 @@ def cylinder_final_path(out_root: Path, L: int) -> Path:
 
 
 def phase_final_path(out_root: Path, name: str) -> Path:
-    """Path of a post-synthesis phase's final structure (``ejection`` / ``dissociation``).
+    """Path of a post-synthesis phase's final structure (``ejection``).
 
     ``<out_root>/<name>/traj_final.pdb`` -- the phase runs as a single ``run_length``
     call writing its final directly under ``<name>/``. Same for both runners.
@@ -359,7 +359,7 @@ def append_progress(out_root: Path, unit: str, status: str) -> None:
     out_root : pathlib.Path
         Output root holding ``progress.log``.
     unit : str
-        Unit name -- ``L_<L>`` for a residue, or ``ejection`` / ``dissociation``.
+        Unit name -- ``L_<L>`` for a residue, or ``ejection``.
     status : str
         ``"RUNNING"`` or ``"DONE"``.
     """

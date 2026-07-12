@@ -119,7 +119,7 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
         Side-effecting: writes per-residue trajectories under
         ``out_root/L_<L>/`` (per-stage ``traj_s{1,2,3}.dcd``), the immutable schedule + PTC-geometry table
         ``dwell_times.dat``, an append-only ``progress.log`` (resume status), and (if
-        requested) ``ejection/`` and ``dissociation/`` phases. If ``params.resume`` is
+        requested) an ``ejection/`` phase. If ``params.resume`` is
         ``auto``/``yes`` and an interrupted run is present under ``out_root``, continues
         from the last completed residue instead of restarting (see :mod:`topo.csp.resume`).
 
@@ -284,7 +284,7 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
 
     # --- up-front cost report: exact step total, nominal wall-time ----------
     total_steps = (sum(sum(r.steps) for r in schedule)
-                   + max(params.ejection_steps, 0) + max(params.dissociation_steps, 0))
+                   + max(params.ejection_steps, 0))
     print(f"[schedule] {L_max - L0 + 1} residues, {total_steps:,} planned MD steps"
           f"{resume_mod.est_walltime(total_steps, params)}")
     print(f"Per-residue dwell-time table: {dwell_log}")
@@ -362,9 +362,9 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
     print(f"Done. Synthesized {L0} -> {L_max}. Per-residue outputs under {out_path}/L_<L>/")
     print(f"Per-residue dwell-time table: {dwell_log}")
 
-    # --- post-synthesis: ejection then dissociation (both free runs) --------
-    # Each phase is its own progress unit; on resume a completed phase is skipped and
-    # its final structure reloaded to seed the next phase (see topo.csp.resume).
+    # --- post-synthesis: ejection (free run) --------------------------------
+    # The ejection phase is its own progress unit; on resume a completed phase is
+    # skipped (see topo.csp.resume).
     if params.ejection_steps > 0:
         if do_resume and prog.is_done("ejection"):
             prev_final = resume_mod.load_final_pdb(
@@ -383,23 +383,6 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
                 n_steps_override=params.ejection_steps, nascent_rmin_2=nascent_rmin_2_arg,
                 label="ejection")
             resume_mod.append_progress(out_path, "ejection", "DONE")
-
-    if params.dissociation_steps > 0:
-        if do_resume and prog.is_done("dissociation"):
-            print("[resume] dissociation already complete; skipping.")
-        else:
-            print()
-            print(f"=== Dissociation (L = {L_max}, {params.dissociation_steps} steps, "
-                  f"restraint OFF) -> {out_path / 'dissociation'}/ ===")
-            resume_mod.append_progress(out_path, "dissociation", "RUNNING")
-            run_length(
-                L_max, full_pdb=full_pdb, R_full=R_full, eps_full=eps_full,
-                p_anchor=p_target, a_anchor=a_anchor, prev_final=None,
-                seed_override=prev_final, out_root=out_path, params=ep, ribo=ribo,
-                restrain=False, out_subdir="dissociation",
-                n_steps_override=params.dissociation_steps, nascent_rmin_2=nascent_rmin_2_arg,
-                label="dissociation")
-            resume_mod.append_progress(out_path, "dissociation", "DONE")
 
 
 # --------------------------------------------------------------------------
@@ -482,8 +465,7 @@ def read_csp_config(config_file: str, verbose: bool = True) -> CSPConfig:
     - ``max_steps_per_stage`` -- cap each stage's step count (the tutorial uses a
       small value for a ~2000-steps/residue test; blank = uncapped production).
     - ``min_steps_per_stage`` -- floor each stage's step count (default 1).
-    - ``ejection_steps`` / ``dissociation_steps`` -- post-synthesis free runs
-      (0 = skip).
+    - ``ejection_steps`` -- post-synthesis free run; restraint released (0 = skip).
     - ``resume`` -- resume policy: ``auto`` (default; resume iff an interrupted run is
       present under ``outdir``), ``yes`` (require a resumable run, else error) or ``no``
       (always start fresh). See :mod:`topo.csp.resume`.
@@ -728,8 +710,6 @@ def read_csp_config(config_file: str, verbose: bool = True) -> CSPConfig:
         p.min_steps_per_stage = as_int(opt("min_steps_per_stage"))
     if opt("ejection_steps") is not None:
         p.ejection_steps = as_int(opt("ejection_steps"))
-    if opt("dissociation_steps") is not None:
-        p.dissociation_steps = as_int(opt("dissociation_steps"))
     # Resume policy: auto (default; resume iff an interrupted run is present), yes
     # (require a resumable run), no (always fresh). See topo.csp.resume.
     if opt("resume") is not None:
@@ -764,9 +744,8 @@ def read_csp_config(config_file: str, verbose: bool = True) -> CSPConfig:
     log(f"  ribosome: rigid scenery (always, from the supplied PDB)"
         f"; tunnel wall: {'on (plane auto-derived from structure)' if p.tunnel_wall else 'off'}")
     log(f"  integrator: dt={p.dt_ps} ps, ref_t={p.ref_t} K, tau_t={p.tau_t} /ps, nstout={p.nstout}")
-    if p.ejection_steps or p.dissociation_steps:
-        log(f"  post-synthesis: ejection={p.ejection_steps} steps, "
-            f"dissociation={p.dissociation_steps} steps")
+    if p.ejection_steps:
+        log(f"  post-synthesis: ejection={p.ejection_steps} steps")
     log(f"  hardware/output: device={p.device}, ppn={p.ppn}, outdir={outdir}")
 
     return CSPConfig(pdb_file=pdb_file, ribosome=ribosome, L0=L0, L_max=L_max,

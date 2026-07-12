@@ -28,8 +28,8 @@ each run for an **exponentially-sampled** dwell time (first-passage-time samplin
 | 3 | tRNA binding / waiting | `codon_total − stage1 − stage2` | → **P-anchor** |
 
 The A→P restraint switch between stages 2 and 3 reproduces translocation. Stage 3's
-final structure seeds the next residue. After `L_max`, optional **ejection** (release
-the restraint) and **dissociation** (free drift-off) phases run.
+final structure seeds the next residue. After `L_max`, an optional **ejection**
+(release the restraint; the finished chain diffuses free) phase runs.
 
 Dwell times map to integration steps the O'Brien way:
 
@@ -86,7 +86,7 @@ the protein + table (see the `mrna` key below).
 | `time_stage_1` / `time_stage_2` | mean peptidyl-transfer / translocation dwell (s) |
 | `random_seed` | seed for the FPT sampler (reproducible schedules) |
 | `max_steps_per_stage` / `min_steps_per_stage` | clamp each stage's step count (testing) |
-| `ejection_steps` / `dissociation_steps` | post-synthesis free runs (0 = skip) |
+| `ejection_steps` | post-synthesis free run (0 = skip) |
 | `resume` | `auto` (default; resume iff an interrupted run is present under `outdir`), `yes` (require a resumable run, else error), `no` (always fresh). See *Resume* below. |
 
 **MD / ribosome keys** (configure the shared `RunParams`; `n_steps` is **not** used — step
@@ -110,7 +110,7 @@ in **seconds**.
 `traj_s{1,2,3}.dcd` + `traj_s{1,2,3}.log`, one folded `traj_runinfo.log` (a section per
 stage), and a single `traj_final.pdb` (the stage-3 final — it seeds the next residue and
 is the resume-reload target). No per-stage `.chk` (per-residue resume reloads
-`traj_final.pdb`). Plus `ejection/` and optional `dissociation/`.
+`traj_final.pdb`). Plus an optional `ejection/`.
 
 At the output root: `dwell_times.dat` (the **immutable plan** — the full per-residue
 3-stage schedule, drawn once up front, with the PTC restraint geometry in its `#PTC`

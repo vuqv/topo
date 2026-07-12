@@ -80,23 +80,19 @@ fillet **0.2 nm**, wall stiffness **8368 kJ/mol/nm²**. The kinetics keys (`mrna
 `scale_factor`, `time_stage_1/2`, `max_steps_per_stage`) are the **same** as the CSP
 tutorials; the demo caps each residue at 2000 steps (delete the clamps for production).
 
-## Post-synthesis: ejection and dissociation
+## Post-synthesis: ejection
 
-Once the chain reaches its final length, two optional **post-synthesis free runs**
-continue the same system from the finished structure — the **same `ejection_steps` /
-`dissociation_steps` keys as `topo-csp`**. Both phases **release** the C-terminus
-restraint, so the completed protein is free to diffuse; the analytic tunnel stays on
-(bore + closed PTC end + exit wall), so the only way out is +x through the exit. This
-tests whether the nascent protein **diffuses out of the tunnel and folds in the
-cytosol**.
+Once the chain reaches its final length, an optional **post-synthesis free run**
+continues the same system from the finished structure — the **same `ejection_steps`
+key as `topo-csp`**. The phase **releases** the C-terminus restraint, so the completed
+protein is free to diffuse; the analytic tunnel stays on (bore + closed PTC end + exit
+wall), so the only way out is +x through the exit. This tests whether the nascent
+protein **diffuses out of the tunnel and folds in the cytosol**.
 
-- **`ejection`** (`ejection_steps`) — the first free run, written to `<outdir>/ejection/`.
-- **`dissociation`** (`dissociation_steps`) — a continued free run seeded from the
-  ejection structure, written to `<outdir>/dissociation/`.
+- **`ejection`** (`ejection_steps`) — the free run, written to `<outdir>/ejection/`.
 
 ```ini
 ejection_steps     = 300_000   # use a LONG run so the protein can clear the tunnel
-dissociation_steps = 0         # 0 -> skip
 ```
 
 ## Visualize / validate

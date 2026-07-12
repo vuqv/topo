@@ -158,8 +158,8 @@ def run_length(L: int, *, full_pdb: str, R_full: np.ndarray, eps_full: np.ndarra
     (:func:`add_tunnel_cylinder`) supplies all ribosome confinement. Injects the ``L x L``
     build-once-subset contact block exactly as the shipped runner does.
 
-    The same routine drives both an elongation step and the post-synthesis phases
-    (ejection / dissociation); these arguments tailor it to the latter:
+    The same routine drives both an elongation step and the post-synthesis phase
+    (ejection); these arguments tailor it to the latter:
 
     - ``seed_point`` : where to place the **new** C-terminal residue ``L`` when continuing
       from ``prev_final`` (default ``cterm_seed``). The kinetic driver passes a point one
@@ -170,10 +170,10 @@ def run_length(L: int, *, full_pdb: str, R_full: np.ndarray, eps_full: np.ndarra
       ratchets out. Unused for cold start / ``seed_override``.
     - ``seed_override`` : use these ``(L, 3)`` nm coordinates directly (the fully
       synthesized structure) instead of cold-start / new-residue placement.
-    - ``restrain`` : if False, drop the C-terminus restraint (ejection/dissociation --
-      the finished protein is released and free to diffuse out the exit).
+    - ``restrain`` : if False, drop the C-terminus restraint (ejection -- the finished
+      protein is released and free to diffuse out the exit).
     - ``out_subdir`` : output folder under ``out_root`` (default ``L_<L>``); e.g.
-      ``ejection`` / ``dissociation``.
+      ``ejection``.
     - ``n_steps_override`` : run this many steps instead of ``params.n_steps`` (the
       kinetic driver passes the per-residue codon-dwell step count here).
     - ``label`` : console-banner text.
@@ -424,7 +424,7 @@ def run_cylinder_synthesis(full_pdb: str, *, L0: int = 1, L_max: Optional[int] =
 
     # --- up-front cost report: exact step total, nominal wall-time ----------
     total_steps = (sum(r.steps for r in schedule)
-                   + max(params.ejection_steps, 0) + max(params.dissociation_steps, 0))
+                   + max(params.ejection_steps, 0))
     print(f"[schedule] {L_max - L0 + 1} residues, {total_steps:,} planned MD steps"
           f"{resume_mod.est_walltime(total_steps, params)}")
     print(f"Per-residue dwell-time table: {dwell_log}")
@@ -450,13 +450,12 @@ def run_cylinder_synthesis(full_pdb: str, *, L0: int = 1, L_max: Optional[int] =
     print(f"Per-residue dwell-time table: {dwell_log}")
 
     # Post-synthesis: once the chain reaches its final length, release the C-terminus
-    # restraint and let the finished protein move -- ejection then dissociation, two
-    # sequential free runs (both restraint OFF), mirroring topo.csp.protocol so the two
-    # runners share the `ejection_steps` / `dissociation_steps` control keys. Each phase
-    # continues the length-L_max system from the previous final structure; the analytic
-    # tunnel stays on throughout (the only way out is the exit face).
-    # Each phase is its own progress unit; on resume a completed phase is skipped and its
-    # final structure reloaded to seed the next phase.
+    # restraint and let the finished protein move -- ejection, a free run (restraint
+    # OFF), mirroring topo.csp.protocol so the two runners share the `ejection_steps`
+    # control key. It continues the length-L_max system from the previous final
+    # structure; the analytic tunnel stays on throughout (the only way out is the exit
+    # face). The ejection phase is its own progress unit; on resume a completed phase is
+    # skipped.
     if params.ejection_steps > 0:
         if do_resume and prog.is_done("ejection"):
             prev_final = resume_mod.load_final_pdb(
@@ -476,24 +475,6 @@ def run_cylinder_synthesis(full_pdb: str, *, L0: int = 1, L_max: Optional[int] =
                 label=f"ejection (L = {L_max})")
             resume_mod.append_progress(out_path, "ejection", "DONE")
             print(f"Done. Ejection written to {out_path / 'ejection'}/")
-
-    if params.dissociation_steps > 0:
-        if do_resume and prog.is_done("dissociation"):
-            print("[resume] dissociation already complete; skipping.")
-        else:
-            print()
-            print(f"=== Dissociation (L = {L_max}, {params.dissociation_steps} steps, "
-                  f"restraint OFF -> free diffusion) -> {out_path / 'dissociation'}/ ===")
-            resume_mod.append_progress(out_path, "dissociation", "RUNNING")
-            run_length(
-                L_max, full_pdb=full_pdb, R_full=R_full, eps_full=eps_full,
-                prev_final=None, out_root=out_path, params=params,
-                cterm_seed=cterm_seed, x_lo=x_lo, x_exit=x_exit,
-                seed_override=prev_final, restrain=False, out_subdir="dissociation",
-                n_steps_override=params.dissociation_steps,
-                label=f"dissociation (L = {L_max})")
-            resume_mod.append_progress(out_path, "dissociation", "DONE")
-            print(f"Done. Dissociation written to {out_path / 'dissociation'}/")
 
 
 # --------------------------------------------------------------------------
@@ -541,10 +522,9 @@ def read_cylinder_config(config_file: str, verbose: bool = True) -> CylinderConf
     - **Tunnel geometry**: ``tunnel_radius`` (nm), ``tunnel_length`` (nm),
       ``tunnel_x_lo`` (nm), ``tunnel_center`` (``"y0,z0"`` nm), ``tunnel_k``
       (kJ/mol/nm^2), ``tunnel_mouth_round`` (nm).
-    - **Post-synthesis** (same keys as CSP): ``ejection_steps`` and
-      ``dissociation_steps`` -- two sequential free runs at full length (each releases
-      the C-terminus restraint so the finished protein diffuses out the exit and folds
-      in the cytosol; 0 = skip that phase).
+    - **Post-synthesis** (same key as CSP): ``ejection_steps`` -- a free run at full
+      length that releases the C-terminus restraint so the finished protein diffuses
+      out the exit and folds in the cytosol (0 = skip).
     - ``resume`` -- resume policy (same as CSP): ``auto`` (default; resume iff an
       interrupted run is present under ``outdir``), ``yes`` (require a resumable run,
       else error) or ``no`` (always fresh). See :mod:`topo.csp.resume`.
@@ -672,11 +652,9 @@ def read_cylinder_config(config_file: str, verbose: bool = True) -> CylinderConf
         p.tunnel_k = float(opt("tunnel_k"))
     if opt("tunnel_mouth_round") is not None:
         p.tunnel_mouth_round_nm = float(opt("tunnel_mouth_round"))
-    # --- post-synthesis free runs (same keys as CSP) ---
+    # --- post-synthesis free run (same key as CSP) ---
     if opt("ejection_steps") is not None:
         p.ejection_steps = as_int(opt("ejection_steps"))
-    if opt("dissociation_steps") is not None:
-        p.dissociation_steps = as_int(opt("dissociation_steps"))
     # Resume policy (same as CSP): auto (default) / yes / no. See topo.csp.resume.
     if opt("resume") is not None:
         r = opt("resume").strip().lower()
@@ -707,9 +685,8 @@ def read_cylinder_config(config_file: str, verbose: bool = True) -> CylinderConf
         f"x_lo={p.tunnel_x_lo_nm} nm, center={p.tunnel_center_nm} nm, "
         f"k={p.tunnel_k} kJ/mol/nm^2, mouth_round={p.tunnel_mouth_round_nm} nm")
     log(f"  mechanics: restraint_k={p.restraint_k} kJ/mol/nm^2, minimize={p.minimize}")
-    if p.ejection_steps or p.dissociation_steps:
-        log(f"  post-synthesis: ejection={p.ejection_steps} steps, "
-            f"dissociation={p.dissociation_steps} steps")
+    if p.ejection_steps:
+        log(f"  post-synthesis: ejection={p.ejection_steps} steps")
     else:
         log("  post-synthesis: off")
     log(f"  integrator: dt={p.dt_ps} ps, ref_t={p.ref_t} K, tau_t={p.tau_t} /ps, nstout={p.nstout}")

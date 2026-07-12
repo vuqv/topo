@@ -331,7 +331,7 @@
 
   <g class="node" data-k="csp-post">
     <rect x="1150" y="972" width="340" height="58" rx="10"/>
-    <text class="t" x="1170" y="996">ejection / dissociation</text>
+    <text class="t" x="1170" y="996">ejection</text>
     <text class="m" x="1170" y="1016">run_length · restraint OFF · free drift</text>
   </g>
 
@@ -412,7 +412,7 @@ const DETAIL = {
 
   "csp-cli":  { t:"topo-csp", m:"entry · topo/csp/protocol.py", b:"The O'Brien continuous-synthesis runner. Reads the CSP control file and launches <code>run_continuous_synthesis()</code>." },
   "csp-cfg":  { t:"read_csp_config()", m:"topo.csp.protocol", b:"Parses <code>csp.ini</code> into a <code>CSPConfig</code> + <code>RunParams</code>: full-length PDB, ribosome PDB, mRNA, domain.yaml nscales, and every MD + kinetic knob (scale_factor, per-stage times, dt, restraint constants)." },
-  "csp-driver":{ t:"run_continuous_synthesis()", m:"the synthesis driver", b:"Sets up the fixed scenery once (ribosome, anchors, PTC targets, tunnel plane, contacts, kinetics), then loops <code>L = L0…L_max</code> running three sub-stages per residue, then optional ejection + dissociation." },
+  "csp-driver":{ t:"run_continuous_synthesis()", m:"the synthesis driver", b:"Sets up the fixed scenery once (ribosome, anchors, PTC targets, tunnel plane, contacts, kinetics), then loops <code>L = L0…L_max</code> running three sub-stages per residue, then an optional ejection." },
   "csp-ribo": { t:"load_ribosome()", m:"topo.csp.ribosome", b:"Parses the truncated CG ribosome PDB into rigid <b>mass-0</b> scenery — per-bead collision radii and charges from <code>model_parameters</code>. Loaded once; identical at every length." },
   "csp-anchor":{ t:"anchors + optimal_ptc_targets()", m:"topo.csp.core", b:"Reads the fixed P-/A-anchors from the ribosome's tRNA beads, then places the optimal A-site and P-site <b>target points</b> — one equilibrium peptide bond (0.381 nm) apart and clear of the ribosome — so a rigid AllBonds build seeds and minimizes cleanly." },
   "csp-precompute":{ t:"precompute_contacts()", m:"topo.csp.core", b:"Runs the TOPO contact builder once on the full native structure → the <code>N×N</code> well-position / well-depth matrices and per-residue K-B Rmin/2. Each length reuses the top-left <code>L×L</code> block, so STRIDE and the heavy-atom analysis never re-run." },
@@ -421,7 +421,7 @@ const DETAIL = {
   "csp-stage1":{ t:"run_length · stage 1", m:"peptidyl-transfer · A-site", b:"Adds the new residue and restrains its C-terminus to the <b>A-site</b> target for <code>s1</code> steps. Cold start lays the initial segment from the P-anchor. Runs one full pass through the shared core." },
   "csp-stage2":{ t:"run_length · stage 2", m:"translocation · A-site", b:"Continues from stage 1's final structure at the same A-site restraint for <code>s2</code> steps (minimization skipped — the seed is already relaxed)." },
   "csp-stage3":{ t:"run_length · stage 3", m:"tRNA-binding · A → P", b:"Switches the C-terminus restraint from the A-site to the <b>P-site</b> target — this A→P move reproduces translocation — and runs <code>s3</code> steps. Its final structure (<code>f3</code>) seeds the next residue." },
-  "csp-post": { t:"ejection / dissociation", m:"post-synthesis", b:"After L_max, two sequential free runs with the restraint <b>OFF</b>: ejection then dissociation, each continuing from the previous final structure. The finished protein diffuses out the exit." },
+  "csp-post": { t:"ejection", m:"post-synthesis", b:"After L_max, one free run with the restraint <b>OFF</b>: ejection, continuing from the last stage's final structure. The finished protein diffuses out the exit." },
 
   "ff-build": { t:"build model", m:"topo.core — the force field", b:"<code>buildCoarseGrainModel()</code> (mdrun) or <code>build_length_model()</code> (CSP, injecting the L×L contact block). Same Cα build both ways: <code>getCAlphaOnly → getAtoms → getBonds → getAngles</code>, per-AA mass/charge, bonds/angles/torsions, Yukawa electrostatics, structure-based contacts, then <code>createSystemObject()</code>." },
   "scenery":  { t:"scenery (CSP only)", m:"topo.csp.core / ribosome", b:"What synthesis adds to a stock system before running: <code>add_cterm_restraint()</code> (harmonic spring to the A- or P-target), <code>append_ribosome()</code> (mass-0 beads + the O'Brien 12-10-6 NC↔ribosome excluded volume), and the one-sided tunnel wall. mdrun skips this entirely." },
@@ -457,7 +457,7 @@ const FLOWS = {
       "For each residue L, <code>stage_steps()</code> samples the 3 stage dwell times → step counts",
       "3 × <code>run_length()</code>: each builds the L-length model, adds ribosome/tunnel scenery + the C-term restraint, then runs the shared engine core",
       "The restraint switches <b>A → P</b> between stages 2 and 3 (translocation); <code>_final.pdb</code> seeds L+1",
-      "After L_max: ejection then dissociation (restraint off)"
+      "After L_max: ejection (restraint off)"
     ]
   },
   residue: {

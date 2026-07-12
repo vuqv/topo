@@ -41,7 +41,7 @@ structure-based model and powers two complementary workflows.
   **mRNA generator** (`topo-make-mrna`) in fastest / slowest / median synonymous-codon
   modes.
 - **tRNA tether**, **rigid-bond (`AllBonds`) support**, **resume** (continue from the
-  last completed residue), and post-synthesis **ejection / dissociation** phases.
+  last completed residue), and a post-synthesis **ejection** phase.
 - **Movie tool** (`topo-csp-movie`) — stitch per-residue/-stage trajectories into a VMD
   movie, with `--tunnel` (analytic tunnel) or `--ribosome` (CG ribosome) scenery.
 

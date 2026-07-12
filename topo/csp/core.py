@@ -921,9 +921,8 @@ class RunParams:
     # --- test clamps (production: leave both at their defaults / None) ---
     max_steps_per_stage: Optional[int] = None  # cap each stage (tutorial: small)
     min_steps_per_stage: int = 1               # floor each stage
-    # --- post-synthesis phases (steps; 0 = skip) ---
-    ejection_steps: int = 0             # release the restraint; let the chain leave
-    dissociation_steps: int = 0         # free run; protein drifts off the ribosome
+    # --- post-synthesis phase (steps; 0 = skip) ---
+    ejection_steps: int = 0             # release the restraint; the finished chain diffuses free
 
 
 def _make_cfg(out_dir: Path, sub_pdb: str, seed_pdb: str,

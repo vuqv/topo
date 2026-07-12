@@ -13,12 +13,12 @@ It handles **two output layouts** with a shared stitching core
 
 * **CSP (3-stage)** -- ``<out>/L_<L>/`` from the Continuous Synthesis Protocol
   (:mod:`topo.csp.protocol`): one folder per residue with per-stage
-  ``traj_s<1,2,3>.dcd`` and a shared ``traj.psf``, plus ``ejection/`` /
-  ``dissociation/``. Use :func:`stitch_movie` / :func:`find_stage_segments`. The movie
+  ``traj_s<1,2,3>.dcd`` and a shared ``traj.psf``, plus ``ejection/``.
+  Use :func:`stitch_movie` / :func:`find_stage_segments`. The movie
   plays the chain growing **stage by stage** (new residue at the A-site, settle,
   translocate to P).
 * **Flat (per-length)** -- ``<out>/L_<L>/traj.dcd`` from a single-segment per-length loop
-  (e.g. the cylinder runner), plus ``ejection/`` / ``dissociation/``.
+  (e.g. the cylinder runner), plus ``ejection/``.
   Use :func:`stitch_length_movie` / :func:`find_lengths`.
 
 The :func:`main` CLI (``topo-csp-movie``) **auto-detects** the layout (3-stage if any
@@ -51,10 +51,10 @@ SENTINEL_A = 99999.0
 # Per-residue elongation sub-stages, in playback order (CSP layout).
 STAGES = (1, 2, 3)
 # Post-synthesis phase folders, in the order they should appear after growth.
-# Both the CSP protocol and the flat per-length (cylinder) loop run the same two
-# free-run phases: ejection then dissociation.
-POST_PHASES_CSP = ("ejection", "dissociation")
-POST_PHASES_FLAT = ("ejection", "dissociation")
+# Both the CSP protocol and the flat per-length (cylinder) loop run the same
+# free-run phase: ejection.
+POST_PHASES_CSP = ("ejection",)
+POST_PHASES_FLAT = ("ejection",)
 
 
 # ==========================================================================
@@ -284,7 +284,7 @@ puts "Loaded $nf frames. Press Play (or run: animate forward) to watch the chain
 
 
 # ==========================================================================
-# CSP layout: <out>/L_<L>/traj_s<1,2,3>.dcd + shared traj.psf  (+ ejection/ dissociation/)
+# CSP layout: <out>/L_<L>/traj_s<1,2,3>.dcd + shared traj.psf  (+ ejection/)
 # ==========================================================================
 def _pick_traj(phase_dir: str, outname: str = "traj") -> Optional[str]:
     """Pick the trajectory file to read for one stage/phase, or ``None`` if absent.
@@ -330,7 +330,7 @@ def find_stage_segments(out_root: str, outname: str = "traj"
 
     Walks ``<out_root>/L_<L>/`` (per-stage ``traj_s<1,2,3>.dcd``) in increasing ``L`` then stage order
     (only stages with a ``.psf`` and a readable trajectory are kept), then appends any
-    ``ejection/`` / ``dissociation/`` phase. ``n_atoms`` is ``L`` for a stage of
+    ``ejection/`` phase. ``n_atoms`` is ``L`` for a stage of
     length ``L`` (the nascent-only output) and the post-phase psf's atom count for
     the post phases. The trajectory is the stage's ``.dcd`` when it has frames, else
     its ``_final.pdb`` snapshot (see :func:`_pick_traj`).
@@ -339,7 +339,7 @@ def find_stage_segments(out_root: str, outname: str = "traj"
     ----------
     out_root : str
         CSP run output root, containing the ``L_<L>/`` length folders and any
-        ``ejection/`` / ``dissociation/`` post-synthesis phases.
+        ``ejection/`` post-synthesis phase.
     outname : str, optional
         Per-stage output basename used by the runner (default ``"traj"``); the
         per-stage psf is ``<outname>.psf`` and the trajectory is chosen by
@@ -451,7 +451,7 @@ def stitch_movie(out_root: str, out_prefix: str = "movie",
 
 
 # ==========================================================================
-# Flat layout: <out>/L_<L>/traj.dcd  (+ ejection/ dissociation/)
+# Flat layout: <out>/L_<L>/traj.dcd  (+ ejection/)
 # ==========================================================================
 def find_lengths(out_root: str,
                  outname: str = "traj") -> List[Tuple[int, str, str]]:
@@ -495,16 +495,14 @@ def find_lengths(out_root: str,
 def find_post(out_root: str, outname: str = "traj") -> List[Tuple[str, str, str]]:
     """Return ``[(name, psf, dcd), ...]`` for present post-synthesis phases (flat).
 
-    Looks for ``<out_root>/ejection/`` and ``<out_root>/dissociation/`` (in that
-    order) -- the optional post-synthesis runs written after the chain reaches its
-    final length in the flat per-length layout. Only phases with both a ``.psf`` and
-    a ``.dcd`` are returned.
+    Looks for ``<out_root>/ejection/`` -- the optional post-synthesis run written
+    after the chain reaches its final length in the flat per-length layout. Only
+    phases with both a ``.psf`` and a ``.dcd`` are returned.
 
     Parameters
     ----------
     out_root : str
-        The run's output root (may contain the ``ejection/`` and/or ``dissociation/``
-        folders).
+        The run's output root (may contain the ``ejection/`` folder).
     outname : str
         Per-length output basename used by the runner (default ``traj``); the
         files looked for are ``<outname>.psf`` and ``<outname>.dcd``.
@@ -533,7 +531,7 @@ def stitch_length_movie(out_root: str, out_prefix: str = "movie",
 
     The flat-layout counterpart of :func:`stitch_movie`: enumerates
     ``<out_root>/L_<L>/`` per-length trajectories (:func:`find_lengths`), appends any
-    ``ejection/`` / ``dissociation/`` phase (:func:`find_post`), and hands them to the
+    ``ejection/`` phase (:func:`find_post`), and hands them to the
     shared :func:`stitch_segments` core. Used by the Tutorial-9 cylinder runner.
 
     Parameters
@@ -571,9 +569,9 @@ def stitch_length_movie(out_root: str, out_prefix: str = "movie",
             f"no per-length trajectories found under {out_root!r} "
             f"(expected {out_root}/L_<L>/{outname}.dcd + .psf).")
 
-    # Ordered playback segments: each growth length, then the post-synthesis phases
-    # (ejection / dissociation) at full length. Each segment is (label, n_atoms,
-    # psf, dcd); the post phases run at the final length, so n_atoms = max L.
+    # Ordered playback segments: each growth length, then the post-synthesis phase
+    # (ejection) at full length. Each segment is (label, n_atoms,
+    # psf, dcd); the post phase runs at the final length, so n_atoms = max L.
     segments = [(f"L={L}", L, psf, dcd) for L, psf, dcd in items]
     for name, psf, dcd in find_post(out_root, outname=outname):
         n = len(mda.Universe(psf).atoms)
@@ -633,7 +631,7 @@ def main(argv: Optional[List[str]] = None) -> None:
                     "VMD-playable movie that grows the chain, and write a movie.tcl "
                     "to view it. Auto-detects the CSP 3-stage layout "
                     "(<out>/L_<L>/traj_s<1,2,3>.dcd) or the flat per-length layout "
-                    "(<out>/L_<L>/traj.dcd), plus any ejection/ dissociation/ phase.",
+                    "(<out>/L_<L>/traj.dcd), plus any ejection/ phase.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     p.add_argument("-o", "--out-root", required=True,
                    help="synthesis run output root (contains the L_<L>/ folders).")

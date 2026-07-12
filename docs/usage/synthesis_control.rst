@@ -71,8 +71,8 @@ Example control files
         ; ribo_free_mask = L24 : 42 - 59                 ; free the L24 exit-tunnel loop (optional)
         ; ribo_free_pdb  = .../ecoli/L24_atomistic.pdb   ; all-atom chain for native contacts
 
-        ; --- post-synthesis phases + resume + hardware ---
-        ejection_steps = 20000 ; dissociation_steps = 0 ; resume = auto
+        ; --- post-synthesis phase + resume + hardware ---
+        ejection_steps = 20000 ; resume = auto
         device = GPU ; ppn = 4 ; outdir = synth_out
 
 ``cylinder.ini`` (analytic tunnel) — the shared keys are identical; it drops ``ribosome``
@@ -91,7 +91,7 @@ Example control files
         tunnel_radius = 0.9 ; tunnel_length = 10.0 ; tunnel_x_lo = 0.0
         tunnel_center = 0.0, 0.0 ; tunnel_k = 8368
 
-        ejection_steps = 300000 ; dissociation_steps = 0 ; resume = auto
+        ejection_steps = 300000 ; resume = auto
         device = GPU ; ppn = 4 ; outdir = synth_out
 
 
@@ -266,10 +266,6 @@ per length — STRIDE / contact analysis are never re-run).
      - int
      - ``0``
      - Post-synthesis ejection phase length (steps); ``0`` = skip. Releases the C-terminus restraint so the finished chain diffuses out of the tunnel (+x).
-   * - ``dissociation_steps``
-     - int
-     - ``0``
-     - Post-synthesis dissociation phase length (steps); ``0`` = skip. A further free run that lets the released protein drift off.
    * - ``resume``
      - str
      - ``auto``
@@ -483,12 +479,11 @@ Flexible exit-tunnel loop (``ribo_free_mask`` / ``ribo_free_pdb``)
         ribo_free_mask = L24 : 42 - 59
         ribo_free_pdb  = assets/csp/prepare_ribosome/structures/ecoli/L24_atomistic.pdb
 
-Post-synthesis phases (``ejection_steps`` / ``dissociation_steps``)
+Post-synthesis phase (``ejection_steps``)
     After the last residue, ``ejection_steps > 0`` runs a phase with the C-terminus
     restraint **released** (ribosome/tunnel still present), so the finished chain diffuses
-    out — the analogue of termination. ``dissociation_steps > 0`` then continues the free
-    protein away from the ribosome. Both write their own ``ejection/`` / ``dissociation/``
-    folders; ``0`` skips the phase.
+    out — the analogue of termination. It writes its own ``ejection/`` folder; ``0`` skips
+    the phase.
 
 Output layout, resume and movies
     Each residue writes one ``<outdir>/L_<L>/`` folder (CSP: shared ``traj.psf`` +

@@ -39,8 +39,8 @@ topo-csp-movie -o synth_out_debug --ribosome ribosome_trunc.pdb
 ```
 
 `topo-csp` writes one folder per residue `L` under `<outdir>/L_<L>/` (a shared topology
-plus a per-stage trajectory `traj_s<s>.dcd`), an optional `ejection/` (and
-`dissociation/`) phase, and a per-residue dwell-time log `<outdir>/dwell_times.dat`.
+plus a per-stage trajectory `traj_s<s>.dcd`), an optional `ejection/` phase, and a
+per-residue dwell-time log `<outdir>/dwell_times.dat`.
 
 ---
 
@@ -421,17 +421,15 @@ stage 3's mean swings with the next codon's `τ` (e.g. L = 5 → next codon GCU 
 `0.019547 − 0.00034 − 0.004201 = 0.015006 s`). Edge case: if a very fast next codon makes
 `τ(next) − t1 − t2 ≤ 0`, the mean is floored to `1e-9 s`.
 
-### 5. After the last residue: ejection (and dissociation)
+### 5. After the last residue: ejection
 
 Once the final residue is added, the protein is complete. The simulation then runs a
 **post-synthesis ejection phase** (`ejection_steps`): the C-terminus restraint is
 **released** (the tether is cut), while the rigid ribosome and one-sided tunnel wall
 remain. Biologically this is **termination** — release factors free the finished protein.
 With the tether gone, the chain **diffuses out of the tunnel along +x** (the one-sided
-wall biases motion forward) and clears the ribosome. An optional **dissociation** phase
-(`dissociation_steps`) continues the free protein away from the ribosome. For a longer,
-dedicated egress demonstration, raise `ejection_steps` (and `dissociation_steps`) in the
-Tutorial 8 `csp_val.ini`.
+wall biases motion forward) and clears the ribosome. For a longer, dedicated egress
+demonstration, raise `ejection_steps` in the Tutorial 8 `csp_val.ini`.
 
 ### 6. Numerical integration, equilibrium seeding, and the stability guard
 
@@ -510,7 +508,6 @@ generic "expected exactly one bead" error. Handling missing/renamed tRNA is a tr
 │   ├── traj_runinfo.log    # folded run-info: one [run:...]/[result:...] per stage
 │   └── traj_final.pdb      # stage-3 final — seeds L+1 and is the resume-reload target
 ├── ejection/               # post-synthesis ejection phase (if ejection_steps > 0)
-├── dissociation/           # post-synthesis free run (if dissociation_steps > 0)
 ├── dwell_times.dat         # per-residue dwell-time log / schedule (see below)
 └── progress.log            # append-only DONE/RUNNING resume status (see below)
 ```
@@ -552,8 +549,7 @@ L=  1    AUG  dwell   0.02757 s  steps  400/1136/2000
 The residue line's `steps` field and the per-stage `steps` are the **configured** step
 counts; a stage that trips the stability guard silently reruns at a halved timestep with
 double the steps (the `[stability] ...` lines above), and always prints its concise summary
-line afterwards. The post-synthesis `ejection` / `dissociation` phases print the same
-summary line.
+line afterwards. The post-synthesis `ejection` phase prints the same summary line.
 
 Set **`TOPO_CSP_VERBOSE=1`** to restore the full per-stage banners (build block, seeded-
 structure minimization, run-metadata path, elapsed time) — useful when debugging a single

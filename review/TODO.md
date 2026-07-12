@@ -53,8 +53,7 @@ is the only synthesis path.)*
   depends on tRNA presence+naming, so it must be gated/validated alongside this.
 - [ ] **`ejection_steps = auto`** — stop ejection once the C-terminus clears the ribosome
   (`x(Cterm) − max(x_ribosome) > cutoff`, default 2.0 nm), chunked-stepping loop + safety
-  cap; add `ejection_cutoff_nm`, `ejection_check_every`; consider same for
-  `dissociation_steps`.
+  cap; add `ejection_cutoff_nm`, `ejection_check_every`.
 
 ### Revision list
 - [ ] **Ribosome-traffic correction** (hidden since 2026-06-30) — decide: (a) finish it
