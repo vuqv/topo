@@ -136,8 +136,12 @@ That has two consequences you must respect:
 ## Step-by-step
 
 ### 1. Run the delta T-jump quench
+
+Use either the installed console command / module, or the in-folder shim — they
+are identical (`topo-mdrun` handles annealing when `anneal = yes`):
 ```bash
-python run_simulation.py -f md.ini
+topo-mdrun -f md.ini                  # == python -m topo.mdrun -f md.ini
+python run_simulation.py -f md.ini    # equivalent in-folder shim
 ```
 The console echoes both phases and the grand total:
 ```
@@ -164,7 +168,8 @@ each file, not single frames.)
 
 ### 2. Run the linear cooling ramp
 ```bash
-python run_simulation.py -f md_linear.ini
+topo-mdrun -f md_linear.ini                  # == python -m topo.mdrun -f md_linear.ini
+python run_simulation.py -f md_linear.ini    # equivalent in-folder shim
 ```
 Now the **quench** schedule has a staircase of cooling stages (outputs in
 `traj_linear/`); production is still a flat `ref_t` run:

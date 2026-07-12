@@ -25,7 +25,7 @@ tutorial reuses the same single-domain protein (`P0CX28`).
 | `P0CX28_clean.pdb` | Input structure. |
 | `md.ini` | **Stage 1**: the initial run (`restart = no`, `md_steps = 5000`). |
 | `md_restart.ini` | **Stage 2**: continue from the checkpoint (`restart = yes`, `md_steps = 10000`). |
-| `run_simulation.py` | The runner script. |
+| `run_simulation.py` | The runner script; a thin shim to `topo.mdrun` (so `topo-mdrun -f md.ini` is equivalent). |
 
 ## How restarting works
 
@@ -49,8 +49,12 @@ between stages so the restart targets the same files. On restart, the reporters
 ## Step-by-step
 
 ### 1. Stage 1 — initial run
+
+Use either the installed console command / module, or the in-folder shim — they
+are identical:
 ```bash
-python run_simulation.py -f md.ini
+topo-mdrun -f md.ini                  # == python -m topo.mdrun -f md.ini
+python run_simulation.py -f md.ini    # equivalent in-folder shim
 ```
 This produces `traj/traj.chk`, `traj/traj.log`, `traj/traj.dcd`, etc., and runs
 to step 5000. Check the last log line:
@@ -60,7 +64,8 @@ tail -1 traj/traj.log     # step column should read 5000
 
 ### 2. Stage 2 — continue from the checkpoint
 ```bash
-python run_simulation.py -f md_restart.ini
+topo-mdrun -f md_restart.ini                  # == python -m topo.mdrun -f md_restart.ini
+python run_simulation.py -f md_restart.ini    # equivalent in-folder shim
 ```
 Watch the console: it prints
 `Restart simulation from step: 5000` and then runs 5000 more steps to reach

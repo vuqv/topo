@@ -88,8 +88,9 @@ Every simulation is driven by a plain-text config file (conventionally
 `md.ini`) and launched with either of:
 
 ```bash
-python -m topo.mdrun -f md.ini          # the canonical package runner
-python run_simulation.py -f md.ini    # same thing, from inside a tutorial folder
+topo-mdrun -f md.ini                  # the installed console command
+python -m topo.mdrun -f md.ini        # same thing, as a module
+python run_simulation.py -f md.ini    # same thing, the in-folder shim
 ```
 
 The runner reads `md.ini`, builds the CA model from your PDB

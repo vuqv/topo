@@ -576,8 +576,11 @@ ribosome — into one VMD-playable movie:
 ```bash
 topo-csp-movie -o <outdir> --ribosome ribosome_trunc.pdb
 # writes <outdir>/movie.psf, movie.dcd, movie.tcl, movie_ribosome.pdb
-vmd -e <outdir>/movie.tcl
+cd <outdir> && vmd -e movie.tcl        # movie.tcl loads its files by basename
 ```
+
+For the headless GIF/hero-image path and the cylinder-tunnel equivalent, see
+{doc}`synthesis_visualization`.
 
 ---
 

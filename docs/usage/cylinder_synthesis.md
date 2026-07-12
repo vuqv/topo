@@ -38,8 +38,8 @@ cd tutorials/07_translation_cylinder
 topo-cylinder -f cylinder.ini          # -> synth_out/
 
 # stitch the per-length trajectories into a movie AND draw the analytic tunnel
-python make_movie_cylinder.py -o synth_out -f cylinder.ini
-vmd -e synth_out/movie.tcl
+topo-csp-movie -o synth_out --tunnel cylinder.ini
+cd synth_out && vmd -e movie.tcl        # movie.tcl loads its files by basename
 ```
 
 `topo-cylinder` writes, per residue `L`, a standalone trajectory under
@@ -176,11 +176,12 @@ residue when re-invoked (`resume = auto`, on by default) — the schedule is re-
 `dwell_times.dat` and the seed reloaded from the last `L_<L>/traj_final.pdb`, tracked by
 `progress.log`. See {doc}`synthesis_resume`.
 
-**Movie.** `make_movie_cylinder.py` stitches the per-length trajectories (reusing the
-shared stitcher in `topo.csp.movie`) **and** draws the analytic tunnel — the bore tube,
-the closed PTC cap, and the infinite exit-face wall as an annulus whose hole is the bore
-— reading the geometry from the same `cylinder.ini`. Plain `topo-csp-movie -o synth_out`
-also works; it just omits the tunnel.
+**Movie.** `topo-csp-movie -o synth_out --tunnel cylinder.ini` stitches the per-length
+trajectories **and** draws the analytic tunnel — the bore tube, the closed PTC cap, and the
+infinite exit-face wall as an annulus whose hole is the bore — reading the geometry from the
+same `cylinder.ini` (the in-folder `make_movie_cylinder.py` is an equivalent wrapper). Plain
+`topo-csp-movie -o synth_out` also works; it just omits the tunnel. For the interactive vs.
+headless recipes and the `cd <outdir>` gotcha, see {doc}`synthesis_visualization`.
 
 ---
 

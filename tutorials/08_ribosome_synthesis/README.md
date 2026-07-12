@@ -5,27 +5,25 @@ ribosome**, using codon-resolved kinetics with `topo-csp`. This is the
 ribosome-based counterpart to [Tutorial 7](07_translation_cylinder.md),
 which replaces the physical ribosome with an analytic cylindrical tunnel.
 
-Unlike the CHARMM-based O'Brien reference, everything here is **standalone
-TOPO**: the ribosome is a truncated CG bead model (`ribosome_trunc.pdb`, loaded
-by `topo.csp.ribosome.load_ribosome`) — no external `.cor`/`.psf`/`.prm` files.
-The nascent chain grows N→C through the exit region and is ejected once
-complete.
+Everything here is **standalone TOPO**: the ribosome is a truncated CG bead model
+(`ribosome_trunc.pdb`, loaded by `topo.csp.ribosome.load_ribosome`) — no external
+`.cor`/`.psf`/`.prm` files. The nascent chain grows N→C through the exit region
+and is ejected once complete.
 
 ![residue-by-residue synthesis of 4c5c](4c5c/img/process.gif)
 
 ***Synthesis on the ribosome** — the chain (coloured beads) grows through TOPO's coarse-grained ribosome (translucent grey); already-emerged N-terminal residues fold while the C-terminus is still being added inside.*
 
-> The GIF is for the `4c5c/` system. After a run, stitch the per-length frames into one
-> movie and render it (beads + the translucent ribosome as context):
+> The GIF is for the `4c5c/` system. After a run, view your own synthesis in VMD:
+> stitch the per-length frames into one movie (adding the ribosome as scenery),
+> then launch VMD *from inside* `synth_out/` (the generated `movie.tcl` loads
+> `movie.{psf,dcd}` by basename, so it only resolves from that folder):
 > ```bash
-> topo-csp-movie -o synth_out                    # -> synth_out/movie.{psf,dcd}
-> python ../_viz/ribosome_scenery_tcl.py -p ribosome_trunc.pdb -o synth_out/ribo.tcl
-> python ../_viz/render_cg.py --psf synth_out/movie.psf --dcd synth_out/movie.dcd \
->        --out img --hero last --no-align --rep beads --fit-main-only \
->        --select "name CA and x < 9000" --selupdate --extra-tcl synth_out/ribo.tcl
+> topo-csp-movie -o synth_out --ribosome ribosome_trunc.pdb   # -> synth_out/movie.{psf,dcd,tcl}
+> cd synth_out && vmd -e movie.tcl
 > ```
-> (the growing chain parks not-yet-synthesized beads at a far sentinel, which
-> `--select … --selupdate` hides.)
+> For the full movie reference (both synthesis models, all `topo-csp-movie` options),
+> see [Visualizing the synthesis process](../usage/synthesis_visualization.md).
 
 **Prerequisite:** the coarse-grained model of
 [Tutorial 1](01_single_domain.md) and
@@ -83,7 +81,4 @@ python analyze_standalone.py
 
 It checks that per-stage potential energy stays finite (no blow-ups) and that
 the ejected chain diffuses cleanly out of the tunnel without penetrating the
-ribosome. Its **quantitative cross-check against the O'Brien reference** relies
-on the reference run from the retired CSP-development tutorials (12/13/15), which
-now live under `sandbox/retired_translation_tutorials/`; the energy-stability and
-ejection checks are self-contained and do not need them.
+ribosome. These checks are self-contained.

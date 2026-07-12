@@ -63,6 +63,7 @@ see :doc:`citation` for the full list with DOIs.
    usage/continuous_synthesis
    usage/cylinder_synthesis
    usage/synthesis_resume
+   usage/synthesis_visualization
    usage/synthesis_control
 
 .. toctree::

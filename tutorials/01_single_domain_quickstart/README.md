@@ -23,7 +23,7 @@ keeps the fold stable. CA trace coloured N→C (blue→red).*
 | `P0CX28_clean.pdb` | Input structure (all-atom PDB; TOPO keeps only the CA atoms). |
 | `domain.yaml` | Defines the single domain and its **calibrated** contact nscale. |
 | `md.ini` | Simulation configuration (steps, temperature, I/O, hardware). |
-| `run_simulation.py` | The runner script (reads `md.ini`, builds the model, runs MD). |
+| `run_simulation.py` | The runner (reads `md.ini`, builds the model, runs MD); a thin shim to `topo.mdrun`, so `topo-mdrun -f md.ini` is equivalent. |
 
 ## Background concepts
 
@@ -74,8 +74,12 @@ minimize = no            # native structure is already the energy minimum
 There is no `stride_output_file` line, so STRIDE is run automatically (next step).
 
 ### 3. Run it
+
+Use either the installed console command / module, or the in-folder shim — they
+are identical:
 ```bash
-python run_simulation.py -f md.ini
+topo-mdrun -f md.ini                  # == python -m topo.mdrun -f md.ini
+python run_simulation.py -f md.ini    # equivalent in-folder shim
 ```
 You'll see TOPO build the model (it prints the number of chains, adds each force
 term, runs STRIDE, builds the contact matrices) and then step the dynamics. It

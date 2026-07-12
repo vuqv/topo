@@ -101,17 +101,28 @@ dissociation_steps = 0         # 0 -> skip
 
 ## Visualize / validate
 
-Use the tutorial's movie tool — it stitches the per-length trajectories (reusing the
-shared stitcher in `topo.csp.movie`) **and** draws the analytic tunnel (bore
-tube, closed PTC cap, and the infinite exit-face wall as an annulus whose hole is the
-bore), reading the geometry from the same `cylinder.ini`:
+Stitch the per-length trajectories into one movie **and** draw the analytic tunnel
+(bore tube, closed PTC cap, and the infinite exit-face wall as an annulus whose hole
+is the bore), reading the geometry from the same `cylinder.ini`. Two equivalent ways:
 
 ```bash
-python make_movie_cylinder.py -o synth_out -f cylinder.ini
-vmd -e synth_out/movie.tcl
+# Module (preferred): the shared stitcher with a --tunnel flag.
+topo-csp-movie -o synth_out --tunnel cylinder.ini      # or: python -m topo.csp.movie -o synth_out --tunnel cylinder.ini
+cd synth_out && vmd -e movie.tcl                       # movie.tcl loads movie.{psf,dcd} by name -> run it from synth_out/
 ```
 
+```bash
+# In-folder script (equivalent; self-contained convenience wrapper).
+python make_movie_cylinder.py -o synth_out -f cylinder.ini
+cd synth_out && vmd -e movie.tcl                       # run from synth_out/ so movie.{psf,dcd} resolve
+```
+
+Both draw the same tunnel from the same `topo.csp.cylinder.tunnel_tcl` geometry
+(`--wall-outer NM` sets the drawn exit-wall radius; default bore radius + 3 nm).
 You then see the chain thread the (blue, transparent) bore, the red PTC end cap it
 grows away from, and the grey exit wall it emerges through — then fold once it
-clears the tunnel. (Plain `topo-csp-movie -o synth_out` also works
-— it just omits the tunnel.)
+clears the tunnel. (Plain `topo-csp-movie -o synth_out`, with no `--tunnel`, also
+works — it just omits the tunnel.)
+
+For the full movie reference (both synthesis models, all `topo-csp-movie` options),
+see [Visualizing the synthesis process](../usage/synthesis_visualization.md).

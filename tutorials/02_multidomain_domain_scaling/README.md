@@ -25,7 +25,7 @@ multidomain enzyme.
 | `1AKE_A.pdb` | Input structure (adenylate kinase, chain A). |
 | `domain.yaml` | **Domain definition** — the new ingredient in this tutorial. |
 | `md.ini` | Simulation config; note the added `domain_def = domain.yaml` line. |
-| `run_simulation.py` | The runner script. |
+| `run_simulation.py` | The runner script; a thin shim to `topo.mdrun` (so `topo-mdrun -f md.ini` is equivalent). |
 
 ## Why domains matter
 
@@ -82,8 +82,12 @@ domain_def = domain.yaml
 That single line switches on domain-aware contact scaling.
 
 ### 2. Run it
+
+Use either the installed console command / module, or the in-folder shim — they
+are identical:
 ```bash
-python run_simulation.py -f md.ini
+topo-mdrun -f md.ini                  # == python -m topo.mdrun -f md.ini
+python run_simulation.py -f md.ini    # equivalent in-folder shim
 ```
 In the build log you'll see `Domain definition file: domain.yaml`, a
 `contact matrices: (214, 214)` line and a `native contacts: … | non-native pairs: …`

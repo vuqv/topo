@@ -612,8 +612,10 @@ def main(argv: Optional[List[str]] = None) -> None:
     layout (:func:`stitch_movie`) if any ``L_<L>/traj_s*.dcd`` are present,
     otherwise the flat per-length layout (:func:`stitch_length_movie`). The parser
     exposes ``-o/--out-root`` (required), ``--prefix``, ``--park``
-    (``sentinel``/``cterm``), ``--outname`` and ``--ribosome``. With no arguments it
-    prints help and exits ``0``.
+    (``sentinel``/``cterm``), ``--outname``, ``--ribosome`` and, for cylinder
+    synthesis, ``--tunnel <cylinder.ini>`` (+ ``--wall-outer``) to append the
+    analytic exit tunnel to ``movie.tcl``. With no arguments it prints help and
+    exits ``0``.
 
     Parameters
     ----------
@@ -644,13 +646,28 @@ def main(argv: Optional[List[str]] = None) -> None:
     p.add_argument("--ribosome", default=None,
                    help="optional CG ribosome PDB to load as static scenery in the "
                         "generated movie.tcl.")
+    p.add_argument("--tunnel", default=None, metavar="CYLINDER_INI",
+                   help="cylinder.ini to draw the analytic exit tunnel (bore + PTC "
+                        "cap + exit-face wall) into movie.tcl, for cylinder-synthesis "
+                        "runs (topo-cylinder). Omit for a plain movie.")
+    p.add_argument("--wall-outer", type=float, default=None,
+                   help="outer radius (nm) of the drawn exit-face wall when --tunnel "
+                        "is given (default: bore radius + 3 nm).")
     if argv is None and len(sys.argv) == 1:
         p.print_help()
         sys.exit(0)
     args = p.parse_args(argv)
     stitch = stitch_movie if _is_csp_layout(args.out_root) else stitch_length_movie
-    stitch(args.out_root, out_prefix=args.prefix, park=args.park,
-           outname=args.outname, ribosome_pdb=args.ribosome)
+    _psf, _dcd, tcl = stitch(args.out_root, out_prefix=args.prefix, park=args.park,
+                             outname=args.outname, ribosome_pdb=args.ribosome)
+
+    # Cylinder synthesis has no ribosome scenery; on request, append the analytic
+    # tunnel (read from the run's cylinder.ini) to the generated movie.tcl.
+    if args.tunnel is not None:
+        from topo.csp.cylinder import tunnel_tcl
+        with open(tcl, "a") as fh:
+            fh.write("\n" + tunnel_tcl(args.tunnel, wall_outer_nm=args.wall_outer))
+        print(f"Appended analytic tunnel (from {args.tunnel}) to {tcl}")
 
 
 if __name__ == "__main__":
