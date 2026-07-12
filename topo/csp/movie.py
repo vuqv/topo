@@ -483,9 +483,11 @@ def find_lengths(out_root: str,
             continue
         L = int(m.group(1))
         psf = os.path.join(d, f"{outname}.psf")
-        dcd = os.path.join(d, f"{outname}.dcd")
-        if os.path.isfile(psf) and os.path.isfile(dcd):
-            items.append((L, psf, dcd))
+        # A coarse nstout can leave a length's DCD empty; _pick_traj falls back to the
+        # _final.pdb snapshot so the length still contributes (see the CSP path).
+        traj = _pick_traj(d, outname)
+        if os.path.isfile(psf) and traj is not None:
+            items.append((L, psf, traj))
     items.sort(key=lambda t: t[0])
     return items
 
@@ -517,9 +519,9 @@ def find_post(out_root: str, outname: str = "traj") -> List[Tuple[str, str, str]
     for name in POST_PHASES_FLAT:
         d = os.path.join(out_root, name)
         psf = os.path.join(d, f"{outname}.psf")
-        dcd = os.path.join(d, f"{outname}.dcd")
-        if os.path.isfile(psf) and os.path.isfile(dcd):
-            found.append((name, psf, dcd))
+        traj = _pick_traj(d, outname)
+        if os.path.isfile(psf) and traj is not None:
+            found.append((name, psf, traj))
     return found
 
 
