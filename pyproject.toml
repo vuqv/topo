@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "topo"
-version = "0.1.0"
+version = "1.4"
 description = "TOPOlogy-based coarse-grained (structure-based / Go-like) model for folded proteins, built on OpenMM."
 readme = "README.md"
 requires-python = ">=3.9"
