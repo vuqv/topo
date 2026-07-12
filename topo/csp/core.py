@@ -866,10 +866,11 @@ class RunParams:
     # C-terminus restraint mode. **Default False = the validated position-restraint path**
     # (a moving harmonic spring to the A/P target point, a->a->p migration over the 3
     # stages) -- matches the CSP runner's INI default, so RunParams-direct callers and
-    # `topo-csp` agree. Set True for O'Brien's tRNA tether: a bond + CA(L-1)-CA(L)-tRNA
-    # orienting angle to the P-site tRNA R bead, which aims the nascent chain down the
-    # tunnel (extrudes N-first, folds outside) rather than balling up at the PTC. The
-    # tether needs the real tRNA bead.
+    # `topo-csp` agree. Set True for O'Brien's tRNA tether: a bond + two orienting
+    # angles + an improper + a backbone angle to the current-stage tRNA beads (A-site in
+    # stages 1-2, P-site in stage 3), which aims the nascent chain down the tunnel
+    # (extrudes N-first, folds outside) rather than balling up at the PTC. The tether
+    # needs the real tRNA beads.
     trna_tether: bool = False
     # O'Brien's one-sided planar tunnel wall on the nascent chain -- keeps beads
     # at x >= tunnel_wall_x0, so the chain can only extrude forward (+x, toward the
@@ -1110,9 +1111,9 @@ def run_length(L: int, *, full_pdb: str, R_full: np.ndarray, eps_full: np.ndarra
 
     # 4. tether the current C-terminus (residue L) ---------------------------
     # (skipped for an ejection run: restrain=False -> the tether is released).
-    # trna_tether: peptidyl-tRNA linkage (bond + CA-CA-tRNA orienting
-    # angle to the P-site R bead) -- aims the chain down the tunnel. Otherwise a
-    # generic harmonic position restraint of residue L to the P-target point.
+    # trna_tether: peptidyl-tRNA linkage (bond + 2 orienting angles + improper +
+    # backbone angle to the current-stage A/P tRNA beads) -- aims the chain down the
+    # tunnel. Otherwise a generic harmonic position restraint of residue L to the P-target point.
     if restrain:
         if ribo is not None and params.trna_tether:
             # tRNA tether for the current C-terminus (residue L) to this

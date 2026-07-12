@@ -107,8 +107,10 @@ def nscale_for(class_key, level):
 # round, expands everything into a full md.ini for topo.mdrun.
 #
 # IMPLICIT_DEFAULTS are the optimizer's own protocol defaults — NOT the bare
-# SimulationConfig dataclass defaults. In particular dt = 0.015 ps (the CG model
-# was parameterized at a 15 fs timestep), whereas the dataclass default is 0.01.
+# SimulationConfig dataclass defaults. In particular the optimizer defaults
+# device = GPU, ref_t = 310 K (stability protocol) and minimize = no, whereas the
+# dataclass defaults are CPU / 300 K / yes. (dt = 0.015 ps matches the CG model's
+# 15 fs parameterization, which is now also the dataclass default.)
 # Anything set in optimize.ini [OPTIONS] overrides these.
 #
 # We use configparser with the SAME settings as the package reader
