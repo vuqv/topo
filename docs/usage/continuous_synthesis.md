@@ -207,7 +207,7 @@ For the current C-terminus `N` (the newest residue) it adds:
 | angle | harmonic | `N–R–P` | 106° | 117° |
 | angle | harmonic | `N–R–BR2` | 127° | 130° |
 | improper | periodic (`CustomTorsion`) | `N–R–P–BR2` | 128° | −161° |
-| backbone | Gaussian angle | `prev–N–R` | aims the chain down the tunnel |
+| backbone | double-Gaussian angle | `prev–N–R` | the backbone-angle potential (bistable, θ ≈ 92°/130°) applied across the peptide–tRNA junction |
 
 (bond/angle stiffness = 200 kcal/mol/Å²; angle/improper = 25 kcal/mol/rad².) The two
 orienting angles + the improper fix the residue's **bearing in the A76 frame** — this is
@@ -220,8 +220,8 @@ what the plain point restraint cannot do.
 
 **tRNA tether geometry** (`trna_tether = yes`). The C-terminus (`N`) **bonds** to the
 **ribose (`R`)** of A76; two orienting angles (`N–R–P`, `N–R–BR2`) and the improper
-(`N–R–P–BR2`) fix its bearing in the A76 frame, and a backbone angle (`prev–N–R`) aims the
-chain down the tunnel. Values shown are the P-site (`PtR`) set; A-site (`AtR`) values are
+(`N–R–P–BR2`) fix its bearing in the A76 frame, and a backbone angle (`prev–N–R`) keeps the
+terminal segment physically oriented. Values shown are the P-site (`PtR`) set; A-site (`AtR`) values are
 in the table above. Only A76 is tethered — the rest of the tRNA is rigid scenery.
 ```
 
