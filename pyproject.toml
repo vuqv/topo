@@ -1,10 +1,12 @@
 [build-system]
-requires = ["setuptools>=61"]
+requires = ["setuptools>=64", "setuptools-scm>=8"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "topo"
-version = "2026.1"
+# Version is derived from the git tag (CalVer YEAR.N) by setuptools-scm; see
+# [tool.setuptools_scm] below and scripts/next_version.sh.
+dynamic = ["version"]
 description = "TOPOlogy-based coarse-grained (structure-based / Go-like) model for folded proteins, built on OpenMM."
 readme = "README.md"
 requires-python = ">=3.9"
@@ -40,6 +42,9 @@ topo-csp-movie = "topo.csp.movie:main"
 # (same prep the runners do for `mrna = fastest/slowest`):
 # `topo-make-mrna --pdb prot.pdb --codon-times table.txt --mode fastest`
 topo-make-mrna = "topo.csp.synth_mrna:main"
+
+[tool.setuptools_scm]
+# Version from git tags (e.g. 2026.1). Between tags, a dev version is derived.
 
 [tool.setuptools.packages.find]
 # Only ship the importable package (not tutorials/docs/etc. at the repo root).
