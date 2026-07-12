@@ -51,29 +51,82 @@ how to supply it.
 Installing them
 ---------------
 
-The convenience script builds/installs both from their upstream source (and
-prefers `bioconda <https://bioconda.github.io/>`_ for STRIDE when ``conda`` is
-available). From the repository root::
+The convenience script installs both binaries. For each tool it tries three
+sources in order — build from upstream, build from a GitHub source mirror, then
+fall back to the vendored binary — so a run succeeds even when the upstream sites
+are down. From the repository root::
 
     scripts/install_deps.sh              # both, into $HOME/.local/bin
     scripts/install_deps.sh stride       # just STRIDE
     PREFIX=~/bin scripts/install_deps.sh # choose the install location
 
+The STRIDE preference order (both in the script and for manual installs) is:
+
+#. **Build from the upstream source** — the canonical STRIDE tarball
+   (``$STRIDE_URL``, default ``https://webclu.bio.wzw.tum.de/stride/stride.tar.gz``):
+   ``make`` and copy the resulting ``stride`` onto your ``PATH``. This site is
+   often unreachable; if so, use the mirror below.
+#. **Compile from the GitHub mirror** — the maintained
+   `MDAnalysis/stride <https://github.com/MDAnalysis/stride>`_ source
+   (``$STRIDE_GIT``): ``git clone`` it, ``make``, and copy ``stride`` onto your
+   ``PATH``.
+#. **Use the shipped binary** — if neither source build works, the validated
+   STRIDE binary is vendored in the repository at ``assets/stride/`` (see its
+   ``README.md`` for provenance). Put that directory on your ``PATH``, or set
+   ``TOPO_STRIDE`` to ``assets/stride/stride``. This is a Linux x86-64 build.
+
+   .. note::
+
+      STRIDE is distributed for **academic use with restrictive redistribution
+      terms**. The vendored binary is included for academic reproducibility only;
+      it is kept out of the installable wheel. If you redistribute TOPO, review
+      STRIDE's terms, and cite Frishman & Argos (*Proteins* **23**, 566–579,
+      1995) in any work using its assignments.
+
+Installing PULCHRA
+------------------
+
+PULCHRA is optional — you only need it to backmap a coarse-grained trajectory to
+an all-atom model. ``scripts/install_deps.sh`` installs it automatically, walking
+the same three sources as STRIDE. To install it independently, use the same
+preference order:
+
+#. **Build from the upstream source** — ``pulchra_306.tgz``
+   (``$PULCHRA_URL``, default ``http://www.pirx.com/downloads/pulchra_306.tgz``).
+   Download, extract, and compile (PULCHRA builds from two C files and needs its
+   ``*.h`` data files in the same directory, so compile from inside the extracted
+   tree)::
+
+       curl -fSLO http://www.pirx.com/downloads/pulchra_306.tgz
+       tar -xzf pulchra_306.tgz
+       cd pulchra_306 && cc -O3 pulchra.c pulchra_data.c -lm -o pulchra
+
+   This site is often unreachable; if so, use the mirror below.
+
+#. **Compile from the GitHub mirror** — the
+   `euplotes/pulchra <https://github.com/euplotes/pulchra>`_ source
+   (``$PULCHRA_GIT``)::
+
+       git clone https://github.com/euplotes/pulchra.git
+       cd pulchra && cc -O3 pulchra.c pulchra_data.c -lm -o pulchra
+
+#. **Use the shipped binary** — if neither source build works, the PULCHRA binary
+   is vendored in the repository at ``assets/pulchra/`` (MIT-licensed, so it is
+   shipped freely; see its ``README.md``). Put that directory on your ``PATH``, or
+   set ``TOPO_PULCHRA`` to ``assets/pulchra/pulchra``. This is a Linux x86-64
+   build.
+
+Then make TOPO see the binary: put it on your ``PATH`` or set ``TOPO_PULCHRA``
+(see :ref:`below <making-topo-see-them>`).
+
 .. note::
 
-   Verify the upstream source URLs in ``scripts/install_deps.sh`` before running
-   it; they are the canonical distribution points at time of writing but may
-   move. Override them with the ``STRIDE_URL`` / ``PULCHRA_URL`` environment
-   variables if needed.
+   Both **vendored binaries** (``assets/stride/`` and ``assets/pulchra/``) are
+   **Linux x86-64** builds. On any other OS or architecture you must build the
+   tool from source and point TOPO at your own binary.
 
-Equivalent manual installs:
 
-* **STRIDE via bioconda** — ``conda install -c bioconda stride``
-* **STRIDE from source** — download the STRIDE tarball, ``make``, and copy the
-  resulting ``stride`` binary onto your ``PATH``.
-* **PULCHRA from source** — download ``pulchra_306.tgz`` and compile the single
-  C file: ``cc -O3 -o pulchra pulchra*.c -lm``.
-
+.. _making-topo-see-them:
 
 Making TOPO see them
 --------------------
