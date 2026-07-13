@@ -76,6 +76,18 @@ def build_system(cfg) -> BuiltSystem:
     # Write the topology as PSF. The single-chain topology is always <outname>.psf;
     # a multi-copy run additionally writes <outname>_multi.psf for the combined DCD.
     cgModel.dumpTopology(cfg.output_path('.psf'))               # single-chain
+
+    # Also write the native structure in CG (CA-only) resolution. After
+    # buildCoarseGrainModel, cgModel.topology/positions hold only the alpha
+    # carbons, so this is the input structure coarse-grained -- a reference for
+    # aligning the simulated trajectory to the native CG state. Named from the
+    # input pdb_file basename (e.g. P0CX28_clean.pdb -> P0CX28_clean_CA.pdb) so
+    # it is tied to the source structure rather than the run's outname.
+    ca_native = str(Path(cfg.output_dir) / f'{Path(cfg.pdb_file).stem}_CA.pdb')
+    cgModel.dumpStructure(ca_native)
+    if not getattr(cfg, 'quiet', False):
+        print(f"Wrote native CG (CA-only) structure to {ca_native}")
+
     if cfg.n_copies > 1:
         pmd.openmm.load_topology(topology, system=system, xyz=positions).save(
             cfg.output_path('_multi.psf'), overwrite=True)      # multi-chain
