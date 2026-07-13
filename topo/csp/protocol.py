@@ -284,7 +284,7 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
 
     # --- up-front cost report: exact step total, nominal wall-time ----------
     total_steps = (sum(sum(r.steps) for r in schedule)
-                   + max(params.ejection_steps, 0))
+                   + max(params.stall_steps, 0) + max(params.ejection_steps, 0))
     print(f"[schedule] {L_max - L0 + 1} residues, {total_steps:,} planned MD steps"
           f"{resume_mod.est_walltime(total_steps, params)}")
     print(f"Per-residue dwell-time table: {dwell_log}")
@@ -361,6 +361,30 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
     print()
     print(f"Done. Synthesized {L0} -> {L_max}. Per-residue outputs under {out_path}/L_<L>/")
     print(f"Per-residue dwell-time table: {dwell_log}")
+
+    # --- post-synthesis: stall (held at the PTC, restraint ON) --------------
+    # Ribosome stalling: keep the finished chain at the P-site with the C-terminus
+    # restraint / tRNA tether still ON (whatever mode the run uses), before ejection
+    # releases it. Its own progress unit (skipped on resume if already done); its
+    # final structure seeds the ejection phase.
+    if params.stall_steps > 0:
+        if do_resume and prog.is_done("stall"):
+            prev_final = resume_mod.load_final_pdb(
+                resume_mod.phase_final_path(out_path, "stall"))
+            print("[resume] stall already complete; skipping.")
+        else:
+            print()
+            print(f"=== Stall (L = {L_max}, {params.stall_steps} steps, "
+                  f"held at PTC / restraint ON) -> {out_path / 'stall'}/ ===")
+            resume_mod.append_progress(out_path, "stall", "RUNNING")
+            prev_final = run_length(
+                L_max, full_pdb=full_pdb, R_full=R_full, eps_full=eps_full,
+                p_anchor=p_target, a_anchor=a_anchor, prev_final=None,
+                seed_override=prev_final, out_root=out_path, params=ep, ribo=ribo,
+                restrain=True, out_subdir="stall", tether_segid="PtR",
+                n_steps_override=params.stall_steps, nascent_rmin_2=nascent_rmin_2_arg,
+                label="stalling")
+            resume_mod.append_progress(out_path, "stall", "DONE")
 
     # --- post-synthesis: ejection (free run) --------------------------------
     # The ejection phase is its own progress unit; on resume a completed phase is
@@ -465,6 +489,8 @@ def read_csp_config(config_file: str, verbose: bool = True) -> CSPConfig:
     - ``max_steps_per_stage`` -- cap each stage's step count (the tutorial uses a
       small value for a ~2000-steps/residue test; blank = uncapped production).
     - ``min_steps_per_stage`` -- floor each stage's step count (default 1).
+    - ``stall_steps`` -- post-synthesis hold at the PTC with the C-terminus restraint /
+      tRNA tether still ON (ribosome stalling), before ejection (0 = skip).
     - ``ejection_steps`` -- post-synthesis free run; restraint released (0 = skip).
     - ``resume`` -- resume policy: ``auto`` (default; resume iff an interrupted run is
       present under ``outdir``), ``yes`` (require a resumable run, else error) or ``no``
@@ -708,6 +734,8 @@ def read_csp_config(config_file: str, verbose: bool = True) -> CSPConfig:
         p.max_steps_per_stage = as_int(opt("max_steps_per_stage"))
     if opt("min_steps_per_stage") is not None:
         p.min_steps_per_stage = as_int(opt("min_steps_per_stage"))
+    if opt("stall_steps") is not None:
+        p.stall_steps = as_int(opt("stall_steps"))
     if opt("ejection_steps") is not None:
         p.ejection_steps = as_int(opt("ejection_steps"))
     # Resume policy: auto (default; resume iff an interrupted run is present), yes
@@ -744,6 +772,8 @@ def read_csp_config(config_file: str, verbose: bool = True) -> CSPConfig:
     log(f"  ribosome: rigid scenery (always, from the supplied PDB)"
         f"; tunnel wall: {'on (plane auto-derived from structure)' if p.tunnel_wall else 'off'}")
     log(f"  integrator: dt={p.dt_ps} ps, ref_t={p.ref_t} K, tau_t={p.tau_t} /ps, nstout={p.nstout}")
+    if p.stall_steps:
+        log(f"  post-synthesis: stall={p.stall_steps} steps (held at PTC, restraint ON)")
     if p.ejection_steps:
         log(f"  post-synthesis: ejection={p.ejection_steps} steps")
     log(f"  hardware/output: device={p.device}, ppn={p.ppn}, outdir={outdir}")

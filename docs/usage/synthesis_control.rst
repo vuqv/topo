@@ -262,6 +262,10 @@ per length — STRIDE / contact analysis are never re-run).
      - Type
      - Default
      - Description
+   * - ``stall_steps``
+     - int
+     - ``0``
+     - Post-synthesis stall phase length (steps); ``0`` = skip. Holds the finished chain at the PTC with the C-terminus restraint / tRNA tether still **ON** (mimics ribosome stalling). Runs **before** ``ejection``.
    * - ``ejection_steps``
      - int
      - ``0``
@@ -479,11 +483,13 @@ Flexible exit-tunnel loop (``ribo_free_mask`` / ``ribo_free_pdb``)
         ribo_free_mask = L24 : 42 - 59
         ribo_free_pdb  = assets/csp/prepare_ribosome/structures/ecoli/L24_atomistic.pdb
 
-Post-synthesis phase (``ejection_steps``)
-    After the last residue, ``ejection_steps > 0`` runs a phase with the C-terminus
-    restraint **released** (ribosome/tunnel still present), so the finished chain diffuses
-    out — the analogue of termination. It writes its own ``ejection/`` folder; ``0`` skips
-    the phase.
+Post-synthesis phases (``stall_steps``, ``ejection_steps``)
+    After the last residue, up to two optional phases run in order. ``stall_steps > 0``
+    first holds the finished chain at the PTC with the C-terminus restraint / tRNA tether
+    still **ON** (a ribosome-stalling hold), then ``ejection_steps > 0`` runs a phase with
+    the restraint **released** (ribosome/tunnel still present), so the finished chain
+    diffuses out — the analogue of termination. Each writes its own folder (``stall/`` then
+    ``ejection/``); ``0`` skips that phase.
 
 Output layout, resume and movies
     Each residue writes one ``<outdir>/L_<L>/`` folder (CSP: shared ``traj.psf`` +

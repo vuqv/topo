@@ -39,7 +39,7 @@ topo-csp-movie -o synth_out_debug --ribosome ribosome_trunc.pdb
 ```
 
 `topo-csp` writes one folder per residue `L` under `<outdir>/L_<L>/` (a shared topology
-plus a per-stage trajectory `traj_s<s>.dcd`), an optional `ejection/` phase, and a
+plus a per-stage trajectory `traj_s<s>.dcd`), optional `stall/` and `ejection/` phases, and a
 per-residue dwell-time log `<outdir>/dwell_times.dat`.
 
 ---
@@ -423,13 +423,16 @@ stage 3's mean swings with the next codon's `τ` (e.g. L = 5 → next codon GCU 
 
 ### 5. After the last residue: ejection
 
-Once the final residue is added, the protein is complete. The simulation then runs a
-**post-synthesis ejection phase** (`ejection_steps`): the C-terminus restraint is
-**released** (the tether is cut), while the rigid ribosome and one-sided tunnel wall
-remain. Biologically this is **termination** — release factors free the finished protein.
-With the tether gone, the chain **diffuses out of the tunnel along +x** (the one-sided
-wall biases motion forward) and clears the ribosome. For a longer, dedicated egress
-demonstration, raise `ejection_steps` in the Tutorial 8 `csp_val.ini`.
+Once the final residue is added, the protein is complete. The simulation then runs up to
+two **post-synthesis phases** in order. First, an optional **stall phase** (`stall_steps`)
+keeps the finished chain at the PTC with the C-terminus restraint / tRNA tether still
+**on** — a ribosome-stalling hold before release. Then the **ejection phase**
+(`ejection_steps`) **releases** the restraint (the tether is cut), while the rigid ribosome
+and one-sided tunnel wall remain. Biologically this is **termination** — release factors
+free the finished protein. With the tether gone, the chain **diffuses out of the tunnel
+along +x** (the one-sided wall biases motion forward) and clears the ribosome. Each phase
+is skipped when its step count is `0`. For a longer, dedicated egress demonstration, raise
+`ejection_steps` in the Tutorial 8 `csp_val.ini`.
 
 ### 6. Numerical integration, equilibrium seeding, and the stability guard
 
@@ -507,6 +510,7 @@ generic "expected exactly one bead" error. Handling missing/renamed tRNA is a tr
 │   ├── traj_s1.log         # energies, stage 1; column 3 = potential energy (kJ/mol)
 │   ├── traj_runinfo.log    # folded run-info: one [run:...]/[result:...] per stage
 │   └── traj_final.pdb      # stage-3 final — seeds L+1 and is the resume-reload target
+├── stall/                  # post-synthesis stall phase, held at PTC (if stall_steps > 0)
 ├── ejection/               # post-synthesis ejection phase (if ejection_steps > 0)
 ├── dwell_times.dat         # per-residue dwell-time log / schedule (see below)
 └── progress.log            # append-only DONE/RUNNING resume status (see below)

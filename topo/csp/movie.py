@@ -52,9 +52,9 @@ SENTINEL_A = 99999.0
 STAGES = (1, 2, 3)
 # Post-synthesis phase folders, in the order they should appear after growth.
 # Both the CSP protocol and the flat per-length (cylinder) loop run the same
-# free-run phase: ejection.
-POST_PHASES_CSP = ("ejection",)
-POST_PHASES_FLAT = ("ejection",)
+# post-synthesis phases, in play order: stall (held at PTC) then ejection (free run).
+POST_PHASES_CSP = ("stall", "ejection")
+POST_PHASES_FLAT = ("stall", "ejection")
 
 
 # ==========================================================================
