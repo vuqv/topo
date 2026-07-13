@@ -924,6 +924,16 @@ class RunParams:
     # --- post-synthesis phases (steps; 0 = skip; run in order stall -> ejection) ---
     stall_steps: int = 0                # hold at the PTC (restraint/tether still ON) -- ribosome stalling
     ejection_steps: int = 0             # release the restraint; the finished chain diffuses free
+    # Ejection restart policy (INI key: 'restart'; default False = no). Gates whether a
+    # re-invocation *continues* the ejection free run from its checkpoint instead of
+    # re-running it. When True AND a prior ejection checkpoint exists on a resumed run:
+    # continue from that checkpoint (positions + velocities + step count) and append only
+    # the steps needed to reach the cumulative `ejection_steps` target; if the checkpoint
+    # already reached `ejection_steps`, report it and run nothing. When False (default):
+    # the ejection phase is always a fresh full run from step 0 to `ejection_steps` (any
+    # prior checkpoint is ignored / overwritten). Raising `ejection_steps` alone no longer
+    # implies a restart -- that now requires `restart = yes`.
+    ejection_restart: bool = False
 
 
 def _make_cfg(out_dir: Path, sub_pdb: str, seed_pdb: str,
@@ -997,6 +1007,9 @@ def run_length(L: int, *, full_pdb: str, R_full: np.ndarray, eps_full: np.ndarra
                minimize_override: Optional[bool] = None,
                outname: str = "traj",
                persist_final: bool = True,
+               checkpoint: bool = False,
+               restart: bool = False,
+               append: bool = False,
                label: Optional[str] = None) -> np.ndarray:
     """Build, seed, (restrain,) minimize and run one length-``L`` system.
 
@@ -1027,6 +1040,13 @@ def run_length(L: int, *, full_pdb: str, R_full: np.ndarray, eps_full: np.ndarra
       (and the post-synthesis phases); stages 1/2 skip the write -- their final
       conformation already lives as the last frame of their DCD -- and still return
       their coords in memory. Default True.
+    - ``checkpoint`` / ``restart`` / ``append`` : the ejection phase sets these so it can
+      be **extended** like a resumed simulation. ``checkpoint`` writes ``traj.chk`` (the
+      per-residue stages skip it). ``restart`` loads that checkpoint (positions +
+      velocities + step count) and runs only the *remaining* steps to reach the
+      cumulative ``n_steps_override`` target (0 remaining -> no-op), forcing minimize off.
+      ``append`` continues the same ``traj.dcd`` / ``.log`` instead of truncating. Default
+      all ``False`` (a plain, self-contained run).
     - ``label`` : short stage tag (e.g. ``"stage 1 peptidyl-transfer"``) shown in
       the concise per-stage summary line and, under ``TOPO_CSP_VERBOSE``, in the
       verbose console banner.
@@ -1174,6 +1194,9 @@ def run_length(L: int, *, full_pdb: str, R_full: np.ndarray, eps_full: np.ndarra
     # Post-synthesis phases run for their own step count.
     if n_steps_override is not None:
         cfg.md_steps = n_steps_override
+    # Restart = extend a prior ejection: setup_simulation loads traj.chk and runs only the
+    # steps remaining to reach the cumulative md_steps target (n_steps_override, not a delta).
+    cfg.restart = bool(restart)
 
     built = engine.BuiltSystem(cgModel=cgModel, system=cgModel.system,
                                topology=cgModel.topology, positions=built_positions)
@@ -1203,7 +1226,13 @@ def run_length(L: int, *, full_pdb: str, R_full: np.ndarray, eps_full: np.ndarra
     # structure setup_simulation loads is already at a local minimum). Retries still skip it
     # too; a diverging stage is instead stabilized by the dt-halving below.
     do_minimize = params.minimize if minimize_override is None else bool(minimize_override)
-    for attempt in range(STABILITY_MAX_ATTEMPTS):
+    if restart:
+        do_minimize = False   # a restart continuation resumes dynamics -- never re-minimize
+    # A restart/append continuation runs exactly once: a dt-halving retry would reload the
+    # checkpoint and re-append duplicate frames, and an equilibrated ejection continuation
+    # does not diverge anyway.
+    max_attempts = 1 if (restart or append) else STABILITY_MAX_ATTEMPTS
+    for attempt in range(max_attempts):
         cfg.dt = base_dt / (2 ** attempt)
         cfg.md_steps = base_steps * (2 ** attempt)
         if attempt > 0:
@@ -1240,22 +1269,30 @@ def run_length(L: int, *, full_pdb: str, R_full: np.ndarray, eps_full: np.ndarra
             # one directly below, so the DCD file is opened exactly once (no double-open /
             # orphaned handle across a stability retry).
             engine.attach_reporters(cfg, ctx.simulation, suffix="", total_steps=cfg.md_steps,
-                                    checkpoint=not nascent_only, trajectory=not nascent_only)
+                                    append=append,
+                                    checkpoint=(checkpoint or not nascent_only),
+                                    trajectory=not nascent_only)
             if nascent_only:
                 # Nascent-only DCD (the rigid ribosome is static -- no need to write its
                 # ~thousands of beads/frame). Cap the output interval at this stage's step
                 # count so even a short stage (n_steps < nstout, common for stage 1) still
                 # records its final conformation; otherwise it would leave a 0-frame,
                 # 0-byte (headerless, unreadable) DCD and the movie would lose that stage.
+                # append=True continues the ejection DCD across an extend.
                 dcd_every = max(1, min(cfg.nstxout, cfg.md_steps))
                 ctx.simulation.reporters.append(NascentDCDReporter(
-                    cfg.output_path(".dcd"), dcd_every, nascent_topology, L))
+                    cfg.output_path(".dcd"), dcd_every, nascent_topology, L,
+                    append=append))
 
             # Step in chunks so a divergence is caught (and the stage aborted) mid-run.
-            chunk = max(cfg.nstxout, cfg.md_steps // 20, 1)
+            # On a restart, setup_simulation loaded the checkpoint (ctx.done_steps); the
+            # remaining steps reach the cumulative md_steps target (<= 0 = already there,
+            # so nothing is stepped and the run just refreshes the final / checkpoint).
+            steps_to_run = (cfg.md_steps - ctx.done_steps) if restart else cfg.md_steps
+            chunk = max(cfg.nstxout, steps_to_run // 20, 1)
             done = 0
-            while done < cfg.md_steps:
-                n = min(chunk, cfg.md_steps - done)
+            while done < steps_to_run:
+                n = min(chunk, steps_to_run - done)
                 try:
                     ctx.simulation.step(n)
                 except Exception as exc:
@@ -1295,6 +1332,10 @@ def run_length(L: int, *, full_pdb: str, R_full: np.ndarray, eps_full: np.ndarra
         # state either way, so stages 1/2 still return their final without a file.
         final_pdb = str(out_dir / "traj_final.pdb") if persist_final else None
         final = _finalize_nascent(cfg, ctx, nascent_topology, L, start, final_pdb=final_pdb)
+        if checkpoint:
+            # Persist the exact end state so a later run can restart/extend this phase
+            # (the periodic CheckpointReporter may lag the final step by < nstchk).
+            ctx.simulation.saveCheckpoint(ctx.checkpoint)
     else:
         engine.finalize_simulation(cfg, ctx, built.topology, start)
         final = mm.app.PDBFile(cfg.output_path("_final.pdb")).getPositions(
@@ -1303,8 +1344,15 @@ def run_length(L: int, *, full_pdb: str, R_full: np.ndarray, eps_full: np.ndarra
     # One concise, column-aligned line per stage (verbose banners above are gated
     # on VERBOSE). Fixed-width fields so stacked stage lines line up:
     #   L, stage tag, steps, wall-time, final-step potential energy.
-    print(f"  L={L:>3d}  {(label or 'run'):<26s}  {base_steps:>5d} steps  "
-          f"{time.time() - start:>6.2f} s  PE={final_pe:>+13.4e} kJ/mol")
+    # A restart whose checkpoint already reached the cumulative target stepped nothing --
+    # say so explicitly rather than reporting the (unrun) step count.
+    if restart and ctx.done_steps >= base_steps:
+        print(f"  L={L:>3d}  {(label or 'run'):<26s}  cumulative {base_steps} steps already "
+              f"met at checkpoint step {ctx.done_steps}; nothing to run  "
+              f"PE={final_pe:>+13.4e} kJ/mol")
+    else:
+        print(f"  L={L:>3d}  {(label or 'run'):<26s}  {base_steps:>5d} steps  "
+              f"{time.time() - start:>6.2f} s  PE={final_pe:>+13.4e} kJ/mol")
 
     return np.asarray(final)[:L]
 

@@ -390,14 +390,37 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
     # The ejection phase is its own progress unit; on resume a completed phase is
     # skipped (see topo.csp.resume).
     if params.ejection_steps > 0:
-        if do_resume and prog.is_done("ejection"):
+        # ejection_steps is the CUMULATIVE free-run length. Continuing a prior ejection from
+        # its checkpoint is now an explicit opt-in (`restart = yes`), not implied by simply
+        # raising ejection_steps:
+        #   - restart=yes + a prior checkpoint on a resumed run -> continue from the
+        #     checkpoint (positions + velocities + step count) and append only the steps
+        #     needed to reach the cumulative ejection_steps target. If the checkpoint
+        #     already reached it, setup_simulation finds 0 remaining steps and run_length
+        #     reports "already met" and steps nothing.
+        #   - restart=no (default), or no checkpoint yet -> a fresh full run from step 0 to
+        #     ejection_steps (any prior ejection output is overwritten).
+        # `do_resume` is kept in the gate so a stale checkpoint from a since-overwritten
+        # synthesis can never be continued after a fresh start. Inspect ejection/traj_final.pdb
+        # yourself and raise ejection_steps (with restart=yes) until the chain has left the ribosome.
+        if do_resume and prog.is_done("ejection") and not params.ejection_restart:
+            # Plain resume of an already-complete ejection: skip it (like the stall phase).
+            # `restart = yes` is the escape hatch to continue/extend a completed ejection.
             prev_final = resume_mod.load_final_pdb(
                 resume_mod.phase_final_path(out_path, "ejection"))
-            print("[resume] ejection already complete; skipping.")
-        else:
             print()
-            print(f"=== Ejection (L = {L_max}, {params.ejection_steps} steps, "
-                  f"restraint OFF) -> {out_path / 'ejection'}/ ===")
+            print("[resume] ejection already complete; skipping "
+                  "(set restart = yes to continue/extend it).")
+        else:
+            restart = (params.ejection_restart and do_resume
+                       and resume_mod.phase_checkpoint_path(out_path, "ejection").is_file())
+            print()
+            if restart:
+                print(f"=== Ejection (L = {L_max}, restraint OFF; restart from checkpoint toward "
+                      f"cumulative {params.ejection_steps} steps) -> {out_path / 'ejection'}/ ===")
+            else:
+                print(f"=== Ejection (L = {L_max}, {params.ejection_steps} steps, "
+                      f"restraint OFF) -> {out_path / 'ejection'}/ ===")
             resume_mod.append_progress(out_path, "ejection", "RUNNING")
             prev_final = run_length(
                 L_max, full_pdb=full_pdb, R_full=R_full, eps_full=eps_full,
@@ -405,6 +428,7 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
                 seed_override=prev_final, out_root=out_path, params=ep, ribo=ribo,
                 restrain=False, out_subdir="ejection",
                 n_steps_override=params.ejection_steps, nascent_rmin_2=nascent_rmin_2_arg,
+                checkpoint=True, restart=restart, append=restart,
                 label="ejection")
             resume_mod.append_progress(out_path, "ejection", "DONE")
 
@@ -495,6 +519,11 @@ def read_csp_config(config_file: str, verbose: bool = True) -> CSPConfig:
     - ``resume`` -- resume policy: ``auto`` (default; resume iff an interrupted run is
       present under ``outdir``), ``yes`` (require a resumable run, else error) or ``no``
       (always start fresh). See :mod:`topo.csp.resume`.
+    - ``restart`` -- ``yes`` / ``no`` (default ``no``): whether to *continue* the ejection
+      free run from its checkpoint. ``yes`` + a larger ``ejection_steps`` on a resumed run
+      extends the ejection from where it stopped (appending only the extra steps); if the
+      checkpoint already reached ``ejection_steps`` it reports "already met" and runs
+      nothing. ``no`` re-runs the whole ejection fresh (0 -> ``ejection_steps``).
 
     MD / ribosome keys: ``dt``, ``ref_t``, ``tau_t``, ``nstout``, ``device``, ``ppn``,
     ``constraints`` (default ``AllBonds``), ``restraint_k``, ``minimize``,
@@ -746,6 +775,10 @@ def read_csp_config(config_file: str, verbose: bool = True) -> CSPConfig:
             raise ValueError(f"{config_file}: resume must be 'auto', 'yes' or 'no', "
                              f"got {opt('resume')!r}.")
         p.resume = r
+    # Ejection restart policy: yes -> continue the ejection free run from its checkpoint
+    # (extend it); no (default) -> re-run the ejection fresh. See RunParams.ejection_restart.
+    if opt("restart") is not None:
+        p.ejection_restart = bool(strtobool(opt("restart")))
 
     # Validation: per-codon timing needs both the (protein-specific) mRNA and an explicit
     # codon-time table -- there is no bundled default (pick one under
@@ -775,7 +808,8 @@ def read_csp_config(config_file: str, verbose: bool = True) -> CSPConfig:
     if p.stall_steps:
         log(f"  post-synthesis: stall={p.stall_steps} steps (held at PTC, restraint ON)")
     if p.ejection_steps:
-        log(f"  post-synthesis: ejection={p.ejection_steps} steps")
+        log(f"  post-synthesis: ejection={p.ejection_steps} steps"
+            f"{' (restart: continue from checkpoint)' if p.ejection_restart else ' (fresh run)'}")
     log(f"  hardware/output: device={p.device}, ppn={p.ppn}, outdir={outdir}")
 
     return CSPConfig(pdb_file=pdb_file, ribosome=ribosome, L0=L0, L_max=L_max,

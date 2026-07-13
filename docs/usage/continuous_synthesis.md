@@ -434,6 +434,19 @@ along +x** (the one-sided wall biases motion forward) and clears the ribosome. E
 is skipped when its step count is `0`. For a longer, dedicated egress demonstration, raise
 `ejection_steps` in the Tutorial 8 `csp_val.ini`.
 
+The ejection is **extendable**, but extension is opt-in via `restart` (default `no`):
+`ejection_steps` is the *cumulative* free-run length. If the chain has not fully left the
+ribosome, set `restart = yes`, raise `ejection_steps`, and re-run on the existing `outdir`
+(with `resume = auto`) — the ejection continues from its checkpoint (positions, velocities
+and step count) and appends only the additional steps, exactly like resuming a simulation
+(if the checkpoint already reached the target it reports "already met" and does nothing).
+With the default `restart = no`, a **completed** ejection is instead **skipped** on resume
+(like the `stall` phase) — raising `ejection_steps` does not re-run or extend it; use
+`restart = yes` (or `resume = no` to redo the whole synthesis). Inspect
+`ejection/traj_final.pdb` yourself and top it up until the
+chain is clear; the nascent-only final is then a ready ribosome-free input for a
+post-translation `topo-mdrun`.
+
 ### 6. Numerical integration, equilibrium seeding, and the stability guard
 
 **The default is rigid `AllBonds` at `dt = 0.015 ps`, and it is stable by construction.**
