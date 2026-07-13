@@ -65,12 +65,13 @@ jobs:
 
       - name: Build all documentation versions
         run: |
-          # Compute the release version once here (real checkout: .git + tags) and
-          # export it as SETUPTOOLS_SCM_PRETEND_VERSION. sphinx-polyversion checks
-          # each ref out with `git archive` (no .git), so setuptools-scm in conf.py
-          # can't read git there; the pretend var makes it resolve anyway (e.g.
-          # 2026.1) instead of falling back to YEAR.dev.
-          SETUPTOOLS_SCM_PRETEND_VERSION="$(python -m setuptools_scm)"
+          # Compute the docs version once here (real checkout: .git + tags) and export
+          # it as SETUPTOOLS_SCM_PRETEND_VERSION. sphinx-polyversion checks each ref out
+          # with `git archive` (no .git), so setuptools-scm in conf.py can't read git
+          # there; the pretend var makes it resolve anyway. Inject the last RELEASED
+          # CalVer tag (e.g. "2026.1"), matching conf.py's display choice -- between
+          # tags the docs label the last release, not the guessed-next "2026.2.devN".
+          SETUPTOOLS_SCM_PRETEND_VERSION="$(git describe --tags --abbrev=0)"
           export SETUPTOOLS_SCM_PRETEND_VERSION
           echo "docs version -> $SETUPTOOLS_SCM_PRETEND_VERSION"
           # poly.py enumerates LOCAL branches (sphinx-polyversion 2.0.0 mis-parses
