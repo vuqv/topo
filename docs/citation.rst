@@ -5,7 +5,9 @@ How to cite TOPO
 
 If TOPO contributed to work you are publishing, please cite it. Citing the
 software lets others find the exact model and version you used, and credits the
-people who maintain it.
+people who maintain it. If your work is published with the help of TOPO, please
+also give it a star on `GitHub <https://github.com/vuqv/topo>`_ in addition to
+citing it — it helps others find the project.
 
 .. note::
 

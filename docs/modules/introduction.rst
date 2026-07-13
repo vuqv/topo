@@ -74,19 +74,17 @@ Installation
 ------------
 
 TOPO depends on OpenMM (and ParmEd, MDAnalysis, mdtraj, NumPy, pandas, PyYAML),
-which are best installed from ``conda-forge``. From the repository root::
+which are best installed from ``conda-forge``, plus the external **STRIDE** (and
+optional **PULCHRA**) binaries. In brief::
 
     mamba create -n topo -c conda-forge python">=3.9" openmm parmed \
         mdanalysis mdtraj numpy pandas pyyaml
     mamba activate topo
     pip install -e .
 
-This installs TOPO as an editable package (your source edits take effect
-immediately) and registers the ``topo-mdrun`` and ``topo-optimize`` console
-commands. **STRIDE** must be on your ``PATH`` for the contact potential (or
-supply a precomputed STRIDE file via ``stride_output_file``); STRIDE and the
-optional PULCHRA backmapper are covered in :doc:`../usage/external_dependencies`.
-See the project ``README`` for a no-install (``PYTHONPATH``) alternative.
+See :doc:`installation` for the full step-by-step guide (both the editable/regular
+``pip`` install and the no-install ``PYTHONPATH`` alternative), and
+:doc:`../usage/external_dependencies` for STRIDE and PULCHRA.
 
 
 Running a simulation

@@ -11,8 +11,9 @@ single folded-protein structure it builds a one-bead-per-residue, structure-base
 unfolding, thermal/mechanical stability, and multidomain motions.
 
 **New here?** Read :doc:`overview` to see the two things TOPO does and jump to
-the right tutorials, :doc:`modules/introduction` for installation and package
-layout, and :doc:`usage/model_theory` for what the model is.
+the right tutorials, :doc:`modules/installation` to get it running,
+:doc:`modules/introduction` for the package layout, and
+:doc:`usage/model_theory` for what the model is.
 
 **Lineage.** TOPO implements the models developed in the **O'Brien lab** (E. P.
 O'Brien and co-workers): the coarse-grained structure-based model of O'Brien
@@ -27,6 +28,7 @@ see :doc:`citation` for the full list with DOIs.
 
    overview
    diagrams
+   modules/installation
    modules/introduction
    usage/external_dependencies
    citation

@@ -85,6 +85,14 @@ mamba activate topo
 pip install -e .
 ```
 
+Use the editable install (`-e`, above) for development. For a stable deployment,
+a regular install copies the package into `site-packages` instead (source edits
+then require a reinstall):
+
+```bash
+pip install .
+```
+
 Verify:
 
 ```bash
