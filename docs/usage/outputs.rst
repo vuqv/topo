@@ -34,6 +34,9 @@ After ``topo-mdrun -f md.ini`` finishes, the run folder contains:
    * - ``<outname>_final.pdb``
      - text
      - **Last conformation** (CA PDB). Reuse as ``init_position`` to seed a follow-up run.
+   * - ``<pdb_prefix>_CA.pdb``
+     - text
+     - **Native structure at CA resolution** — the input ``pdb_file`` coarse-grained to its alpha carbons, in the same bead order as the ``.dcd``. Use it as the reference for aligning or computing RMSD of the simulated trajectory against the native state. Named from the **input PDB** basename (``P0CX28_clean.pdb`` → ``P0CX28_clean_CA.pdb``), not ``outname``.
    * - ``<outname>_runinfo.log``
      - text (INI)
      - **Run provenance** — package versions, hardware, GPU, timing, coordinate/velocity sources. See below.
@@ -142,6 +145,19 @@ Loading a trajectory for analysis
 
    # multi-copy run: use the combined topology
    u_multi = mda.Universe("traj/traj_multi.psf", "traj/traj.dcd")
+
+To align the trajectory to the native state, load the CA-resolution native
+structure written next to the trajectory (same bead order as the ``.dcd``) as a
+reference:
+
+.. code-block:: python
+
+   import MDAnalysis as mda
+   from MDAnalysis.analysis import align, rms
+
+   ref = mda.Universe("traj/P0CX28_clean_CA.pdb")          # native, CA resolution
+   u   = mda.Universe("traj/traj.psf", "traj/traj.dcd")
+   R = rms.RMSD(u, ref, select="name CA").run()            # RMSD vs. native per frame
 
 From there, compute RMSD, radius of gyration, or the native-contact score *Q*
 (:doc:`native_contacts`). For multi-copy runs, split the combined DCD into
