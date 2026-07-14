@@ -207,6 +207,21 @@ scripts/         Standalone analysis tools and install_deps.sh
 tests/           Test suite
 ```
 
+## Citation
+
+If TOPO contributed to your work, please cite it (and give the repo a ⭐):
+
+> Vu, Q. (2026). *TOPO: a topology-based coarse-grained model for folded
+> proteins* (Version 2026.1) [Computer software]. Zenodo.
+> https://doi.org/10.5281/zenodo.21360706
+
+The DOI above is the **concept DOI** (always the latest release); use
+[10.5281/zenodo.21360707](https://doi.org/10.5281/zenodo.21360707) to pin
+version 2026.1. GitHub's "Cite this repository" button reads
+[`CITATION.cff`](CITATION.cff). Please also cite the underlying O'Brien-lab
+models and other methods — see the
+[citation guide](docs/citation.rst) for the full list.
+
 ## License
 
 TOPO is released under the **GNU General Public License v3.0** — see
