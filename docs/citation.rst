@@ -24,11 +24,12 @@ Primary citation
 Cite the software itself:
 
    Vu, Q. (2026). *TOPO: a topology-based coarse-grained model for folded
-   proteins* (Version 2026.1) [Computer software].
-   https://github.com/vuqv/topo
+   proteins* (Version 2026.1) [Computer software]. Zenodo.
+   https://doi.org/10.5281/zenodo.21360706
 
-If you archive a release on Zenodo (see below), add the version-specific DOI to
-this reference and to your paper's methods.
+The DOI above is the **concept DOI**, which always resolves to the latest
+release. To pin the exact version you ran, use the version-specific DOI for
+2026.1 instead: https://doi.org/10.5281/zenodo.21360707
 
 BibTeX
 ~~~~~~
@@ -42,6 +43,7 @@ A software entry you can drop into your ``.bib`` file:
      title   = {{TOPO}: a topology-based coarse-grained model for folded proteins},
      year    = {2026},
      version = {2026.1},
+     doi     = {10.5281/zenodo.21360706},
      url      = {https://github.com/vuqv/topo},
      note     = {Built on OpenMM}
    }

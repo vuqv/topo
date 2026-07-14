@@ -19,6 +19,15 @@ authors:
 version: "2026.1"
 date-released: "2026-07-12"
 license: "GPL-3.0-or-later"
+# Concept DOI (Zenodo) — always resolves to the latest version.
+doi: "10.5281/zenodo.21360706"
+identifiers:
+  - type: doi
+    value: "10.5281/zenodo.21360706"
+    description: "Concept DOI — all versions"
+  - type: doi
+    value: "10.5281/zenodo.21360707"
+    description: "Version DOI — 2026.1"
 url: "https://github.com/vuqv/topo"
 repository-code: "https://github.com/vuqv/topo"
 keywords:
