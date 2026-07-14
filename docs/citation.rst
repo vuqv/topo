@@ -11,11 +11,11 @@ citing it — it helps others find the project.
 
 .. note::
 
-   The primary reference below is a **template**. Replace the bracketed
-   ``[PLACEHOLDER]`` fields with the real authors, title, year, and DOI once the
-   TOPO paper / software release is available, and update
-   :download:`CITATION.cff <../CITATION.cff>` at the repository root to match so
-   the two stay in sync.
+   No paper or preprint describing TOPO exists yet, so the software entry below
+   is the primary reference. Once a paper is available, cite that as the primary
+   reference and keep the software entry as a secondary, version-specific
+   citation. Keep :download:`CITATION.cff <../CITATION.cff>` at the repository
+   root in sync with this page.
 
 
 Primary citation
@@ -23,27 +23,26 @@ Primary citation
 
 Cite the software itself:
 
-   [AUTHORS] (\ [YEAR]). *TOPO: a topology-based coarse-grained model for folded
-   proteins* (Version [VERSION]) [Computer software]. [PUBLISHER / DOI / URL].
+   Vu, Q. (2026). *TOPO: a topology-based coarse-grained model for folded
+   proteins* (Version 2026.1) [Computer software].
    https://github.com/vuqv/topo
 
-Once a paper or preprint describing TOPO exists, cite that as the primary
-reference and keep the software entry as a secondary, version-specific citation.
+If you archive a release on Zenodo (see below), add the version-specific DOI to
+this reference and to your paper's methods.
 
 BibTeX
 ~~~~~~
 
-A software entry you can drop into your ``.bib`` file and fill in:
+A software entry you can drop into your ``.bib`` file:
 
 .. code-block:: bibtex
 
    @software{topo,
-     author  = {[AUTHORS]},
+     author  = {Vu, Quyen},
      title   = {{TOPO}: a topology-based coarse-grained model for folded proteins},
-     year    = {[YEAR]},
-     version = {[VERSION]},
+     year    = {2026},
+     version = {2026.1},
      url      = {https://github.com/vuqv/topo},
-     doi      = {[DOI, e.g. a Zenodo archive DOI]},
      note     = {Built on OpenMM}
    }
 
