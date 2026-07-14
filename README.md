@@ -1,6 +1,6 @@
 # TOPO: TOPOlogy-based coarse-grained model for folded prOteins
 
-[![DOI](https://zenodo.org/badge/1146774070.svg)](https://doi.org/10.5281/zenodo.21360706)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21360706.svg)](https://doi.org/10.5281/zenodo.21360706)
 
 A coarse-grained molecular-dynamics engine for **globular (folded) proteins**,
 built on [OpenMM](https://openmm.org/). From a single folded-protein structure,
