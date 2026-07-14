@@ -10,6 +10,16 @@ by :func:`topo.utils.nonbonded.read_yaml_config` and
 It is **optional**: if you omit ``domain_def``, every SS contact is scaled by
 1.0 (i.e. no domain scaling at all).
 
+.. tip::
+
+   **Where to get domain boundaries.** If your simulation uses a native
+   structure from the AlphaFold Database, you can obtain ready-made domain
+   assignments (residue ranges) from `TED — The Encyclopedia of Domains
+   <https://ted.cathdb.info/>`_, which provides consensus domain definitions
+   for the AlphaFold predicted structures. Look up your model by its UniProt
+   accession and use the reported domain residue ranges to populate the
+   ``intra_domains`` blocks below.
+
 
 YAML syntax in 60 seconds
 -------------------------

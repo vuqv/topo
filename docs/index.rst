@@ -44,6 +44,7 @@ see :doc:`citation` for the full list with DOIs.
    :caption: The TOPO model
 
    usage/model_theory
+   usage/nscale_optimization
 
 .. toctree::
    :maxdepth: 1

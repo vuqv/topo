@@ -16,20 +16,6 @@ it can **fold co-translationally** as it extrudes and once it clears the bore.
 
 ***Protein synthesis → ejection.** The chain (N→C rainbow beads) grows from the PTC (C-terminus, red) and extrudes N-terminus-first down the transparent blue **bore** (with the red closed PTC cap and the translucent grey **exit-face wall**), emerges past the wall, and folds into the ejected protein just outside the tunnel.*
 
-> The tunnel is a pure force (no beads); the drawn geometry is read from the same
-> `cylinder.ini`. Regenerate after a run:
-> ```bash
-> python make_movie_cylinder.py -o synth_out -f cylinder.ini          # stitch movie + tunnel
-> python ../_viz/cylinder_tunnel_tcl.py -f cylinder.ini -o synth_out/tunnel.tcl
-> # beads (VDW+Licorice) hide sentinel-parked beads cleanly; a zoomed-out view
-> # (scale<1, bigger beads) shows the whole grow→thread→eject path in one frame.
-> python ../_viz/render_cg.py --psf synth_out/movie.psf --dcd synth_out/movie.dcd \
->        --out img --hero last --no-align --rep beads --bead-radius 2.6 --scale 0.78 \
->        --select "name CA and x < 9000" --selupdate --extra-tcl synth_out/tunnel.tcl
-> ```
-> (the shipped GIF trims the trajectory to the end of ejection, before the free
-> protein diffuses off-axis — slice `movie.dcd` to the ejection frames first.)
-
 ## The cylinder ribosome model (`topo.csp.cylinder`)
 
 The analytic tunnel is a different *physics of confinement* than the explicit-bead

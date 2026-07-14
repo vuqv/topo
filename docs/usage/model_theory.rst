@@ -546,10 +546,26 @@ used by any force in the single-chain (isolated-protein) model**: every contact
 distance :math:`R_{ij}` — native *and* non-native — is derived from the input
 structure (native distances are the Cα–Cα distances; non-native distances come
 from the nearest non-contact Cα distance, see :ref:`theory-contacts`). They **are**
-used by the **inter-chain excluded-volume** term for ribosome–nascent-chain
-complexes — the ribosome↔nascent :math:`(\sigma/r)^{12}` repulsion in
-protein synthesis (:mod:`topo.csp.ribosome`), where each rigid-ribosome
-bead's collision radius comes from ``Rmin_2``.
+used by the **inter-chain** ribosome–nascent-chain excluded-volume term in
+protein synthesis (:mod:`topo.csp.ribosome`), which reproduces O'Brien's
+**12-10-6** form (the *same* functional form as the intra-chain contacts, **not**
+a pure :math:`(\sigma/r)^{12}` repulsion):
+
+.. math::
+
+   U_{ij}(r) = \varepsilon\Big[\,13(R_{ij}/r)^{12} - 18(R_{ij}/r)^{10}
+   + 4(R_{ij}/r)^{6}\,\Big],
+   \qquad R_{ij} = \Big(\tfrac{R_\mathrm{min}}{2}\Big)_i
+                 + \Big(\tfrac{R_\mathrm{min}}{2}\Big)_j ,
+
+with the **sum** combination rule (each bead's collision radius
+:math:`R_\mathrm{min}/2` comes from ``Rmin_2``: for nascent beads either the
+per-residue Karanicolas–Brooks radii from the native structure or the per-amino-acid
+sidechain values; for ribosome beads O'Brien's per-type/per-residue values) and a
+very weak well depth :math:`\varepsilon = 1.32\times10^{-4}` kcal/mol, so in
+practice the term acts as a **soft excluded volume**. An earlier pure
+:math:`(\sigma/r)^{12}` repulsion with the arithmetic-mean combining rule was
+~1000× too soft and has been replaced by this O'Brien-consistent form.
 
 
 Temperature, dynamics, and ensembles
@@ -582,8 +598,10 @@ The single most important *adjustable* quantity in the model is
 :math:`n_\mathrm{scale}` (the ``nscale`` field in ``domain.yaml``), which
 multiplies the sidechain–sidechain well depths. The raw, unscaled model
 (:math:`n_\mathrm{scale} = 1`) is usually **under-stabilized** — proteins sit
-only marginally folded. Two pages cover how to set it:
+only marginally folded. Three pages cover why and how to set it:
 
+* :doc:`nscale_optimization` — **why** calibration is needed and why it is done
+  per domain and per interface (start here).
 * :doc:`domain_definition` — the file format, per-domain and per-interface
   scaling, discontiguous domains, and decoupling.
 * :doc:`../tutorials/05_opt_nscal` — the automatic optimizer that searches a

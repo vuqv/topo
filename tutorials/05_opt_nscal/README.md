@@ -21,9 +21,6 @@ production-length protocol.
 
 ***One stability trajectory** — each round runs 10 of these; the fraction that stay folded (via Q) decides whether the current `nscale` passes or is raised.*
 
-> Regenerate from any round's output, e.g.
-> `python ../_viz/render_cg.py --psf opt_out/round_1/traj/traj.psf --dcd opt_out/round_1/traj/traj_0.dcd --out img --hero 0 --stride 10`.
-
 ---
 
 ## Files in this folder
@@ -54,7 +51,8 @@ The native contact interactions are divided into groups by the **domains**
 the **level-1** nscale for its structural class (α, β, α/β, or *interface*;
 Table 1).
 
-Then **`ntraj` independent MD trajectories at 310 K** are run for the current CG
+Then **`ntraj` independent MD trajectories at the reference temperature
+(`ref_t`)** are run for the current CG
 model, and the *Q* value (fraction of native contacts formed) of every domain and
 interface is monitored. A domain/interface is **stable** when **all** `ntraj`
 trajectories keep its *Q* above the threshold **Q = 0.6688** for **≥ 98 %** of the
@@ -75,7 +73,8 @@ final model regardless of stability.
 | &alpha;/&beta; | 1.1556 | 1.4213 | 1.6871 | 1.9644 | 2.5044 |
 | Interface | 1.2747 | 1.5679 | 1.8611 | 2.1670 | 2.5044 |
 
-> Calibrated on a training set of 18 small single-domain proteins.
+> Calibrated on a training set of 19 small single-domain proteins
+> ([Leininger et al., *PNAS* **116**, 5523–5532, 2019](https://www.pnas.org/doi/full/10.1073/pnas.1813003116)).
 
 ## 3. The search algorithm (per round)
 
@@ -93,11 +92,31 @@ Each **round** is one set of nscales tested. For each round the optimizer:
    - Otherwise each **unstable** unit climbs one ladder level (stable units stay
      frozen) and the next round runs.
 
-Because every unstable unit climbs **independently**, different domains converge
-at different levels. After level 5, a still-unstable unit drops to the **median
-(level-3)** fallback. `max_rounds` defaults to **6** (5 levels + fallback); a
-protein still unstable after that is flagged with a **WARNING** in the report so
-you can inspect or exclude it.
+Within a single round, every **currently** unstable unit climbs one level while
+stable units stay frozen, so units that are unstable *at the same time* advance in
+parallel. If the units were fully independent, six rounds would always suffice
+regardless of their number — five ladder levels plus the median (level-3)
+fallback. A unit still unstable at the top of the ladder is pinned at that
+fallback for the final model.
+
+The units are **not** independent, however: domains and their shared interfaces
+are coupled through the native-contact map, so **raising one unit's nscale can
+destabilize a unit that had already stabilized**, forcing it to start climbing
+again. Because that re-climbing happens *after* the first unit has settled, the
+worst-case number of rounds is **not** bounded by the ladder height — it grows
+with the number of units, up to roughly *(number of units) × (ladder levels)* in
+the extreme. For example, with two domains D1, D2 (plus their interface): D2 may
+need until round 5 to reach level 5 and finally fold, but that high D2 nscale then
+destabilizes D1 (previously stable at level 1), which must now climb 1→5 over the
+next several rounds — on the order of **ten rounds** for a two-domain protein.
+
+`max_rounds` therefore defaults to **6** only as a **heuristic**, not a physical
+bound: it covers the common case (weak or no coupling, where a unit made stable
+almost always stays stable as the other units' nscales change) and keeps the
+default run short. Strongly coupled multidomain systems can legitimately need
+more, so **raise `max_rounds`** for them. Any unit still unstable when
+`max_rounds` is reached is flagged with a **WARNING** in the report, so you can
+inspect it, increase `max_rounds`, or exclude it.
 
 ## 4. Run it
 
@@ -142,6 +161,12 @@ min_contacts   = 0             ; units with fewer native contacts than this are
                                ;   pinned at level 1 and not optimized (0 = off)
 ```
 
+> **Recommended production settings.** The `md_steps` above is a fast demo value.
+> For a reliable nscale optimization, use **`ntraj = 10`** with each trajectory run
+> for **1 µs** (at `dt = 0.015` ps that is `md_steps ≈ 66,700,000`). Ten
+> independent 1 µs trajectories give enough sampling for the per-unit stability
+> test to be robust.
+
 A domain or interface with fewer than `min_contacts` native contacts is treated as
 too weakly structured to fold: it is **pinned at the first ladder level and excluded
 from optimization** (it never climbs and never blocks convergence). This is useful
@@ -149,9 +174,13 @@ for interfaces between domains that barely touch, or small/disordered domains th
 would otherwise spuriously read as "unstable" and waste rounds. The default `0`
 disables the check.
 
+> **Recommended value.** `min_contacts = 25` is a reasonable heuristic: below
+> roughly this many native contacts a domain or interface is too weakly
+> structured to support a stably folded unit, so it should be pinned rather than
+> optimized ([Zhang et al., *Science* **390**, eadt1630, 2025](https://www.science.org/doi/10.1126/science.adt1630)).
+
 Each round the optimizer expands this into a full `round_N/md.ini` (one implicit
-default worth knowing: `dt = 0.015` ps, the model's 15 fs timestep — *not* the
-package's bare 0.01 default).
+default worth knowing: `dt = 0.015` ps, the model's 15 fs timestep).
 
 ## 6. The `domain.yaml` — note the `class` field
 
@@ -193,10 +222,10 @@ Under the `-o` directory:
 ## 8. Under the hood (reusable package pieces)
 
 - **`topo.analysis.native_contacts`** — the *Q* scorer. Native contacts are
-  defined from the all-atom reference (heavy-atom ≤ 4.5 Å, sequence separation
-  > 3); a contact is *formed* in a CG frame when d<sub>CG</sub> ≤ 1.2 ×
-  d<sub>native</sub>. It emits one *Q* column per domain and per interface. Use it
-  standalone too:
+  defined from the all-atom reference (heavy-atom distance ≤ 4.5 Å, between
+  residues more than 3 apart in sequence); a contact is *formed* in a CG frame
+  when d<sub>CG</sub> ≤ 1.2 × d<sub>native</sub>. It emits one *Q* column per
+  domain and per interface. Use it standalone too:
   ```bash
   python -m topo.analysis.native_contacts -d domain.yaml -r ref.pdb \
       -p traj/traj.psf -f traj/traj.dcd -o Q.csv
@@ -205,10 +234,10 @@ Under the `-o` directory:
   via memory-bounded streaming (handles trajectories too large for RAM). CLI:
   `python -m topo.utils.multichain -f combined.dcd -n N -o out/`.
 
-## 9. Use the result
+## 9. Run production with the optimized nscale values
 
-`domain_optimized.yaml` is a ready-to-use `domain.yaml` — point a production run
-straight at it (the extra `class` field is harmless):
+`domain_optimized.yaml` is a ready-to-use domain definition file — point a
+production run's `domain_def` straight at it (the extra `class` field is harmless):
 
 ```ini
 # md.ini

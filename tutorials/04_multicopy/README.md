@@ -14,9 +14,6 @@ a GPU.
 
 ***The run** — every copy evolves independently, giving 10 trajectories per run to split apart for analysis.*
 
-> Regenerate after your run with
-> `python ../_viz/render_cg.py --psf traj/traj_multi.psf --dcd traj/traj.dcd --out img --hero last --no-align --color chain`.
-
 ---
 
 ## Why do this?
