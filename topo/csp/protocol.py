@@ -48,7 +48,6 @@ force constants kJ/mol/nm^2. In-vivo dwell times in the kinetics are **seconds**
 from __future__ import annotations
 
 import argparse
-import configparser
 import random
 import sys
 from dataclasses import dataclass, field
@@ -62,7 +61,7 @@ from topo.csp.core import (RunParams,
                                        precompute_contacts,
                                        run_length, optimal_ptc_targets)
 from topo.csp.ribosome import (load_ribosome, anchor_coord)
-from topo.utils.config import strtobool
+from topo.utils.config import read_ini, strtobool
 from topo.csp import kinetics
 from topo.csp import resume as resume_mod
 from topo.csp import synth_mrna
@@ -483,7 +482,7 @@ class CSPConfig:
 
 
 def read_csp_config(config_file: str, verbose: bool = True) -> CSPConfig:
-    """Parse a CSP control file (INI ``[OPTIONS]``) into a :class:`CSPConfig`.
+    """Parse a CSP control file (INI) into a :class:`CSPConfig`.
 
     The structure / MD / ribosome keys configure the shared
     :class:`topo.csp.core.RunParams` machinery; the O'Brien **kinetic keys**
@@ -536,7 +535,7 @@ def read_csp_config(config_file: str, verbose: bool = True) -> CSPConfig:
     Parameters
     ----------
     config_file : str
-        Path to the INI control file (must contain an ``[OPTIONS]`` section).
+        Path to the INI control file: a flat ``key = value`` list.
     verbose : bool, optional
         If True (default), echo the parsed configuration to stdout.
 
@@ -551,7 +550,7 @@ def read_csp_config(config_file: str, verbose: bool = True) -> CSPConfig:
     FileNotFoundError
         If ``config_file`` cannot be read.
     ValueError
-        If the ``[OPTIONS]`` section is missing, a required key (``pdb_file``,
+        If the file holds no settings, a required key (``pdb_file``,
         ``ribosome``, ``domain_def``) is absent/blank, or per-codon timing is requested
         without ``mrna``.
     """
@@ -566,15 +565,16 @@ def read_csp_config(config_file: str, verbose: bool = True) -> CSPConfig:
         if verbose:
             print(msg)
 
-    cp = configparser.ConfigParser(inline_comment_prefixes=("#", ";"))
-    if not cp.read(config_file):
-        raise FileNotFoundError(f"could not read CSP config file: {config_file!r}")
-    if "OPTIONS" not in cp:
-        raise ValueError(f"{config_file}: missing required [OPTIONS] section.")
+    try:
+        cp = read_ini(config_file)
+    except FileNotFoundError:
+        raise FileNotFoundError(f"could not read CSP config file: {config_file!r}") from None
+    if not cp["OPTIONS"]:
+        raise ValueError(f"{config_file}: no settings found (no key = value lines).")
     o = cp["OPTIONS"]
 
     def opt(key: str) -> Optional[str]:
-        """Return an optional ``[OPTIONS]`` value, or ``None`` if absent/blank.
+        """Return an optional setting, or ``None`` if absent/blank.
 
         Parameters
         ----------
@@ -594,7 +594,7 @@ def read_csp_config(config_file: str, verbose: bool = True) -> CSPConfig:
         return v if v != "" else None
 
     def req(key: str) -> str:
-        """Return a required ``[OPTIONS]`` value, raising if it is missing.
+        """Return a required setting, raising if it is missing.
 
         Parameters
         ----------
@@ -857,7 +857,7 @@ def csp(argv: Optional[List[str]] = None) -> None:
                     "Controlled by an INI file: topo-csp -f csp.ini",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("-input", "-f", dest="config", type=str,
-                        help="CSP control file (INI, [OPTIONS] section).")
+                        help="CSP control file (INI).")
     parser.add_argument("-o", "--outdir", default=None,
                         help="override the output directory from the config file.")
     parser.add_argument("--device", default=None, choices=["CPU", "GPU"],

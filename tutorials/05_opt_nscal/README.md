@@ -136,14 +136,13 @@ live MD step counter).
 ## 5. The `optimize.ini` config
 
 `optimize.ini` is deliberately **minimal** — only the essentials, in a **single
-`[OPTIONS]` section**. The optimizer takes the keys it needs (`ntraj`,
+flat key list**. The optimizer takes the keys it needs (`ntraj`,
 `q_threshold`, `frame_fraction`, `max_rounds`, `min_contacts`); every other key is
 a simulation parameter passed through to each round's `md.ini`. Everything else
 (timestep, thermostat, model, device, output naming, …) comes from the
 optimizer's built-in protocol defaults, so you don't repeat a full `md.ini`.
 
 ```ini
-[OPTIONS]
 # inputs + simulation parameters (passed through to each round's md.ini)
 pdb_file   = P0A6E6.pdb        ; all-atom reference (native contacts + geometry)
 domain_def = domain.yaml       ; initial domains + class; nscales get optimized

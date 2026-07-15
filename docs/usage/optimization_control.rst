@@ -4,11 +4,11 @@ Optimization control options
 ============================
 
 Optimizer parameters are read from an ``.ini`` file (e.g. ``optimize.ini``) by
-:func:`topo.optimize.read_optimize_config`. The section title ``[OPTIONS]`` is
-required. For *why* the nscale needs optimizing at all, see
-:doc:`nscale_optimization`; for a worked run see the tutorial
-:doc:`../tutorials/05_opt_nscal`.
+:func:`topo.optimize.read_optimize_config`. For *why* the nscale needs
+optimizing at all, see :doc:`nscale_optimization`; for a worked run see the
+tutorial :doc:`../tutorials/05_opt_nscal`.
 
+* The file is a flat list of ``key = value`` lines.
 * Comments: inline or on their own line, starting with ``;`` or ``#``.
 * Keyword and value are separated by ``=`` or ``:``.
 * Only ``pdb_file`` and ``domain_def`` are *required*; everything else has a
@@ -17,8 +17,8 @@ required. For *why* the nscale needs optimizing at all, see
 .. important::
 
    **How this file differs from** ``md.ini``. The optimizer is not a simulation
-   engine — it *drives* :mod:`topo.mdrun` in a loop. So ``optimize.ini`` has one
-   flat ``[OPTIONS]`` section that is **split two ways** when it is read:
+   engine — it *drives* :mod:`topo.mdrun` in a loop. So ``optimize.ini`` is one
+   flat key list that is **split two ways** when it is read:
 
    * the five **optimizer controls** (``ntraj``, ``q_threshold``,
      ``frame_fraction``, ``max_rounds``, ``min_contacts``) are consumed by the
@@ -54,8 +54,6 @@ Example ``optimize.ini``:
 
 .. code-block::
 
-        [OPTIONS]
-
         ; --- inputs (paths are resolved relative to THIS file) ---
         pdb_file   = P0A6E6.pdb    ; all-atom reference (native contacts + geometry)
         domain_def = domain.yaml   ; initial domains + class; nscales get optimized
@@ -82,22 +80,20 @@ Example ``optimize.ini``:
 
 .. note::
 
-   **Set** ``md_steps`` **explicitly.** It is a pass-through simulation
-   parameter, and the optimizer does *not* give it an implicit default — so if
-   you omit it, each round falls back to the
-   :class:`~topo.utils.config.SimulationConfig` default of **10 000 steps**
-   (150 ps at ``dt = 0.015``). That is far too short to distinguish a folded
-   domain from an unfolded one, and the optimizer will happily report
-   "converged" on meaningless trajectories. The published protocol uses ~0.5 µs
-   per trajectory (≈ ``3.3e7`` steps at ``dt = 0.015``).
+   **Set** ``md_steps`` **explicitly.** Its implicit default is only **10 000
+   steps** (150 ps at ``dt = 0.015``) — a smoke-test length, far too short to
+   distinguish a folded domain from an unfolded one, and the optimizer will
+   happily report "converged" on meaningless trajectories. The published
+   protocol uses ~0.5 µs per trajectory (≈ ``3.3e7`` steps at ``dt = 0.015``).
+   Lower ``nstxout`` alongside it: at its ``5000``-step default a 10 000-step
+   round yields two frames per trajectory to compute Q from.
 
 .. _opt-options:
 
 Options
 -------
 
-Everything worth deciding about in ``[OPTIONS]``, in one table. The keys are of
-three kinds:
+Everything worth deciding about, in one table. The keys are of three kinds:
 
 * **Inputs** (``pdb_file``, ``domain_def``, ``stride_output_file``) — the
   structure and domains the model is built from. The first two are the only
@@ -105,11 +101,12 @@ three kinds:
 * **Controls** (``ntraj``, ``q_threshold``, ``frame_fraction``, ``max_rounds``,
   ``min_contacts``) — consumed by the optimizer itself, and the only keys that do
   **not** reach the per-round ``md.ini``.
-* **Simulation parameters** (``md_steps``, ``device``, ``ref_t``, ``minimize``)
-  — passed through to each round's ``md.ini``. ``md_steps`` is the one you must
-  set yourself; the other three are filled in from the optimizer's own protocol
-  defaults, and ``device`` and ``minimize`` deliberately differ from what the
-  same key would default to in a plain :doc:`simulation_control` run.
+* **Simulation parameters** (``md_steps``, ``nstxout``, ``device``, ``ref_t``,
+  ``minimize``) — passed through to each round's ``md.ini``. All are filled in
+  from the optimizer's own protocol defaults, but ``md_steps`` and ``nstxout``
+  are the two you should set yourself, since their defaults only describe a
+  smoke test. ``device`` and ``minimize`` deliberately differ from what the same
+  key would default to in a plain :doc:`simulation_control` run.
 
 .. list-table::
    :header-rows: 1
@@ -138,8 +135,13 @@ three kinds:
    * - ``md_steps``
      - int
      - no
-     - ``—``
-     - **Set this explicitly** (see the note above). Steps per trajectory, passed through to ``md.ini``. The optimizer gives it no implicit default, so omitting it falls back to the :class:`~topo.utils.config.SimulationConfig` default of **10 000 steps** — far too short to tell a folded domain from an unfolded one.
+     - ``10_000``
+     - **Set this explicitly** (see the note above). Steps per trajectory, passed through to ``md.ini``. The default is a smoke-test length — far too short to tell a folded domain from an unfolded one.
+   * - ``nstxout``
+     - int
+     - no
+     - ``5000``
+     - Steps between trajectory (DCD) writes, passed through to ``md.ini``. These frames are what Q is computed from, so this sets the sampling resolution of the stability decision — lower it alongside ``md_steps``. ``nstlog`` and ``nstchk`` default to ``5000`` the same way.
    * - ``ntraj``
      - int
      - no
@@ -185,7 +187,7 @@ The table stops at the keys worth a decision. The remaining implicit defaults
 match the model's standard parameterization and are rarely touched:
 ``dt = 0.015`` (ps), ``model = topo``, ``tcoupl = yes``, ``tau_t = 0.05``,
 ``pcoupl = no``, ``pbc = no``, ``restart = no`` (every round starts fresh),
-``ppn = 4``. Setting any of these in ``optimize.ini`` overrides the implicit
+``ppn = 4``, ``nstlog = 5000``, ``nstchk = 5000``. Setting any of these in ``optimize.ini`` overrides the implicit
 value. The full set is :data:`topo.optimize.IMPLICIT_DEFAULTS`. Beyond these,
 any other key from :doc:`simulation_control` may appear and is passed through
 verbatim.

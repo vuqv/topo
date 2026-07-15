@@ -23,7 +23,7 @@ one round at a time::
       5. decide: stable units freeze; unstable units climb the ladder
       until all units are stable, or unstable units reach the median fallback.
 
-``optimize.ini`` is a MINIMAL config: a single ``[OPTIONS]`` section. The
+``optimize.ini`` is a MINIMAL config: a flat ``key = value`` list. The
 optimizer takes the keys it needs (ntraj, q_threshold, frame_fraction,
 max_rounds, min_contacts — see :data:`CONTROL_TYPES`); every other key is a
 simulation parameter (pdb_file, domain_def, md_steps, sampling, ref_t, ...)
@@ -60,6 +60,7 @@ import MDAnalysis as mda
 # The Q machinery lives in the package. Import the submodule explicitly
 # (topo.analysis also re-exports a `native_contacts` function of the same name).
 import topo.analysis.native_contacts as ncmod
+from topo.utils.config import read_ini
 from topo.utils.multichain import split_chains
 
 
@@ -109,13 +110,14 @@ def nscale_for(class_key, level):
 # IMPLICIT_DEFAULTS are the optimizer's own protocol defaults — NOT the bare
 # SimulationConfig dataclass defaults. In particular the optimizer defaults
 # device = GPU and minimize = no, whereas the dataclass defaults are CPU / yes.
-# (dt = 0.015 ps matches the CG model's 15 fs parameterization, and ref_t = 300 K
-# the dataclass temperature; both are pinned here so the generated md.ini records
-# the protocol explicitly rather than inheriting it.)
-# Anything set in optimize.ini [OPTIONS] overrides these.
+# The rest (dt = 0.015 ps, the CG model's 15 fs parameterization; ref_t = 300 K;
+# md_steps and the nstxout/nstlog/nstchk output frequencies) match the dataclass
+# defaults but are pinned here anyway, so each round's generated md.ini records
+# the protocol explicitly rather than inheriting it silently.
+# Anything set in optimize.ini overrides these.
 #
-# We use configparser with the SAME settings as the package reader
-# (topo.read_simulation_config, config.py) so parsing semantics match exactly.
+# We read with the SAME helper as the package reader (topo.utils.config.read_ini,
+# used by topo.read_simulation_config) so parsing semantics match exactly.
 # read_simulation_config returns a typed SimulationConfig (units + defaults) with
 # no serializer back to a file, so we round-trip the text with configparser here.
 # --------------------------------------------------------------------------- #
@@ -131,6 +133,13 @@ IMPLICIT_DEFAULTS = {
     "device": "GPU",      # production-scale task; override in optimize.ini for CPU
     "ppn": "4",
     "ref_t": "300",       # K; stability protocol temperature
+    # Smoke-test length (150 ps at dt = 0.015) — FAR too short to tell a folded
+    # domain from an unfolded one. Set md_steps in optimize.ini for real runs;
+    # nstxout drives the frames that feed Q, so lower it alongside md_steps.
+    "md_steps": "10_000",
+    "nstxout": "5000",    # trajectory (DCD) frames — these feed the Q scoring
+    "nstlog": "5000",
+    "nstchk": "5000",
 }
 
 # max_rounds = 6 covers the normal case exactly: 5 ladder levels + the median
@@ -145,9 +154,9 @@ OPT_DEFAULTS = {"ntraj": 10, "q_threshold": 0.6688,
                 "frame_fraction": 0.98, "max_rounds": 6, "min_contacts": 0}
 
 # Keys the optimizer consumes itself (with the type to cast them to). Everything
-# else in the config section is a simulation parameter passed through to the
-# per-round md.ini, so optimize.ini needs only ONE [OPTIONS] section: the
-# optimizer takes these keys, topo.mdrun gets the rest.
+# else in the file is a simulation parameter passed through to the per-round
+# md.ini, so optimize.ini stays one flat key list: the optimizer takes these
+# keys, topo.mdrun gets the rest.
 CONTROL_TYPES = {"ntraj": int, "q_threshold": float, "frame_fraction": float,
                  "max_rounds": int, "min_contacts": int}
 
@@ -163,16 +172,16 @@ def read_optimize_config(path):
                          (file overrides IMPLICIT_DEFAULTS; controls removed)
     controls : dict      optimizer controls (ntraj, thresholds, max_rounds, ...)
     """
-    cp = configparser.ConfigParser(inline_comment_prefixes=("#", ";"))
-    cp.optionxform = str
-    cp.read(path)
-    if "OPTIONS" not in cp:
-        raise SystemExit(f"{path}: missing required [OPTIONS] section")
+    # preserve_case: option names are round-tripped back out into each round's
+    # md.ini, so they must survive as written.
+    cp = read_ini(path, preserve_case=True)
+    if not cp["OPTIONS"]:
+        raise SystemExit(f"{path}: no settings found (no key = value lines)")
 
     options = dict(cp["OPTIONS"])
     for required in ("pdb_file", "domain_def"):
         if required not in options:
-            raise SystemExit(f"{path}: [OPTIONS] must set '{required}'")
+            raise SystemExit(f"{path}: must set '{required}'")
 
     # One flat section: split off the optimizer controls; the rest are simulation
     # parameters for the per-round md.ini. Controls are popped so they never leak
@@ -195,7 +204,7 @@ def read_optimize_config(path):
 
 
 def write_round_ini(path, base_options, overrides):
-    """Write a per-round md.ini = base [OPTIONS] with `overrides` applied."""
+    """Write a per-round md.ini = the base settings with `overrides` applied."""
     cp = configparser.ConfigParser(inline_comment_prefixes=("#", ";"))
     cp.optionxform = str
     cp["OPTIONS"] = {**base_options, **{k: str(v) for k, v in overrides.items()}}

@@ -1,8 +1,7 @@
 Synthesis control options
 =========================
 
-Both synthesis runners are configured from a ``.ini`` control file with a single
-``[OPTIONS]`` section:
+Both synthesis runners are configured from a ``.ini`` control file:
 
 * **``topo-csp``** — the coarse-grained-ribosome runner (``csp.ini``), read by
   :func:`topo.csp.protocol.read_csp_config`;
@@ -15,6 +14,7 @@ Both return a populated :class:`~topo.csp.core.RunParams`, so **most keys are sh
 :doc:`continuous_synthesis` and :doc:`cylinder_synthesis` pages cover the *physics* and
 point back here for the keys.
 
+* The file is a flat list of ``key = value`` lines.
 * Comments: inline or on their own line, starting with ``;`` or ``#``.
 * Keyword and value are separated by ``=`` or ``:``.
 * Every option has a default **except** the ones marked *required*; set only what you
@@ -45,7 +45,6 @@ Example control files
 
 .. code-block::
 
-        [OPTIONS]
         ; --- inputs (pdb_file, ribosome, domain_def are required) ---
         pdb_file           = 4c5c_model_clean.pdb   ; all-atom native PDB; the CG model is built from it
         ribosome           = ribosome_trunc.pdb     ; truncated CG ribosome (P-/A-anchors + rigid scenery)
@@ -80,7 +79,6 @@ Example control files
 
 .. code-block::
 
-        [OPTIONS]
         pdb_file   = P0CX28_clean.pdb ; domain_def = domain.yaml   ; (no `ribosome` PDB)
         L0 = 1 ; L_max =              ; mrna = P0CX28_mrna.txt ; codon_times = trans_times.txt
         scale_factor = 216564650 ; random_seed = 20240629
@@ -100,7 +98,7 @@ Option reference
 
 "Required = yes" means the run cannot proceed without it; options with a default may be
 omitted. ``—`` in the *Default* column means there is no default. The keys are grouped
-into three sets — all in the same single ``[OPTIONS]`` section:
+into three sets — all listed in the same flat file:
 
 * **Shared** — accepted (with identical meaning) by *both* runners.
 * **Coarse-grained ribosome runner only** (``topo-csp`` / ``csp.ini``).

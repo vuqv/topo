@@ -72,7 +72,7 @@ state at all," not "measure the folding rate."
 
 ## All annealing options
 
-All keys live in the single `[OPTIONS]` section, alongside the usual settings.
+All keys live in the same flat `md.ini`, alongside the usual settings.
 They are read **only when `anneal = yes`**.
 
 | Option | Type | Default | Description |

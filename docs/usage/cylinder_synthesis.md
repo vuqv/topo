@@ -142,8 +142,8 @@ gyration) between the two models without accounting for these missing terms.
 
 ## Configuration
 
-The cylinder reads a single INI control file with one `[OPTIONS]` section
-(`topo.csp.cylinder.read_cylinder_config`). **Every control key is documented in one
+The cylinder reads a single INI control file — a flat `key = value` list, parsed by
+`topo.csp.cylinder.read_cylinder_config`. **Every control key is documented in one
 place:** {doc}`synthesis_control` — the *shared* keys (inputs, kinetics, integrator,
 post-synthesis, `resume`) plus the **Cylinder-runner-only** `tunnel_*` geometry keys
 (`tunnel_radius`, `tunnel_length`, `tunnel_x_lo`, `tunnel_center`, `tunnel_k`,

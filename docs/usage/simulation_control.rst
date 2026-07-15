@@ -3,9 +3,9 @@ Simulation control options
 
 Simulation parameters are read from an ``.ini`` file (e.g. ``md.ini``) by
 :func:`topo.read_simulation_config`, which returns a
-:class:`~topo.utils.config.SimulationConfig`. The section title ``[OPTIONS]`` is
-required.
+:class:`~topo.utils.config.SimulationConfig`.
 
+* The file is a flat list of ``key = value`` lines.
 * Comments: inline or on their own line, starting with ``;`` or ``#``.
 * Keyword and value are separated by ``=`` or ``:``.
 * Every option below has a default **except** the ones marked *required*; you
@@ -26,8 +26,6 @@ The runner lives in the package as :mod:`topo.mdrun`. Once TOPO is installed
 Example ``md.ini``:
 
 .. code-block::
-
-        [OPTIONS]
 
         ; --- system input & force field ---
         pdb_file = 2ww4.pdb

@@ -109,7 +109,7 @@ Both files are plain text — `cat progress.log` to see exactly how far a run go
 
 ## The `resume` knob
 
-Set it in the `[OPTIONS]` section of `csp.ini`, or override on the CLI.
+Set it in `csp.ini`, or override on the CLI.
 
 | Value | Behavior |
 |---|---|

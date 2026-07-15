@@ -1,7 +1,7 @@
 """
 Read a simulation control file (``md.ini``) into a structured configuration.
 
-The control file is an INI file with a single ``[OPTIONS]`` section. Parsing it
+The control file is an INI file: a flat list of ``key = value`` lines. Parsing it
 used to be a ~100-line block copy-pasted into every ``run_simulation.py``. This
 module centralizes that logic so a run script can simply do::
 
@@ -16,6 +16,7 @@ OpenMM units already applied where appropriate (``dt``, ``ref_t``, ``tau_t``,
 ``ref_p``).
 """
 import configparser
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from json import loads
@@ -217,6 +218,108 @@ class SimulationConfig:
         return (mm.Platform.getPlatformByName('CPU'), {'Threads': str(self.ppn)})
 
 
+# A section header: a whole line that is nothing but `[...]`, optionally with a
+# trailing comment. Anchored at column 0 and to the end of the line, which is what
+# keeps it from matching a *value* -- `box_dimension = [10, 10, 10]` is a real key,
+# and an unanchored `\[.*\]` would blank it out and silently turn PBC off. Leading
+# whitespace is deliberately not allowed: configparser reads an indented line as a
+# continuation of the previous value, so an indented `[...]` is data, not a header.
+_SECTION_HEADER_LINE = re.compile(r'^\[[^\]\n]*\][ \t]*(?:[#;][^\n]*)?$', re.MULTILINE)
+
+# read_ini prepends exactly one synthetic `[OPTIONS]` line, so every line of the
+# user's file sits one lower in what configparser actually parses. Subtract this
+# from any line number configparser reports, or the error points at the wrong line.
+_HEADER_LINE_SHIFT = 1
+
+
+def _unshift_parsing_error(exc: configparser.ParsingError,
+                           config_file: str) -> configparser.ParsingError:
+    """Rebuild a :class:`configparser.ParsingError` with honest line numbers.
+
+    Parameters
+    ----------
+    exc : configparser.ParsingError
+        The error raised against the shifted text.
+    config_file : str
+        Path to report as the source.
+
+    Returns
+    -------
+    configparser.ParsingError
+        The same errors, renumbered to the user's file.
+    """
+    fixed = configparser.ParsingError(source=config_file)
+    for lineno, line in exc.errors:
+        fixed.append(lineno - _HEADER_LINE_SHIFT, line)
+    return fixed
+
+
+def read_ini(config_file: str, preserve_case: bool = False) -> configparser.ConfigParser:
+    """Parse a topo control file into a :class:`configparser.ConfigParser`.
+
+    A topo control file is a flat list of ``key = value`` lines. Section headers
+    are optional and their names carry no meaning: every setting in the file is
+    read into one flat set, whether it is written under one header, several, or
+    none at all. So no setting can go unread because of where it sits in the file
+    -- a key that is written is a key that is applied.
+
+    Parameters
+    ----------
+    config_file : str
+        Path to the control file (``md.ini``, ``optimize.ini``, ``csp.ini``, ...).
+        Inline comments starting with ``#`` or ``;`` are ignored.
+    preserve_case : bool, optional (default: False)
+        If True, keep option names as written instead of lower-casing them
+        (:mod:`configparser`'s default). Needed when the keys are round-tripped
+        back out to another file, as in :mod:`topo.optimize`.
+
+    Returns
+    -------
+    configparser.ConfigParser
+        Every setting in the file, collected into one section. The section is
+        always present, and is empty only for a file that sets nothing.
+
+    Raises
+    ------
+    FileNotFoundError
+        If ``config_file`` does not exist.
+    ValueError
+        If a key is set more than once. There is no principled way to pick a
+        winner, and silently applying one of two values would change a run's
+        physics without saying so, so a repeated key is an error rather than a
+        last-one-wins.
+    configparser.ParsingError
+        If a line is neither a comment nor a ``key = value`` pair.
+    """
+    text = Path(config_file).read_text()
+
+    # Blank out every section header, then supply the single one configparser
+    # insists on. Blanking rather than deleting keeps each of the user's lines at
+    # its own number (offset only by the one line prepended here, which the error
+    # handlers below subtract back off). Collapsing every header into one section
+    # is also what turns a repeated key into a DuplicateOptionError, instead of
+    # one header silently shadowing another.
+    flattened = "[OPTIONS]\n" + _SECTION_HEADER_LINE.sub("", text)
+
+    cp = configparser.ConfigParser(
+        inline_comment_prefixes=("#", ";"),
+        # Values are literal: a `%` in a path is data, not a `%(key)s` reference.
+        interpolation=None,
+    )
+    if preserve_case:
+        cp.optionxform = str
+    try:
+        cp.read_string(flattened, source=str(config_file))
+    except configparser.DuplicateOptionError as exc:
+        where = (f" (line {exc.lineno - _HEADER_LINE_SHIFT})"
+                 if exc.lineno is not None else "")
+        raise ValueError(f"{config_file}: '{exc.option}' is set more than once"
+                         f"{where}. Remove the duplicate.") from None
+    except configparser.ParsingError as exc:
+        raise _unshift_parsing_error(exc, str(config_file)) from None
+    return cp
+
+
 def read_simulation_config(config_file: str, verbose: bool = True) -> SimulationConfig:
     """
     Parse a simulation control file into a :class:`SimulationConfig`.
@@ -224,9 +327,9 @@ def read_simulation_config(config_file: str, verbose: bool = True) -> Simulation
     Parameters
     ----------
     config_file : str
-        Path to the control file (e.g. ``md.ini``). Must contain an
-        ``[OPTIONS]`` section. Inline comments starting with ``#`` or ``;`` are
-        ignored. Underscores in ``md_steps`` (e.g. ``500_000``) are allowed.
+        Path to the control file (e.g. ``md.ini``): a flat ``key = value``
+        list (see :func:`read_ini`). Inline comments starting with ``#`` or ``;``
+        are ignored. Underscores in ``md_steps`` (e.g. ``500_000``) are allowed.
     verbose : bool, optional (default: True)
         If True, echo each parsed setting to stdout (the original behaviour of
         the inline parser). Set False for a quiet read.
@@ -261,8 +364,9 @@ def read_simulation_config(config_file: str, verbose: bool = True) -> Simulation
     cfg = SimulationConfig(config_file=config_file)
 
     log(f"Reading simulation parameters from {config_file} file...")
-    config = configparser.ConfigParser(inline_comment_prefixes=("#", ";"))
-    config.read(config_file)
+    config = read_ini(config_file)
+    if not config['OPTIONS']:
+        raise ValueError(f"{config_file}: no settings found (no key = value lines).")
     params = config['OPTIONS']
 
     cfg.md_steps = int(str(params.get('md_steps', cfg.md_steps)).replace('_', ''))

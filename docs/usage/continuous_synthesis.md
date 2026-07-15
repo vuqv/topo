@@ -483,8 +483,8 @@ default `AllBonds` seeding the guard essentially never fires: Tutorial 8's full-
 
 ## Configuration
 
-CSP reads a single INI control file with one `[OPTIONS]` section
-(`topo.csp.protocol.read_csp_config`). **Every control key — for both `topo-csp` and
+CSP reads a single INI control file — a flat `key = value` list, parsed by
+`topo.csp.protocol.read_csp_config`. **Every control key — for both `topo-csp` and
 `topo-cylinder` — is documented in one place:** {doc}`synthesis_control` (grouped into
 *shared*, *coarse-grained-ribosome-only*, and *cylinder-only* keys, with types and
 defaults). Units are OpenMM defaults (nm, ps, kJ/mol, K, kJ/mol/nm²) and dwell times are

@@ -58,7 +58,7 @@ cd tutorials/07_translation_cylinder
 topo-cylinder -f cylinder.ini          # or: python -m topo.csp.cylinder -f cylinder.ini
 ```
 
-All parameters live in [`cylinder.ini`](https://github.com/vuqv/topo/blob/main/tutorials/07_translation_cylinder/cylinder.ini) (`[OPTIONS]` section). The
+All parameters live in [`cylinder.ini`](https://github.com/vuqv/topo/blob/main/tutorials/07_translation_cylinder/cylinder.ini). The
 nascent chain is the 106-residue P0CX28, with `domain.yaml` + the precomputed STRIDE
 for the contact map, and `P0CX28_mrna.txt` for the codon kinetics. Tunnel defaults:
 bore radius **0.9 nm**, length **10.0 nm** (`x_lo=0`, `x_exit=10`), axis on X, mouth

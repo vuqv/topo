@@ -30,7 +30,6 @@ constants kJ/mol/nm^2. In-vivo dwell times in the kinetics are **seconds**.
 from __future__ import annotations
 
 import argparse
-import configparser
 import random
 import sys
 import time
@@ -57,7 +56,7 @@ from topo.csp.core import (
     _make_cfg,
     _write_pdb,
 )
-from topo.utils.config import strtobool
+from topo.utils.config import read_ini, strtobool
 from topo.csp import kinetics
 from topo.csp import resume as resume_mod
 from topo.csp import synth_mrna
@@ -558,7 +557,7 @@ class CylinderConfig:
 def read_cylinder_config(config_file: str, verbose: bool = True) -> CylinderConfig:
     """Parse a cylinder synthesis control file (INI) into a :class:`CylinderConfig`.
 
-    Single ``[OPTIONS]`` section. Required: ``pdb_file``, ``L0``, ``domain_def``, and --
+    A flat ``key = value`` list. Required: ``pdb_file``, ``L0``, ``domain_def``, and --
     unless ``codon_times`` is a positive number (uniform timing) -- ``mrna``. No ribosome
     PDB (the tunnel geometry comes from the params, not a structure). Recognised keys
     (optional ones fall back to defaults):
@@ -602,11 +601,12 @@ def read_cylinder_config(config_file: str, verbose: bool = True) -> CylinderConf
         if verbose:
             print(msg)
 
-    cp = configparser.ConfigParser(inline_comment_prefixes=("#", ";"))
-    if not cp.read(config_file):
-        raise FileNotFoundError(f"could not read cylinder config file: {config_file!r}")
-    if "OPTIONS" not in cp:
-        raise ValueError(f"{config_file}: missing required [OPTIONS] section.")
+    try:
+        cp = read_ini(config_file)
+    except FileNotFoundError:
+        raise FileNotFoundError(f"could not read cylinder config file: {config_file!r}") from None
+    if not cp["OPTIONS"]:
+        raise ValueError(f"{config_file}: no settings found (no key = value lines).")
     o = cp["OPTIONS"]
 
     def opt(key: str) -> Optional[str]:
@@ -868,7 +868,7 @@ def cylinder(argv: Optional[List[str]] = None) -> None:
                     "by an INI file: topo-cylinder -f cylinder.ini",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("-input", "-f", dest="config", type=str,
-                        help="synthesis control file (INI, [OPTIONS] section).")
+                        help="synthesis control file (INI).")
     parser.add_argument("-o", "--outdir", default=None,
                         help="override the output directory from the config file.")
     parser.add_argument("--device", default=None, choices=["CPU", "GPU"],

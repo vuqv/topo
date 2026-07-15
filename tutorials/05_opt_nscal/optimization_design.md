@@ -58,7 +58,7 @@ entry points it uses).
 ## Inputs
 
 The optimizer is driven by a single **minimal `optimize.ini`** (not a full
-`md.ini`) with one flat `[OPTIONS]` section. The optimizer consumes its own
+`md.ini`) with one flat key list. The optimizer consumes its own
 control keys (`ntraj`, `q_threshold`, `frame_fraction`, `max_rounds`,
 `min_contacts`); every other key is an essential simulation parameter
 (`pdb_file`, `domain_def`, `md_steps`, sampling, `ref_t`) passed through to each
@@ -215,7 +215,7 @@ function is_stable(unit u):
    starts fresh each invocation; decide how to checkpoint `level[]` and completed
    rounds.
 5. ~~**STRIDE caching.**~~ **Done.** STRIDE depends only on the fixed structure,
-   so it is identical every round. If `stride_output_file` is set in `[OPTIONS]`
+   so it is identical every round. If `stride_output_file` is set in `optimize.ini`
    it is resolved to an absolute path and passed through every round (STRIDE never
    runs). Otherwise round 1 runs `cwd=round_1/`, and the optimizer reuses the
    `{pdb_stem}_stride.dat` the model build cached there for rounds 2+ — STRIDE runs
