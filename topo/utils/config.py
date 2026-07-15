@@ -45,14 +45,15 @@ class SimulationConfig:
     """Parsed contents of a simulation control file (``md.ini``)."""
 
     # run control
-    md_steps: int = 1000
+    md_steps: int = 10_000
     # default_factory: a Quantity is treated as a mutable default by dataclasses
     dt: Any = field(default_factory=lambda: 0.015 * unit.picoseconds)
-    nstxout: int = 10
-    nstlog: int = 10
-    # Checkpoint-write frequency. When None it falls back to ``nstxout`` so that
-    # behaviour is unchanged for configs that do not set ``nstchk``.
-    nstchk: Optional[int] = None
+    nstxout: int = 5000
+    nstlog: int = 5000
+    # Checkpoint-write frequency. Reading an md.ini that omits ``nstchk`` still
+    # falls back to that file's ``nstxout`` (see read_simulation_config), so this
+    # default applies only when a SimulationConfig is constructed directly.
+    nstchk: Optional[int] = 5000
     # Center-of-mass motion removal frequency. When None (the default), no
     # CMMotionRemover is added. COM removal suits a single chain but couples the
     # drift of multiple independent chains, so it is opt-in via the config.

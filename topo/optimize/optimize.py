@@ -108,9 +108,10 @@ def nscale_for(class_key, level):
 #
 # IMPLICIT_DEFAULTS are the optimizer's own protocol defaults — NOT the bare
 # SimulationConfig dataclass defaults. In particular the optimizer defaults
-# device = GPU, ref_t = 310 K (stability protocol) and minimize = no, whereas the
-# dataclass defaults are CPU / 300 K / yes. (dt = 0.015 ps matches the CG model's
-# 15 fs parameterization, which is now also the dataclass default.)
+# device = GPU and minimize = no, whereas the dataclass defaults are CPU / yes.
+# (dt = 0.015 ps matches the CG model's 15 fs parameterization, and ref_t = 300 K
+# the dataclass temperature; both are pinned here so the generated md.ini records
+# the protocol explicitly rather than inheriting it.)
 # Anything set in optimize.ini [OPTIONS] overrides these.
 #
 # We use configparser with the SAME settings as the package reader
@@ -129,7 +130,7 @@ IMPLICIT_DEFAULTS = {
     "restart": "no",      # every optimization round starts fresh
     "device": "GPU",      # production-scale task; override in optimize.ini for CPU
     "ppn": "4",
-    "ref_t": "310",       # K; stability protocol temperature
+    "ref_t": "300",       # K; stability protocol temperature
 }
 
 # max_rounds = 6 covers the normal case exactly: 5 ladder levels + the median

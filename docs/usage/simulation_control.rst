@@ -137,8 +137,8 @@ description).
    * - ``md_steps``
      - int
      - no
-     - ``1000``
-     - Total number of integration steps. Underscores are allowed (``500_000``).
+     - ``10_000``
+     - Total number of integration steps. Underscores are allowed (``500_000``). The default is a smoke-test length (150 ps at ``dt = 0.015``); production runs set this explicitly.
    * - ``dt``
      - float [ps]
      - no
@@ -277,7 +277,7 @@ description).
    * - ``nstxout``
      - int
      - no
-     - ``10``
+     - ``5000``
      - Steps between writing the trajectory (DCD).
    * - ``nstchk``
      - int
@@ -287,7 +287,7 @@ description).
    * - ``nstlog``
      - int
      - no
-     - ``10``
+     - ``5000``
      - Steps between writing the energy/temperature log.
    * - ``nstcomm``
      - int
