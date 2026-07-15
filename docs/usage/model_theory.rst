@@ -351,6 +351,51 @@ kept). For a native contact:
        - 1.0 by default; set per domain/interface
        - ``domain.yaml`` (see :doc:`domain_definition`)
 
+  .. note::
+
+     **Why** :math:`E_\mathrm{BS}` **is 0, 0.37, or 0.74 — BS contacts are
+     directional.** Unlike an SS contact, which is a single symmetric fact about
+     the pair (sidechain *i* touches sidechain *j*), a BS contact has a *donor*
+     and an *acceptor* role: the backbone belongs to one residue and the
+     sidechain to the other. A pair *(i, j)* therefore admits **two independent
+     contacts**, and either, both, or neither may be present:
+
+     .. list-table::
+        :header-rows: 1
+        :widths: 12 44 44
+
+        * - Count
+          - Geometry
+          - :math:`E_\mathrm{BS}`
+        * - **0**
+          - Neither backbone reaches the other's sidechain — the pair has no BS
+            contact at all (it may still be native via an H-bond or an SS contact).
+          - 0
+        * - **1**
+          - Exactly one direction is satisfied: backbone of *i* is within 4.5 Å of
+            a sidechain heavy atom of *j*, **or** backbone of *j* is within 4.5 Å
+            of a sidechain heavy atom of *i* — but not both.
+          - 0.37 kcal/mol
+        * - **2**
+          - Both directions are satisfied simultaneously: backbone of *i* touches
+            sidechain of *j* **and** backbone of *j* touches sidechain of *i* —
+            a mutually interdigitated pair.
+          - 0.74 kcal/mol
+
+     Mechanically (:func:`topo.utils.nonbonded.get_bs_contact_matrix`), the two
+     directions are found separately and stored in an **asymmetric** matrix whose
+     entry :math:`M_{ij}=1` means "backbone of *i* within 4.5 Å of sidechain of
+     *j*". The value used by the energy is the symmetrized count
+     :math:`M_{ij}+M_{ji} \in \{0,1,2\}`, which is exactly the number of
+     directions realized. A count of 2 marks a tighter, more mutually buried
+     packing than a count of 1, so it earns twice the well depth. Note that
+     glycine, having no sidechain, can only ever be the backbone partner, so any
+     BS contact involving it caps at 1.
+
+     This is a genuinely different counting rule from :math:`E_\mathrm{HB}`, which
+     is also capped at two units (0, 0.75, 1.5) but for an unrelated reason: there
+     the 2 counts *two H-bonds* reported by STRIDE, not two directions.
+
   All energies are converted to kJ/mol internally (1 kcal/mol = 4.184 kJ/mol).
 
 **2. Non-native pairs** — every other (non-excluded) pair. These get a soft

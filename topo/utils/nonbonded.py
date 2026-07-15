@@ -383,6 +383,36 @@ def get_bs_contact_matrix(u: mda.Universe, cutoff: float = DEFAULT_CUTOFF) -> np
     excluding H. Pairs within abs(resid_i - resid_j) <= LOCAL_SEPARATION are excluded,
     but only when both residues are in the same chain; residues in different chains
     are never excluded by sequence separation (multi-chain safe).
+
+    **Why the count is 0, 1, or 2 (and not just a 0/1 flag).** A BS contact is
+    *directional*: the backbone belongs to one residue and the sidechain to the
+    other, so the roles are not interchangeable. A pair (i, j) therefore admits two
+    independent contacts, and either, both, or neither may be present:
+
+    - **0** — neither backbone reaches the other's sidechain. (The pair may still be
+      a native contact via an H-bond or an SS contact; see
+      :func:`build_nonbonded_interaction`.)
+    - **1** — exactly one direction: backbone of i is within `cutoff` of a sidechain
+      atom of j, *or* backbone of j is within `cutoff` of a sidechain atom of i.
+    - **2** — both directions at once: backbone of i touches sidechain of j *and*
+      backbone of j touches sidechain of i (mutually interdigitated).
+
+    That is exactly what the two-step construction below computes: `contacts_bs`
+    holds directed (backbone-residue -> sidechain-residue) pairs, which are stored in
+    an **asymmetric** matrix where `M[i, j] = 1` means "backbone of i within cutoff of
+    sidechain of j". The returned value is the symmetrized count `M + M.T`, whose
+    entries are the number of directions realized. The energy is linear in that count
+    (0, 1, or 2 x ENERGY_PARAMS['backbone_sidechain']), so a count of 2 marks a
+    tighter, mutually buried pair and earns twice the well depth.
+
+    Two easy confusions worth flagging:
+
+    - This is **not** the same rule as the H-bond count, which also tops out at 2
+      (see :func:`get_hb_contact_matrix`) but for an unrelated reason: there the 2
+      counts *two H-bonds* reported by STRIDE, not two directions. The BS 2 is a
+      structural maximum, not a cap.
+    - Glycine has no sidechain atoms, so it can only ever be the backbone partner —
+      any BS contact involving a glycine caps at 1 by construction.
     """
     key_to_index, _, n_residues = get_residue_mapping(u)
 
@@ -923,6 +953,9 @@ def build_nonbonded_interaction(
     hb_interaction_energy = ENERGY_PARAMS['hydrogen_bond'] * hb_contact_matrix
 
     bs_contact_matrix = get_bs_contact_matrix(u, cutoff=DEFAULT_CUTOFF)
+    # Matrix values: 0, 1, or 2 — the number of *directions* realized (bb_i–sc_j and
+    # bb_j–sc_i are independent contacts), not an H-bond-style cap. Energy is linear
+    # in that count: 0.37 kcal/mol per direction. See get_bs_contact_matrix.
     bs_interaction_energy = bs_contact_matrix * ENERGY_PARAMS['backbone_sidechain']
 
     if domain_def is None:
