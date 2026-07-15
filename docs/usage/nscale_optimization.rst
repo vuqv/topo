@@ -26,8 +26,9 @@ structure) untouched.
 
 This page explains **why a raw, unscaled model is rarely usable as-is** and why
 the right value is chosen **per domain and per interface** rather than globally.
-For the file format see :doc:`domain_definition`; for the automatic search that
-finds the values see the tutorial :doc:`../tutorials/05_opt_nscal`.
+For the file format see :doc:`domain_definition`; for the options that drive the
+automatic search see :doc:`optimization_control`; for a worked run see the
+tutorial :doc:`../tutorials/05_opt_nscal`.
 
 
 The raw model is under-stabilized

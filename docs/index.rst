@@ -45,6 +45,7 @@ see :doc:`citation` for the full list with DOIs.
 
    usage/model_theory
    usage/nscale_optimization
+   usage/optimization_control
 
 .. toctree::
    :maxdepth: 1
