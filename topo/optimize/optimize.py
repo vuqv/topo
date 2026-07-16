@@ -25,7 +25,7 @@ one round at a time::
 
 ``optimize.ini`` is a MINIMAL config: a flat ``key = value`` list. The
 optimizer takes the keys it needs (ntraj, q_threshold, frame_fraction,
-max_rounds, min_contacts — see :data:`CONTROL_TYPES`); every other key is a
+max_rounds, min_contacts, outdir — see :data:`CONTROL_TYPES`); every other key is a
 simulation parameter (pdb_file, domain_def, md_steps, sampling, ref_t, ...)
 passed through to each round's md.ini. Anything unset uses the optimizer's
 implicit protocol defaults (:data:`IMPLICIT_DEFAULTS` / :data:`OPT_DEFAULTS`).
@@ -44,7 +44,6 @@ Limitations: the optimization is not resumable — each invocation starts fresh
 from __future__ import annotations
 
 import argparse
-import configparser
 import copy
 import itertools
 import subprocess
@@ -119,7 +118,8 @@ def nscale_for(class_key, level):
 # We read with the SAME helper as the package reader (topo.utils.config.read_ini,
 # used by topo.read_simulation_config) so parsing semantics match exactly.
 # read_simulation_config returns a typed SimulationConfig (units + defaults) with
-# no serializer back to a file, so we round-trip the text with configparser here.
+# no serializer back to a file, so write_round_ini re-emits the flat key = value
+# text itself.
 # --------------------------------------------------------------------------- #
 IMPLICIT_DEFAULTS = {
     "dt": "0.015",        # ps; CG model parameterized at a 15 fs timestep
@@ -150,15 +150,22 @@ IMPLICIT_DEFAULTS = {
 # min_contacts: a unit (domain or interface) with fewer than this many native
 # contacts is considered too weakly structured to fold; it is NOT optimized but
 # pinned at the first ladder level and frozen. Default 0 disables the check.
-OPT_DEFAULTS = {"ntraj": 10, "q_threshold": 0.6688,
-                "frame_fraction": 0.98, "max_rounds": 6, "min_contacts": 0}
+# outdir defaults to None rather than "opt_out" so that "unset in the file" stays
+# distinguishable from an explicit value: -o/--outdir has to win over the file,
+# and the fallback has to stay CWD-relative (see run_optimizer).
+OPT_DEFAULTS = {"ntraj": 10, "q_threshold": 0.6688, "frame_fraction": 0.98,
+                "max_rounds": 6, "min_contacts": 0, "outdir": None}
 
 # Keys the optimizer consumes itself (with the type to cast them to). Everything
 # else in the file is a simulation parameter passed through to the per-round
 # md.ini, so optimize.ini stays one flat key list: the optimizer takes these
 # keys, topo.mdrun gets the rest.
+#
+# NOTE outdir is the optimization ROOT (it gets round_N/ subdirs). It is not the
+# md.ini key `output_dir`, which names one round's traj dir and is overwritten
+# every round -- setting that one here has no effect.
 CONTROL_TYPES = {"ntraj": int, "q_threshold": float, "frame_fraction": float,
-                 "max_rounds": int, "min_contacts": int}
+                 "max_rounds": int, "min_contacts": int, "outdir": str}
 
 
 def read_optimize_config(path):
@@ -199,17 +206,29 @@ def read_optimize_config(path):
         options["stride_output_file"] = str(
             (base / options["stride_output_file"]).resolve())
 
+    # outdir, when the file sets it, is a path like every other key here: resolve
+    # it against the ini so the file is self-contained and gives the same layout
+    # from any working directory. Left None when unset, so run_optimizer can tell
+    # "the file did not ask for one" from an explicit choice.
+    if controls["outdir"] is not None:
+        controls["outdir"] = str((base / controls["outdir"]).resolve())
+
     sim_options = {**IMPLICIT_DEFAULTS, **options}   # file overrides defaults
     return pdb, domain, sim_options, controls
 
 
 def write_round_ini(path, base_options, overrides):
-    """Write a per-round md.ini = the base settings with `overrides` applied."""
-    cp = configparser.ConfigParser(inline_comment_prefixes=("#", ";"))
-    cp.optionxform = str
-    cp["OPTIONS"] = {**base_options, **{k: str(v) for k, v in overrides.items()}}
+    """Write a per-round md.ini = the base settings with `overrides` applied.
+
+    The file is the same flat `key = value` list read_ini accepts; section
+    headers carry no meaning there, so none is written. The lines go out
+    directly rather than through configparser, whose interpolation rejects a
+    legitimate `%` in a value (a path or outname) that read_ini reads fine.
+    """
+    merged = {**base_options, **overrides}
     with open(path, "w") as fh:
-        cp.write(fh)
+        for key, value in merged.items():
+            fh.write(f"{key} = {value}\n")
 
 
 # --------------------------------------------------------------------------- #
@@ -385,7 +404,7 @@ def run_md(round_dir, md_ini, python_exe):
 # --------------------------------------------------------------------------- #
 # Driver
 # --------------------------------------------------------------------------- #
-def run_optimizer(config, outdir="opt_out", device=None, md_steps=None,
+def run_optimizer(config, outdir=None, device=None, md_steps=None,
                   python_exe=None):
     """Run the nscale optimization end to end.
 
@@ -394,7 +413,11 @@ def run_optimizer(config, outdir="opt_out", device=None, md_steps=None,
     config : str or Path
         Path to the minimal ``optimize.ini``.
     outdir : str or Path, optional
-        Optimization root directory (created if missing). Default ``opt_out``.
+        Optimization root directory (created if missing). Overrides an ``outdir``
+        set in the config file; when neither is given, defaults to ``opt_out`` in
+        the current directory. A relative path here is resolved against the
+        current directory, whereas the config file's ``outdir`` is resolved
+        against the file itself.
     device : str, optional
         Override the simulation device (``CPU``/``GPU``) for every round.
     md_steps : int, optional
@@ -419,7 +442,10 @@ def run_optimizer(config, outdir="opt_out", device=None, md_steps=None,
     min_contacts = controls["min_contacts"]
     raw_cfg = yaml.safe_load(Path(domain_path).read_text())
 
-    out_root = Path(outdir).resolve()
+    # Precedence: -o/--outdir (or the API arg) > outdir in the ini > opt_out.
+    # The ini's value is already absolute (resolved against the file); the
+    # bare default stays relative to the CWD, as it has always been.
+    out_root = Path(outdir if outdir else controls["outdir"] or "opt_out").resolve()
     out_root.mkdir(parents=True, exist_ok=True)
     opt_log = out_root / "optimization.log"
     # Line-buffered + explicit flush so the report is readable live during a long
@@ -657,8 +683,7 @@ def parse_args(argv=None):
     Returns
     -------
     argparse.Namespace
-        Parsed arguments: ``config``, ``outdir``, ``device``, ``md_steps`` and
-        ``python``.
+        Parsed arguments: ``config``, ``outdir``, ``device`` and ``md_steps``.
     """
     p = argparse.ArgumentParser(
         prog="topo-optimize",
@@ -668,13 +693,13 @@ def parse_args(argv=None):
     )
     p.add_argument("-f", "--config", required=True,
                    help="optimize.ini (minimal config; see Tutorial 5).")
-    p.add_argument("-o", "--outdir", default="opt_out", help="Optimization root dir.")
+    p.add_argument("-o", "--outdir", default=None,
+                   help="Optimization root dir. Overrides 'outdir' in the "
+                        "config file; defaults to opt_out when neither is set.")
     p.add_argument("--device", default=None,
                    help="Override device (CPU/GPU) for every round.")
     p.add_argument("--md-steps", type=int, default=None,
                    help="Override md_steps for every round (e.g. quick test runs).")
-    p.add_argument("--python", default=sys.executable,
-                   help="Python interpreter used to launch topo.mdrun.")
     # A bare `topo-optimize` (no arguments) prints help, like `-h`.
     if argv is None:
         argv = sys.argv[1:]
@@ -690,8 +715,12 @@ def optimize(argv=None):
     # only fires when someone actually invokes topo-optimize).
     warnings.filterwarnings("ignore", category=Warning, module=r"MDAnalysis")
     args = parse_args(argv)
+    # python_exe is left to its default (sys.executable): topo-optimize is a
+    # console script of this package, so the interpreter running it always has
+    # topo importable for the `-m topo.mdrun` subprocesses. It stays a
+    # run_optimizer argument for callers that genuinely need another interpreter.
     run_optimizer(args.config, outdir=args.outdir, device=args.device,
-                  md_steps=args.md_steps, python_exe=args.python)
+                  md_steps=args.md_steps)
 
 
 if __name__ == "__main__":

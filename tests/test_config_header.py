@@ -194,6 +194,42 @@ def test_percent_in_value_is_literal(tmp_path):
     assert cp["OPTIONS"]["outname"] == "run_50%_done"
 
 
+def test_optimize_ini_outdir_resolves_against_the_ini(tmp_path, monkeypatch):
+    """A relative `outdir` follows the .ini, not the working directory.
+
+    pdb_file/domain_def already resolve against the file; outdir must too, or the
+    same optimize.ini would write its rounds somewhere else depending on where it
+    was launched from.
+    """
+    from topo.optimize.optimize import read_optimize_config
+
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    (proj / "p.pdb").touch()
+    (proj / "d.yaml").touch()
+    (proj / "optimize.ini").write_text(
+        "pdb_file = p.pdb\ndomain_def = d.yaml\noutdir = my_run\n")
+
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.chdir(elsewhere)          # launch from a different cwd
+
+    _, _, sim_options, controls = read_optimize_config(str(proj / "optimize.ini"))
+    assert controls["outdir"] == str(proj / "my_run")
+    assert "outdir" not in sim_options, "outdir leaked into the per-round md.ini"
+
+
+def test_optimize_ini_outdir_unset_is_none(tmp_path):
+    """Unset must stay None, so -o/--outdir can be told apart from a file value."""
+    from topo.optimize.optimize import read_optimize_config
+
+    (tmp_path / "p.pdb").touch()
+    (tmp_path / "d.yaml").touch()
+    _, _, _, controls = read_optimize_config(
+        _write(tmp_path, "pdb_file = p.pdb\ndomain_def = d.yaml\n", "optimize.ini"))
+    assert controls["outdir"] is None
+
+
 def test_optimize_ini_header_optional(tmp_path):
     """read_optimize_config accepts a headerless optimize.ini too."""
     from topo.optimize.optimize import read_optimize_config
