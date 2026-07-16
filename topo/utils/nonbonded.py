@@ -28,8 +28,6 @@ Typical use
 ... )
 >>> # rmin_matrix (well positions), energy_matrix in nm and kJ/mol for OpenMM
 """
-import os
-import subprocess
 import warnings
 import MDAnalysis as mda
 from MDAnalysis.analysis.distances import distance_array
@@ -41,7 +39,7 @@ from collections import defaultdict
 import yaml
 from typing import Dict, List, Tuple, Set, Optional
 
-from topo.utils.external import find_executable
+from topo.utils.external import run_stride
 # import logging
 
 # Configure logging
@@ -908,45 +906,12 @@ def build_nonbonded_interaction(
         u = mda.Universe(pdb_file)
     resid_to_index, index_to_resname, n_residues = get_residue_mapping(u)
 
-    # Resolve STRIDE output: use the file if provided; otherwise, if the `stride`
-    # program is available, run it and cache the output to "{prefix}_stride.dat"
-    # (prefix taken from the PDB filename, e.g. 1AKE_A.pdb -> 1AKE_A_stride.dat),
-    # then parse that file.
+    # Resolve STRIDE output: use the file if provided; otherwise run STRIDE and
+    # cache "{stem}_stride.dat" into the current directory. Validate on DNR
+    # (hydrogen-bond) records -- that is what get_hb_contact_matrix parses.
     stride_path = stride_output_file
     if stride_path is None:
-        try:
-            stride_exe = find_executable("stride")
-        except RuntimeError as exc:
-            raise RuntimeError(
-                "stride_output_file was not supplied and STRIDE could not be located. "
-                "Either provide a precomputed STRIDE output file (stride_output_file=...) "
-                "or make STRIDE available. " + str(exc)
-            ) from None
-        prefix = os.path.splitext(os.path.basename(pdb_file))[0]
-        stride_path = "{}_stride.dat".format(prefix)
-        print("Running STRIDE on structure (stride -h {} -> {}).".format(pdb_file, stride_path))
-        try:
-            result = subprocess.run(
-                [stride_exe, "-h", pdb_file],
-                capture_output=True,
-                text=True,
-                timeout=60,
-            )
-        except FileNotFoundError:
-            raise RuntimeError(
-                "stride executable was found but could not be run. "
-                "Ensure stride is executable and on PATH."
-            ) from None
-        # NOTE: some STRIDE builds return a non-zero exit code even on success, so we
-        # validate by output content (presence of DNR hydrogen-bond records, which
-        # parse_hydrogen_bonds keys on) rather than trusting the process return code.
-        if "DNR" not in result.stdout:
-            raise RuntimeError(
-                "STRIDE produced no hydrogen-bond (DNR) records for {} (exit code {}). "
-                "stderr: {}".format(pdb_file, result.returncode, result.stderr)
-            )
-        with open(stride_path, "w") as f:
-            f.write(result.stdout)
+        stride_path = run_stride(pdb_file, out_dir=Path.cwd(), require="DNR")
 
     hb_contact_matrix = get_hb_contact_matrix(stride_path, resid_to_index, n_residues)
     # Matrix values: 0, 1, or 2 only (2+ H-bonds capped; energy 0.75 kcal/mol per single, 1.5 for multiple)

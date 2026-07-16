@@ -370,7 +370,8 @@ The metrics are importable for custom analysis:
        mirror_rmsd, local_chirality, chirality_agreement,
        segment_endpoints_from_stride, classify_mirror,
    )
-   from topo.analysis.mirror import build_cg_universe, run_stride
+   from topo.analysis.mirror import build_cg_universe
+   from topo.utils.external import run_stride
    from topo.analysis import reference_residue_geometry
    from topo.analysis.native_contacts import load_universe
    from topo.utils.nonbonded import get_residue_mapping

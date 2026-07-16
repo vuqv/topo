@@ -59,8 +59,8 @@ import MDAnalysis as mda
 # The Q machinery lives in the package. Import the submodule explicitly
 # (topo.analysis also re-exports a `native_contacts` function of the same name).
 import topo.analysis.native_contacts as ncmod
-from topo.analysis.mirror import run_stride
 from topo.utils.config import read_ini
+from topo.utils.external import run_stride
 from topo.utils.multichain import split_chains
 
 

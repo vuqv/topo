@@ -42,8 +42,6 @@ Residue numbering: STRIDE / segment files use 1-based residue numbers that map t
 
 from pathlib import Path
 import argparse
-import os
-import subprocess
 import sys
 import warnings
 
@@ -60,7 +58,7 @@ from .native_contacts import (
     fraction_native_contacts,
 )
 from ..utils.nonbonded import _norm_chain, get_residue_mapping
-from ..utils.external import find_executable
+from ..utils.external import run_stride
 
 
 # --------------------------------------------------------------------------- #
@@ -194,41 +192,6 @@ def chirality_agreement(chi_frames, chi_ref):
 # --------------------------------------------------------------------------- #
 # Secondary-structure segment endpoints
 # --------------------------------------------------------------------------- #
-def run_stride(pdb_file, out_dir=None, timeout=60):
-    """Run ``stride -h`` on ``pdb_file`` and cache the output to
-    ``{stem}_stride.dat``; return that path.
-
-    Mirrors the STRIDE-runner pattern in ``nonbonded.build_nonbonded_interaction``:
-    locate the executable, run it, and validate by output content (the ``LOC``
-    secondary-structure records) rather than the exit code -- some STRIDE builds
-    return non-zero even on success.
-    """
-    try:
-        stride_exe = find_executable("stride")
-    except RuntimeError as exc:
-        raise RuntimeError(
-            "No STRIDE output supplied and STRIDE could not be located. "
-            "Provide --segments or -s <stride output>, or make STRIDE available. "
-            + str(exc)
-        ) from None
-    stem = os.path.splitext(os.path.basename(pdb_file))[0]
-    out_dir = Path(out_dir) if out_dir is not None else Path(pdb_file).resolve().parent
-    stride_path = out_dir / f"{stem}_stride.dat"
-    print(f"Running STRIDE (stride -h {pdb_file} -> {stride_path}).")
-    result = subprocess.run(
-        [stride_exe, "-h", str(pdb_file)],
-        capture_output=True, text=True, timeout=timeout,
-    )
-    if "LOC" not in result.stdout:
-        raise RuntimeError(
-            f"STRIDE produced no secondary-structure (LOC) records for {pdb_file} "
-            f"(exit code {result.returncode}). stderr: {result.stderr}"
-        )
-    out_dir.mkdir(parents=True, exist_ok=True)
-    stride_path.write_text(result.stdout)
-    return str(stride_path)
-
-
 def segment_endpoints_from_stride(stride_output_file, key_to_index, min_len=4):
     """0-based Cα bead indices of the head & tail of each STRIDE helix/strand
     element (length >= ``min_len``), flattened across elements and sorted -> the
