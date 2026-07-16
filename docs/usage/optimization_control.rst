@@ -74,7 +74,8 @@ Example ``optimize.ini``:
         ; device = CPU
 
         ; Optional: skip STRIDE entirely by pointing at a precomputed file. If
-        ; omitted, STRIDE runs once in round 1 and the result is reused.
+        ; omitted, STRIDE runs once up front (written to the optimization root)
+        ; and every round reuses that file.
         ; stride_output_file = P0A6E6_stride.dat
 
         ; --- optimizer controls (consumed here; never reach md.ini) ---
@@ -145,7 +146,7 @@ The keys fall into four categories:
      - str
      - no
      - ``—``
-     - Precomputed STRIDE output. If omitted, STRIDE runs during round 1 and the cached file is reused for every later round (STRIDE depends only on the fixed structure, so it never changes). Resolved to an absolute path, since each round's ``md.ini`` lives in a different directory.
+     - Precomputed STRIDE output. If omitted, STRIDE runs once up front, is written to the optimization root, and every round reuses that file (STRIDE depends only on the fixed structure, so it never changes). Resolved to an absolute path, since each round's ``md.ini`` lives in a different directory.
    * - **Per-trajectory production** — passed through to each round's ``md.ini``
      -
      -

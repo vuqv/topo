@@ -59,6 +59,7 @@ import MDAnalysis as mda
 # The Q machinery lives in the package. Import the submodule explicitly
 # (topo.analysis also re-exports a `native_contacts` function of the same name).
 import topo.analysis.native_contacts as ncmod
+from topo.analysis.mirror import run_stride
 from topo.utils.config import read_ini
 from topo.utils.multichain import split_chains
 
@@ -391,12 +392,11 @@ def run_subprocess(cmd, log_path, label, cwd=None):
 def run_md(round_dir, md_ini, python_exe):
     """Run one multi-copy MD (topo.mdrun) as a subprocess.
 
-    Runs with cwd=round_dir so that, when no stride_output_file is configured, the
-    STRIDE file the model build caches ("{pdb_stem}_stride.dat") lands predictably
-    inside round_dir, where the caller can pick it up to reuse in later rounds.
-    All paths in the md.ini are absolute, so the working directory is otherwise
-    irrelevant. A fresh subprocess per round also isolates each OpenMM/GPU
-    context."""
+    Runs with cwd=round_dir purely to isolate any stray relative outputs to the
+    round dir; all paths in the md.ini are absolute (STRIDE included -- it is
+    precomputed once into the optimization root and passed via stride_output_file),
+    so the working directory is otherwise irrelevant. A fresh subprocess per round
+    also isolates each OpenMM/GPU context."""
     run_subprocess([python_exe, "-m", "topo.mdrun", "-f", str(md_ini)],
                    round_dir / "mdrun.out", "topo.mdrun", cwd=round_dir)
 
@@ -494,6 +494,16 @@ def _optimize_loop(log, pdb, domain_path, raw_cfg, sim_options, out_root,
     frozen = {k for k in scorer.unit_keys()
               if scorer.n_contacts(k) < min_contacts}
 
+    # STRIDE depends only on the (fixed) reference structure, so it is identical
+    # for every round. Run it ONCE up front into the optimization root and point
+    # every round's md.ini at that file, rather than letting round 1 cache it in
+    # round_1/ and later rounds reuse from there. Skipped when the user supplied
+    # their own stride_output_file.
+    if "stride_output_file" not in sim_options:
+        stride_path = run_stride(pdb, out_dir=out_root)
+        sim_options["stride_output_file"] = str(stride_path)
+        log(f"# STRIDE computed once -> {stride_path} (reused by every round)")
+
     log(f"# Nscale optimization for {Path(pdb).name}")
     log(f"# domains: {scorer.domain_names}  interfaces: {scorer.interfaces}")
     log("# native contacts detected (heavy-atom <= 4.5 A, |i-j| > 3):")
@@ -571,15 +581,6 @@ def _optimize_loop(log, pdb, domain_path, raw_cfg, sim_options, out_root,
         log(f"   running {ntraj}-copy MD ({eff_steps} steps/traj) — "
             f"live progress in round_{rnd}/traj/traj.log ...")
         run_md(round_dir, md_ini, python_exe)
-
-        # STRIDE depends only on the (fixed) structure, so it is identical every
-        # round. If the user did not supply one, reuse the file the round-1 model
-        # build cached so STRIDE runs once instead of once per round.
-        if "stride_output_file" not in sim_options:
-            cached_stride = round_dir / f"{Path(pdb).stem}_stride.dat"
-            if cached_stride.exists():
-                sim_options["stride_output_file"] = str(cached_stride)
-                log(f"   caching STRIDE output for later rounds: {cached_stride}")
 
         # Split the combined multi-copy DCD into per-copy DCDs (in-process,
         # memory-bounded streaming — handles large trajectories).
