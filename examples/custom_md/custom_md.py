@@ -11,7 +11,7 @@ can insert your own logic between them. Copy this file, edit the sections marked
 
 and run it like the real runner::
 
-    python examples/custom_md.py -f md.ini
+    python examples/custom_md/custom_md.py -f md.ini
 
 It reads the same ``md.ini`` control file, so all the usual options
 (``pdb_file``, ``ref_t``, ``md_steps``, ``dt``, ``device``, ``n_copies``, output

@@ -12,7 +12,14 @@ reaches into private internals.
 
 | Script | What it shows |
 | --- | --- |
-| [`custom_md.py`](custom_md.py) | The open version of `topo-mdrun`: `build_system → setup_simulation → attach_reporters → run_protocol → finalize_simulation`, with marked edit points for adding forces, defining a temperature schedule, and running in segments with a callback. |
+| [`custom_md/`](custom_md/) | The open version of `topo-mdrun`: `build_system → setup_simulation → attach_reporters → run_protocol → finalize_simulation`, with marked edit points for adding forces, defining a temperature schedule, and running in segments with a callback. Script **and** notebook. |
+| [`parallel_tempering_openmmtools/`](parallel_tempering_openmmtools/) | Temperature replica exchange (REMD) via [openmmtools](https://openmmtools.readthedocs.io/) — managed exchange, NetCDF storage, restart, MBAR analysis, plus an `analyze.ipynb`. The recommended REMD path. |
+| [`parallel_tempering_scratch/`](parallel_tempering_scratch/) | The same REMD, hand-written on OpenMM `Context`s — no external deps; the readable reference for how replica exchange works. |
+| [`simulated_tempering/`](simulated_tempering/) | Single-walker simulated tempering via OpenMM's built-in `SimulatedTempering` (a *different* method from REMD — see its README). |
+
+Each enhanced-sampling folder above is **self-contained** (own inputs + `md.ini`)
+and shows TOPO handing its `openmm.System` to a different corner of the OpenMM
+ecosystem.
 
 ## How to use
 
@@ -20,7 +27,7 @@ reaches into private internals.
    reference clean and update-friendly):
 
    ```bash
-   cp examples/custom_md.py my_run.py
+   cp examples/custom_md/custom_md.py my_run.py
    ```
 
 2. Edit the sections marked `# === EDIT: ... ===`.
