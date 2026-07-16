@@ -20,9 +20,9 @@ tutorial :doc:`../tutorials/05_opt_nscal`.
    engine — it *drives* :mod:`topo.mdrun` in a loop. So ``optimize.ini`` is one
    flat key list that is **split two ways** when it is read:
 
-   * the five **optimizer controls** (``ntraj``, ``q_threshold``,
-     ``frame_fraction``, ``max_rounds``, ``min_contacts``) are consumed by the
-     optimizer and *removed* — they never reach ``md.ini``;
+   * the six **optimizer controls** (``ntraj``, ``q_threshold``,
+     ``frame_fraction``, ``max_rounds``, ``min_contacts``, ``outdir``) are
+     consumed by the optimizer and *removed* — they never reach ``md.ini``;
    * **every other key** is treated as a simulation parameter and passed through
      verbatim into each round's generated ``round_N/md.ini``.
 
@@ -45,8 +45,14 @@ installed (``pip install -e .`` from the repo root) either of these works:
 
 .. code-block:: bash
 
-    topo-optimize -f optimize.ini -o opt_out        # installed console command
-    python -m topo.optimize -f optimize.ini -o opt_out   # module form
+    topo-optimize -f optimize.ini        # installed console command
+    python -m topo.optimize -f optimize.ini   # module form
+
+``-f``/``--config`` is the only required argument: it names the ``optimize.ini``
+below, and is the one setting that cannot live *inside* that file. Every other
+setting is a key in :ref:`Options <opt-options>`. Three of those keys also have a
+command-line flag for overriding the file without editing it — ``-o``/``--outdir``,
+``--device`` and ``--md-steps`` — each documented on its own row in that table.
 
 A bare ``topo-optimize`` with no arguments prints help and exits.
 
@@ -77,6 +83,8 @@ Example ``optimize.ini``:
         frame_fraction = 0.98      ; a traj is "stable" if >= this fraction folded
         max_rounds     = 6         ; 5 ladder levels + median fallback
         min_contacts   = 0         ; 0 disables the too-few-contacts freeze
+        ; outdir       = opt_out   ; optimization root; relative to THIS file.
+                                   ; -o on the command line overrides it.
 
 .. note::
 
@@ -84,7 +92,7 @@ Example ``optimize.ini``:
    steps** (150 ps at ``dt = 0.015``) — a smoke-test length, far too short to
    distinguish a folded domain from an unfolded one, and the optimizer will
    happily report "converged" on meaningless trajectories. The published
-   protocol uses ~0.5 µs per trajectory (≈ ``3.3e7`` steps at ``dt = 0.015``).
+   protocol uses ~1 µs per trajectory (≈ ``6.7e7`` steps at ``dt = 0.015``).
    Lower ``nstxout`` alongside it: at its ``5000``-step default a 10 000-step
    round yields two frames per trajectory to compute Q from.
 
@@ -93,20 +101,21 @@ Example ``optimize.ini``:
 Options
 -------
 
-Everything worth deciding about, in one table. The keys are of three kinds:
+The keys fall into four categories:
 
-* **Inputs** (``pdb_file``, ``domain_def``, ``stride_output_file``) — the
-  structure and domains the model is built from. The first two are the only
-  required keys in the file.
-* **Controls** (``ntraj``, ``q_threshold``, ``frame_fraction``, ``max_rounds``,
-  ``min_contacts``) — consumed by the optimizer itself, and the only keys that do
-  **not** reach the per-round ``md.ini``.
-* **Simulation parameters** (``md_steps``, ``nstxout``, ``device``, ``ref_t``,
-  ``minimize``) — passed through to each round's ``md.ini``. All are filled in
-  from the optimizer's own protocol defaults, but ``md_steps`` and ``nstxout``
-  are the two you should set yourself, since their defaults only describe a
-  smoke test. ``device`` and ``minimize`` deliberately differ from what the same
-  key would default to in a plain :doc:`simulation_control` run.
+* **System input & force field** (``pdb_file``, ``domain_def``,
+  ``stride_output_file``) — the structure and domains the model is built from.
+  The first two are the only required keys in the file.
+* **Per-trajectory production** (``md_steps``, ``nstxout``) — passed through to
+  each round's ``md.ini``. These are the two you should set yourself, since
+  their defaults only describe a smoke test.
+* **Optimizer controls** (``ntraj``, ``q_threshold``, ``frame_fraction``,
+  ``max_rounds``, ``min_contacts``, ``outdir``) — consumed by the optimizer
+  itself, and the only keys that do **not** reach the per-round ``md.ini``.
+* **Protocol & hardware** (``device``, ``ref_t``, ``minimize``) — also passed
+  through, but filled in from the optimizer's own protocol defaults. ``device``
+  and ``minimize`` deliberately differ from what the same key would default to
+  in a plain :doc:`simulation_control` run.
 
 .. list-table::
    :header-rows: 1
@@ -117,6 +126,11 @@ Everything worth deciding about, in one table. The keys are of three kinds:
      - Required
      - Default
      - Description
+   * - **System input & force field**
+     -
+     -
+     -
+     -
    * - ``pdb_file``
      - str
      - **yes**
@@ -132,21 +146,31 @@ Everything worth deciding about, in one table. The keys are of three kinds:
      - no
      - ``—``
      - Precomputed STRIDE output. If omitted, STRIDE runs during round 1 and the cached file is reused for every later round (STRIDE depends only on the fixed structure, so it never changes). Resolved to an absolute path, since each round's ``md.ini`` lives in a different directory.
+   * - **Per-trajectory production** — passed through to each round's ``md.ini``
+     -
+     -
+     -
+     -
    * - ``md_steps``
      - int
      - no
      - ``10_000``
-     - **Set this explicitly** (see the note above). Steps per trajectory, passed through to ``md.ini``. The default is a smoke-test length — far too short to tell a folded domain from an unfolded one.
+     - **Set this explicitly** (see the note above). Steps per trajectory, passed through to ``md.ini``. **Recommended: ~1 µs per trajectory** (≈ ``6.7e7`` steps at ``dt = 0.015``), the published protocol length. The ``10_000`` default is a smoke-test length — far too short to tell a folded domain from an unfolded one. ``--md-steps`` on the command line overrides it for every round, handy for a smoke test before committing to a production run.
    * - ``nstxout``
      - int
      - no
      - ``5000``
      - Steps between trajectory (DCD) writes, passed through to ``md.ini``. These frames are what Q is computed from, so this sets the sampling resolution of the stability decision — lower it alongside ``md_steps``. ``nstlog`` and ``nstchk`` default to ``5000`` the same way.
+   * - **Optimizer controls** — consumed here; never reach ``md.ini``
+     -
+     -
+     -
+     -
    * - ``ntraj``
      - int
      - no
      - ``10``
-     - Independent trajectories per round. Produced as a single **multi-copy** MD run (``n_copies = ntraj``) that is then split into per-copy DCDs, so this scales the cost of every round roughly linearly.
+     - Independent trajectories per round. **Recommended: 10 trajectories**, which is the default. Produced as a single **multi-copy** MD run (``n_copies = ntraj``) that is then split into per-copy DCDs, so this scales the cost of every round roughly linearly.
    * - ``q_threshold``
      - float
      - no
@@ -167,11 +191,21 @@ Everything worth deciding about, in one table. The keys are of three kinds:
      - no
      - ``0``
      - A domain or interface with fewer than this many native contacts is considered too weakly structured to fold: it is **pinned at the first ladder level, frozen, and never optimized** (it cannot otherwise stabilize, so it would drag every round to the fallback). ``0`` disables the check.
+   * - ``outdir``
+     - str
+     - no
+     - ``opt_out``
+     - Optimization root directory — the ``round_N/`` subdirectories and the final model are written here. A relative path is resolved **against this** ``.ini`` **file** (like ``pdb_file`` and ``domain_def``), so the file gives the same layout from any working directory. ``-o``/``--outdir`` on the command line overrides it; when neither is set, ``opt_out`` is created in the *current* directory. Not to be confused with ``output_dir``, a per-round ``md.ini`` key the optimizer :ref:`overrides every round <opt-overridden>`.
+   * - **Protocol & hardware**
+     -
+     -
+     -
+     -
    * - ``device``
      - str
      - no
      - ``GPU``
-     - Passed through to ``md.ini``, where the default would be ``CPU``. Optimization is a production-scale task (``ntraj`` × ``max_rounds`` trajectories).
+     - Passed through to ``md.ini``, where the default would be ``CPU``. Optimization is a production-scale task (``ntraj`` × ``max_rounds`` trajectories). ``--device`` on the command line overrides it for every round, without editing the ``.ini``.
    * - ``ref_t``
      - float
      - no
@@ -183,14 +217,26 @@ Everything worth deciding about, in one table. The keys are of three kinds:
      - ``no``
      - Passed through to ``md.ini``, where the default would be ``yes``. The native structure is already the model's energy minimum.
 
-The table stops at the keys worth a decision. The remaining implicit defaults
-match the model's standard parameterization and are rarely touched:
-``dt = 0.015`` (ps), ``model = topo``, ``tcoupl = yes``, ``tau_t = 0.05``,
-``pcoupl = no``, ``pbc = no``, ``restart = no`` (every round starts fresh),
-``ppn = 4``, ``nstlog = 5000``, ``nstchk = 5000``. Setting any of these in ``optimize.ini`` overrides the implicit
-value. The full set is :data:`topo.optimize.IMPLICIT_DEFAULTS`. Beyond these,
-any other key from :doc:`simulation_control` may appear and is passed through
-verbatim.
+The table covers the keys you are likely to set. The remaining implicit defaults
+fix the stability protocol's ensemble and the model's standard parameterization,
+and are rarely touched.
+
+**The ensemble.** Every round samples constant-temperature dynamics: a Langevin
+integrator at ``ref_t = 300`` K with friction ``tau_t = 0.05`` ps⁻¹
+(``tcoupl = yes``), no pressure coupling (``pcoupl = no``), and no periodic box
+(``pbc = no``). Nscale is therefore calibrated at fixed particle number and
+temperature — this is canonical, constant-*T* sampling rather than a strict NVT
+box run, since with ``pbc = no`` the chain is unbounded and there is no
+simulation volume being held fixed. The thermostat is what makes the stability
+verdict meaningful: Q is scored on thermal fluctuations at 300 K, so a unit
+counts as stable only if it resists unfolding at the protocol temperature.
+
+**Parameterization and bookkeeping.** ``dt = 0.015`` (ps), ``model = topo``,
+``restart = no`` (every round starts fresh), ``ppn = 4``, ``nstlog = 5000``,
+``nstchk = 5000``. Setting any of these — or any ensemble key above — in
+``optimize.ini`` overrides the implicit value. The full set is
+:data:`topo.optimize.IMPLICIT_DEFAULTS`. Beyond these, any other key from
+:doc:`simulation_control` may appear and is passed through verbatim.
 
 .. _opt-overridden:
 
@@ -217,44 +263,13 @@ them in** ``optimize.ini`` **has no effect** — your value is silently replaced
      - Rewritten to absolute paths; ``domain_def`` points at the round's freshly written ``round_N/domain.yaml``, not your seed file.
 
 ``device`` and ``md_steps`` are also overridden, but only when you pass the
-corresponding command-line flag (below); otherwise your ``.ini`` value stands.
-
-Command-line flags
-------------------
-
-.. list-table::
-   :header-rows: 1
-   :widths: 22 14 20 44
-
-   * - Flag
-     - Type
-     - Default
-     - Description
-   * - ``-f``, ``--config``
-     - str
-     - ``—`` (**required**)
-     - Path to ``optimize.ini``.
-   * - ``-o``, ``--outdir``
-     - str
-     - ``opt_out``
-     - Optimization root directory. Round subdirectories and the final model are written here.
-   * - ``--device``
-     - str
-     - ``—``
-     - Override ``device`` (``CPU``/``GPU``) for every round, without editing the ``.ini``.
-   * - ``--md-steps``
-     - int
-     - ``—``
-     - Override ``md_steps`` for every round. Handy for a quick smoke test before committing to a production run.
-   * - ``--python``
-     - str
-     - current interpreter
-     - Python interpreter used to launch :mod:`topo.mdrun` subprocesses.
+corresponding command-line flag; otherwise your ``.ini`` value stands.
 
 What the optimizer writes
 -------------------------
 
-Everything lands under ``--outdir`` (default ``opt_out/``):
+Everything lands under the optimization root — ``--outdir``, else ``outdir`` in
+the ``.ini``, else ``opt_out/``:
 
 .. code-block:: text
 

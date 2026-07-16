@@ -5,8 +5,8 @@ nscales in `domain.yaml` (as in [Tutorial 2](02_multidomain.md)),
 this tutorial **searches** for them automatically, so the force field is just
 strong enough to keep the native structure of every domain and interface folded.
 
-> **The one thing to remember:** the quantity being optimized is the `nscale`
-> field in `domain.yaml` (*n*<sub>scale</sub> in the literature). The optimizer
+> The quantity being optimized is the `nscale` field in `domain.yaml`
+> (*n*<sub>scale</sub> in the literature). The optimizer
 > *chooses* those values for you — `intra_domains[...].nscale` for each domain
 > and `inter_domains` for each interface.
 
@@ -250,7 +250,7 @@ topo-mdrun -f md.ini
 
 - Tighten/loosen the criterion (`q_threshold`, `frame_fraction`) and watch the
   converged levels shift.
-- Increase `md_steps` toward the published ~0.5 µs protocol for production
+- Increase `md_steps` toward the published ~1 µs protocol for production
   calibration (the demo value is short).
 
 > **Status:** the optimizer is a package module (`topo.optimize`, exposed as the
