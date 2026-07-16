@@ -26,6 +26,24 @@ The package is nearly marker-free — only these:
 
 ---
 
+## C. Nscale optimizer (`topo.optimize`)
+
+- [ ] **Restart / resume the optimization** — the round loop is not resumable;
+  every `topo-optimize` invocation starts fresh at round 1, so a crash (GPU
+  eviction, walltime kill, node failure) discards every completed round *and* the
+  in-progress round's MD, each round being a full `ntraj`-copy production MD. The
+  optimizer's own docstring flags this as its sole limitation
+  ([`topo/optimize/optimize.py:40`](../topo/optimize/optimize.py#L40)). Reuse the
+  two artifacts the run already writes: (a) `optimization.log` for round/`level[]`
+  state — but open it append-not-truncate and add a machine-readable `#STATE` line
+  per round; (b) each round's `round_N/traj/traj.chk` MD checkpoint — flip the
+  round's forced `restart=no` to `yes` so a mid-flight round's MD *resumes* rather
+  than restarts. Add `--resume`/`--restart`, skip completed rounds, and guard
+  reuse with a run-identity fingerprint. Full design:
+  [`OPTIMIZE_RESTART_SPEC.md`](OPTIMIZE_RESTART_SPEC.md).
+
+---
+
 ## B. CSP — validation, production, extensions
 
 *(Absorbed the former `topo/csp/TODO.md`, deleted 2026-07-02; revised against the current
