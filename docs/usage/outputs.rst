@@ -3,8 +3,6 @@ Output files and the run log
 
 Every run writes all of its files into **one self-contained folder**, set by
 ``output_dir`` (default ``traj/``) and named ``<outname>`` (default ``traj``).
-This page lists every file TOPO produces, explains the state-log format and how
-to parse it, and describes the run-provenance record.
 
 
 The files a run produces

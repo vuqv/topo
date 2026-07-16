@@ -213,7 +213,7 @@ Non-bonded terms (long-range)
 
 Two pairwise terms act between beads that are **more than two bonds apart**
 (see :ref:`exclusions <theory-exclusions>`): screened electrostatics, and the
-structure-based contact potential that is the heart of the model.
+structure-based contact potential (:ref:`below <theory-contacts>`).
 
 Electrostatics — Debye–Hückel (Yukawa)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -260,8 +260,8 @@ weak and short-ranged at physiological salt because of the 1 nm screening length
 
 .. _theory-contacts:
 
-Structure-based contacts — the heart of the model
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Structure-based contacts
+~~~~~~~~~~~~~~~~~~~~~~~~
 
 Every residue pair :math:`(i,j)` that is **not** excluded gets a pairwise
 contact potential with a **12-10-6 (Gō-type)** functional form:

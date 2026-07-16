@@ -11,7 +11,7 @@ tutorial reuses the same single-domain protein (`P0CX28`).
 
 ![P0CX28 continued trajectory](img/process.gif)
 
-***The run** — stage 1 (0→5 000 steps) **continued** from the checkpoint to 10 000 steps: one seamless trajectory.*
+***The run** — stage 1 (0→5 000 steps) **continued** from the checkpoint to 10 000 steps: one unbroken trajectory.*
 
 ---
 
@@ -98,7 +98,7 @@ print(u.atoms.n_atoms, "CA beads,", len(u.trajectory), "frames")
 
 ## Key takeaways
 
-- **Checkpoint = positions + velocities** → seamless continuation.
+- **Checkpoint = positions + velocities**, so the run continues without a break in the record.
 - **`md_steps` is a total, not an increment.**
 - **Logs and trajectories append** on restart, so long runs stay in one file set.
 - Keep `output_dir` / `outname` / `pdb_file` consistent across stages.

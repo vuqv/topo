@@ -13,8 +13,7 @@ object ready to simulate.
    The **complete force-field theory** — every energy term, its functional form,
    all constants, and where the parameters come from — lives in
    :doc:`../usage/model_theory`. For programmatic use (arguments, the returned
-   object's attributes and methods) see :doc:`../usage/python_api`. This page is a
-   short summary plus the autodoc reference.
+   object's attributes and methods) see :doc:`../usage/python_api`.
 
 
 Coarse-grained alpha-carbon (CA) model

@@ -2,10 +2,8 @@
 
 **Goal:** drive a simulation through a **temperature protocol** instead of a
 single constant temperature — hold the protein hot enough to unfold, then bring
-it back down to `ref_t` to watch it **refold**. You will learn both supported
-protocols (a delta **T-jump quench** and a **linear cooling ramp**), every config
-key that controls them, how the run splits into **two phases writing two separate
-trajectories**, and how the schedule interacts with restarts.
+it back down to `ref_t` to watch it **refold**, using either a delta **T-jump
+quench** or a **linear cooling ramp**.
 
 **Time:** two short runs, ~2–3 seconds each.
 
@@ -30,7 +28,7 @@ at `ref_t` for all `md_steps`. Annealing (`anneal = yes`) splits the run into
 | **Quench** | Hold at `t_high` (and, for a linear ramp, cool down to `ref_t`). The protein unfolds here. | `anneal_steps` (+ `anneal_ramp_steps` for linear) | `<outname>_quench.dcd`, `<outname>_quench.log` |
 | **Production** | Run at `ref_t`. The protein refolds and you collect the equilibrium ensemble. | `md_steps` | `<outname>.dcd`, `<outname>.log` |
 
-Two consequences worth internalizing:
+This has two consequences:
 
 - **`anneal_steps` is *separate* from `md_steps`.** The grand total is
   `quench_steps + md_steps` (where `quench_steps = anneal_steps` for a jump, or
@@ -95,13 +93,13 @@ total = anneal_steps + (anneal_ramp_steps if linear else 0) + md_steps
         \_________________ quench phase ________________/   \ production /
 ```
 
-## ⚠️ The most important physical knob: hold length vs. thermostat coupling
+## The most important physical knob: hold length vs. thermostat coupling
 
 A Langevin thermostat doesn't change the temperature instantly even on a `jump`:
 the kinetic energy relaxes toward the new setpoint over roughly **`1 / tau_t`**.
 So the *setpoint* jumps, but the *system* takes ~`1/tau_t` to follow.
 
-That has two consequences you must respect:
+That has two consequences:
 
 1. **`anneal_steps` must be ≫ the relaxation time** (`1/tau_t`, converted to
    steps via `dt`), or the system never actually reaches `t_high` and won't

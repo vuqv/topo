@@ -397,7 +397,7 @@ Temperature protocol (``anneal`` / ``t_high`` / ``anneal_*``)
     fresh run and simply redoes the quench.
 
     Choose ``jump`` for clean folding kinetics (folding happens at a single
-    temperature) and ``linear`` for maximum refolding yield. Crucially, a Langevin
+    temperature) and ``linear`` for maximum refolding yield. A Langevin
     thermostat relaxes toward a new setpoint over roughly ``1/tau_t``, so
     ``anneal_steps`` must be **many** relaxation times (and long enough to actually
     unfold the protein) — with a production-typical ``tau_t = 0.05`` ps⁻¹ (≈20 ps
@@ -452,9 +452,9 @@ Output frequency and log formatting (``nstxout`` / ``nstchk`` / ``nstcomm`` / ``
 ``restart`` and ``minimize``
     ``restart = yes`` loads positions **and** velocities from ``checkpoint`` and
     continues; reporters append to the existing log/trajectory, and ``minimize``
-    is forced off. With ``restart = no`` you may choose ``minimize``. Note that a
-    native input structure is already the energy minimum of the structure-based
-    model, so minimization is usually unnecessary.
+    is forced off. With ``restart = no`` you may choose ``minimize``. A native
+    input structure is already the energy minimum of the structure-based model,
+    so minimization is usually unnecessary.
 
 Initial coordinates and velocities (``init_position``)
     The starting state is resolved as follows (and recorded in

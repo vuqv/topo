@@ -416,4 +416,4 @@ Typical workflow
    fraction over an ensemble, exclude or separately account for mirror trajectories
    so that (a) mirror artifacts are not counted as native successes, and (b)
    otherwise-correct folds are not counted as gross misfolds by a
-   reflection-allowing RMSD. This is what keeps the CG misfolding estimate honest.
+   reflection-allowing RMSD.

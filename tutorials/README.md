@@ -70,13 +70,13 @@ The force field has these terms:
   constraints by default).
 - **Yukawa electrostatics** — Debye–Hückel screened Coulomb between charged
   residues.
-- **Structure-based non-bonded (contacts)** — the heart of the model. Native
+- **Structure-based non-bonded (contacts)** — Native
   contacts (pairs of residues close together in the folded structure) get an
   attractive well; everything else is repulsive. Contact nscales come from
   hydrogen bonds (via **STRIDE**), backbone–sidechain and sidechain–sidechain
   geometry, and optional **per-domain scaling** (Tutorial 2).
 
-Because the native state is the energy minimum, TOPO is ideal for studying
+Because the native state is the energy minimum, TOPO is used to study
 folding/unfolding, domain motions, and mechanical/thermal stability.
 
 For the full functional forms, constants, and where each parameter comes from,

@@ -1,9 +1,9 @@
 Native-contact analysis (the *Q* score)
 =======================================
 
-The single most useful observable for a structure-based model is **Q, the
-fraction of native contacts formed** — a number between 0 (fully unfolded) and 1
-(fully folded) that tells you, frame by frame, how native-like a conformation is.
+The standard observable for a structure-based model is **Q, the fraction of
+native contacts formed** — a number between 0 (fully unfolded) and 1 (fully
+folded) that tells you, frame by frame, how native-like a conformation is.
 TOPO ships a ready-made *Q* calculator,
 :mod:`topo.analysis.native_contacts`, that reports *Q* for the **whole protein**
 and for **every domain and domain–domain interface** declared in your

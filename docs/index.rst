@@ -7,8 +7,8 @@ Welcome to the TOPO documentation
 library and command-line toolkit for coarse-grained molecular dynamics of
 **globular (folded) proteins**, built on `OpenMM <https://openmm.org/>`_. From a
 single folded-protein structure it builds a one-bead-per-residue, structure-based
-(Gō-like) model and runs Langevin dynamics — ideal for studying folding,
-unfolding, thermal/mechanical stability, and multidomain motions.
+(Gō-like) model and runs Langevin dynamics, for studying folding, unfolding,
+thermal/mechanical stability, and multidomain motions.
 
 **New here?** Read :doc:`overview` to see the two things TOPO does and jump to
 the right tutorials, :doc:`modules/installation` to get it running,

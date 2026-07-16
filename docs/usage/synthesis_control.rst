@@ -9,10 +9,9 @@ Both synthesis runners are configured from a ``.ini`` control file:
   :func:`topo.csp.cylinder.read_cylinder_config`.
 
 Both return a populated :class:`~topo.csp.core.RunParams`, so **most keys are shared**.
-**This page is the single reference for every control key** — grouped into *shared*,
-*coarse-grained-ribosome-only*, and *cylinder-only* sets below; the
-:doc:`continuous_synthesis` and :doc:`cylinder_synthesis` pages cover the *physics* and
-point back here for the keys.
+Every control key is documented here, in *shared*, *coarse-grained-ribosome-only*
+and *cylinder-only* sets; the :doc:`continuous_synthesis` and
+:doc:`cylinder_synthesis` pages cover the *physics*.
 
 * The file is a flat list of ``key = value`` lines.
 * Comments: inline or on their own line, starting with ``;`` or ``#``.
@@ -97,8 +96,8 @@ Option reference
 ++++++++++++++++
 
 "Required = yes" means the run cannot proceed without it; options with a default may be
-omitted. ``—`` in the *Default* column means there is no default. The keys are grouped
-into three sets — all listed in the same flat file:
+omitted. ``—`` in the *Default* column means there is no default. The keys fall into
+three sets, all written in the same flat file:
 
 * **Shared** — accepted (with identical meaning) by *both* runners.
 * **Coarse-grained ribosome runner only** (``topo-csp`` / ``csp.ini``).

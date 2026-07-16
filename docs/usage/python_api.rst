@@ -4,7 +4,7 @@ Using TOPO from Python
 Most users drive TOPO entirely through ``md.ini`` and the ``topo-mdrun`` command
 (:doc:`simulation_control`). But every step is also a documented Python function,
 so you can build a model, inspect its forces, script a custom protocol, or post-
-process trajectories from your own code. This page is a tour of the public API.
+process trajectories from your own code.
 
 The most useful names are re-exported at the top level of the ``topo`` package:
 
