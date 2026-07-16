@@ -544,7 +544,7 @@ def add_tunnel_wall(system, nascent_indices, x0_nm: float,
 _NC_BOND_126_ENERGY = "eps*(13*(R/r)^12 - 18*(R/r)^10 + 4*(R/r)^6)"
 
 # Native contacts are those whose well depth sits above the non-native repulsive
-# floor (ENERGY_PARAMS['non_native'] = 0.000132 kcal/mol). Use a safe margin.
+# floor (NON_NATIVE_KJ = 0.000132 kcal/mol before conversion). Use a safe margin.
 _NON_NATIVE_EPS_KJ = 0.000132 * 4.184
 
 

@@ -18,7 +18,7 @@ Main workflow
    the contacts still interact at nscale = 1.0). Single-domain proteins can omit
    inter_domains.
 4. **Non-native contacts**: repulsive well with per-residue Rmin/2 from the
-   nearest non-contact CA-CA distance (sum rule); energy ENERGY_PARAMS['non_native'].
+   nearest non-contact CA-CA distance (sum rule); energy NON_NATIVE_KJ.
 
 Typical use
 -----------
@@ -55,13 +55,15 @@ LOCAL_SEPARATION = 2   # Residues within this sequence separation are excluded f
 RMIN_SCALE_FACTOR = 2**(1/6)  # 2^(1/6): scales the nearest-contact Ca distance to the collision diameter Rmin (LJ-like)
 DISTANCE_TO_NM = 10.0  # Angstrom to nanometer (CA distances read in Angstrom)
 
-# Energy parameters (kcal/mol values, stored in kJ/mol for OpenMM)
-ENERGY_PARAMS = {
-    'hydrogen_bond': 0.75 * KCAL_TO_KJ,       # per H-bond; 2+ H-bonds capped at 1.5 kcal/mol total
-    'backbone_sidechain': 0.37 * KCAL_TO_KJ,
-    'non_native': 0.000132 * KCAL_TO_KJ,
-    'bt_shift': 0.6   # reference shift for the BT contact potential (kcal/mol)
-}
+# Contact energies (kcal/mol source values, stored in kJ/mol for OpenMM)
+HYDROGEN_BOND_KJ      = 0.75 * KCAL_TO_KJ       # per H-bond; 2+ H-bonds capped at 1.5 kcal/mol total
+BACKBONE_SIDECHAIN_KJ = 0.37 * KCAL_TO_KJ
+NON_NATIVE_KJ         = 0.000132 * KCAL_TO_KJ
+
+# Reference shift for the BT contact potential (kcal/mol): subtracted from the raw
+# CSV value BEFORE conversion (eps = KCAL_TO_KJ * |raw - BT_SHIFT_KCAL|), so it is a
+# kcal/mol reference level, not a kJ energy -- hence kept out of the block above.
+BT_SHIFT_KCAL = 0.6
 
 
 # -----------------------------------------------------------------------------
@@ -400,7 +402,7 @@ def get_bs_contact_matrix(u: mda.Universe, cutoff: float = DEFAULT_CUTOFF) -> np
     an **asymmetric** matrix where `M[i, j] = 1` means "backbone of i within cutoff of
     sidechain of j". The returned value is the symmetrized count `M + M.T`, whose
     entries are the number of directions realized. The energy is linear in that count
-    (0, 1, or 2 x ENERGY_PARAMS['backbone_sidechain']), so a count of 2 marks a
+    (0, 1, or 2 x BACKBONE_SIDECHAIN_KJ), so a count of 2 marks a
     tighter, mutually buried pair and earns twice the well depth.
 
     Two easy confusions worth flagging:
@@ -537,7 +539,7 @@ def load_bt_potential(bt_file: str = 'bt_potential.csv') -> pd.DataFrame:
         bt_path = data_dir / bt_path.name
     try:
         df = pd.read_csv(bt_path, index_col=0)
-        return KCAL_TO_KJ * np.abs(df - ENERGY_PARAMS['bt_shift'])
+        return KCAL_TO_KJ * np.abs(df - BT_SHIFT_KCAL)
     except FileNotFoundError:
         print(f"BT potential file not found: {bt_path}")
         raise
@@ -877,7 +879,7 @@ def build_nonbonded_interaction(
         Rmin/2_i + Rmin/2_j (sum rule).
     energy_matrix : np.ndarray, shape (n_residues, n_residues)
         Pairwise well depth in kJ/mol. Native: sum of H-bond (0.75/1.5 kcal/mol),
-        backbone–sidechain (0.37 kcal/mol), and scaled SS; non-native: ENERGY_PARAMS['non_native'].
+        backbone–sidechain (0.37 kcal/mol), and scaled SS; non-native: NON_NATIVE_KJ.
 
     Raises
     ------
@@ -915,13 +917,13 @@ def build_nonbonded_interaction(
 
     hb_contact_matrix = get_hb_contact_matrix(stride_path, resid_to_index, n_residues)
     # Matrix values: 0, 1, or 2 only (2+ H-bonds capped; energy 0.75 kcal/mol per single, 1.5 for multiple)
-    hb_interaction_energy = ENERGY_PARAMS['hydrogen_bond'] * hb_contact_matrix
+    hb_interaction_energy = HYDROGEN_BOND_KJ * hb_contact_matrix
 
     bs_contact_matrix = get_bs_contact_matrix(u, cutoff=DEFAULT_CUTOFF)
     # Matrix values: 0, 1, or 2 — the number of *directions* realized (bb_i–sc_j and
     # bb_j–sc_i are independent contacts), not an H-bond-style cap. Energy is linear
     # in that count: 0.37 kcal/mol per direction. See get_bs_contact_matrix.
-    bs_interaction_energy = bs_contact_matrix * ENERGY_PARAMS['backbone_sidechain']
+    bs_interaction_energy = bs_contact_matrix * BACKBONE_SIDECHAIN_KJ
 
     if domain_def is None:
         # Single domain: all residues scaled by 1.0
@@ -957,7 +959,7 @@ def build_nonbonded_interaction(
         for j in range(n_residues):
             if binary_contact_matrix[i, j] == 0:
                 rmin_matrix[i, j] = rmin_2[i] + rmin_2[j]        # sum rule
-                eps_ij[i, j] = ENERGY_PARAMS['non_native']
+                eps_ij[i, j] = NON_NATIVE_KJ
 
     # Convert to nm for OpenMM compatibility
     rmin_matrix /= DISTANCE_TO_NM
