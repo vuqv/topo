@@ -3,9 +3,19 @@
 > **Date:** 2026-07-17
 > **Reference (read-only):**
 > `sandbox/original_code/perl/cg_model/create_cg_protein_model_v34_0.03.pl` (v1.34, O'Brien).
-> **topo code touched:** `topo/core/models.py` (`buildCoarseGrainModel`),
-> `topo/utils/nonbonded.py` (`build_nonbonded_interaction`), `topo/utils/config.py`,
-> `topo/csp/core.py`.
+> **topo code CHANGED (3 files):**
+> • `topo/utils/nonbonded.py` — `read_yaml_config` parses `disordered:` (residue set +
+>   `idr_scale`, default 0.03; `intra_domains` now optional); **new `apply_disorder`**;
+>   `build_nonbonded_interaction` calls it at the end (energy path, §2.3).
+> • `topo/analysis/native_contacts.py` — `load_domains` parses `disordered:` + subtracts it
+>   from each domain; `build_native_contacts` gains optional `disorder=None` and drops IDR pairs;
+>   the `main` driver threads it (Q path, §2.7).
+> • `topo/optimize/optimize.py` — `Scorer` threads the disorder set into its
+>   `build_native_contacts` calls (optimizer Q, §2.7).
+> **NOT changed (pass-through / read-only):** `topo/core/models.py`, `topo/utils/config.py`,
+> `topo/csp/core.py` (already thread `domain_def` → get IDR for free, §2.2/§2.6);
+> `topo/parameters/model_parameters.py` (per-AA `Rmin_2` read only); other `build_native_contacts`
+> callers (e.g. `topo/analysis/mirror.py`) keep the `disorder=None` default → byte-identical.
 > **Scope:** the α-carbon (Cα) model only. Proposes a minimal implementation for marking
 > protein regions as disordered/unstructured (IDRs). Companion:
 > [`DIFFERENCES.md`](DIFFERENCES.md) (CSP-side deviations).
@@ -25,9 +35,17 @@ mechanisms:
    volume via the 12-10-6 sum rule `Rmin/2(i) + Rmin/2(j)`.
 
 Because topo already supplies the generic backbone and self-avoidance, **the whole IDR
-feature reduces to per-residue contact masking inside `build_nonbonded_interaction`**
-(optionally plus the weak generic attraction). No changes to bonds, angles, dihedrals, or
-the OpenMM force objects are required. This mirrors the existing `ribo_free_mask` pattern.
+feature reduces to per-residue contact masking inside `build_nonbonded_interaction`**, plus
+a per-pair-class energy fill. No changes to bonds, angles, dihedrals, or the OpenMM force
+objects are required. This mirrors the existing `ribo_free_mask` pattern.
+
+**One model, three pair classes, one knob** (§2.1). Every pair falls into exactly one class:
+**folded–folded** (unchanged: Go / non-native), **IDR–IDR** (`max(NON_NATIVE,
+idr_scale·ε_BT)`), **IDR–folded** (**excluded-volume only** — plain non-native). Well
+position is a per-residue effective radius (IDR residues → transferable per-AA `Rmin_2`; folded
+residues keep K–B). The sole knob is `idr_scale`: `0` is the pure self-avoiding chain (no
+separate "Level A"), default `0.03` reproduces O'Brien's default configuration. (IDR↔folded
+attraction is a documented future extension, not an active knob — §2.1.)
 
 ---
 
@@ -120,82 +138,169 @@ vs `G<n>` (structured) (lines 1229–1235); cross-segment interactions optionall
 > because topo reads one structure, it can localize by **residue range** (a mask) rather
 > than by splitting PDBs — so an internal IDR is one `disordered:` entry, not three PDBs.
 
+### 1.4 How the original treats IDR↔folded (cross) interactions — **default is steric-only**
+
+The intra-IDR generic attraction (§1.2, `0.03·ε_BT`) fires **only within a single `generic`
+PDB** (the loop runs over one `$np`, pairs `|i−j|≥3`, lines 1862–1874). Interactions
+**between two different PDB files** — which is how O'Brien represents an IDR next to a folded
+domain — are a **separate, opt-in mechanism**, written to a separate file and governed by the
+`interact_scale` keyword (lines 1885–1908):
+
+```perl
+if($interact_scale ne "undefined") {         # OFF by default ($interact_scale = "undefined", L164)
+  for each cross-PDB pair (i in np, j in np2):
+    $ene  = $interact_scale * $eps[i][j];    # interact_scale · ε_BT
+    $temp = $rvdw{i} + $rvdw{j};             # well at rvdw sum
+}
+```
+
+Three properties matter for the port:
+
+1. **Default OFF → excluded volume only.** `$interact_scale` defaults to `"undefined"`, and the
+   header is explicit (lines 111–113): *without the keyword these cross parameters "will not be
+   written out even if there are two PDB files listed."* So **by default an IDR and a folded
+   domain feel only excluded volume** across the boundary — no attraction.
+2. **Separate scale from the intra 0.03.** The within-IDR attraction is hardcoded `0.03·ε_BT`;
+   the cross attraction is `interact_scale·ε_BT` with a user-chosen scale. O'Brien deliberately
+   did *not* reuse 0.03 for cross pairs — they are independent knobs over disjoint pair sets.
+3. **Keyed on "different PDB," not on disorder.** `interact_scale` scales *every* inter-PDB pair
+   (folded↔folded, folded↔IDR, IDR↔IDR alike); it errors with a single PDB (line 349). O'Brien
+   has no residue mask, so he cannot single out disorder↔folded — the granularity is the whole
+   PDB. topo, reading one structure with a mask, **could** target disorder↔folded specifically
+   if this cross attraction is ever wanted — a strict improvement (see the extension note in §2.1).
+
+> **Divergence (multiple IDRs).** topo's flat `disordered:` set treats *all* disordered–disordered
+> pairs with `idr_scale`, including residues in two *different* IDRs. In O'Brien those would be
+> inter-PDB → `interact_scale`, not the intra `0.03`. For a single contiguous IDR the two are
+> identical; the distinction only appears with multiple separate IDRs. Accepted for now (one flat
+> set, §4 Q5); revisit if per-IDR cross scaling is ever needed.
+
 ---
 
 ## 2. Proposed implementation for topo
 
-### 2.1 Two levels (pick per study)
+### 2.1 One model, three pair classes (one knob)
 
-- **Level A — self-avoiding IDR.** For any residue in the disorder mask, **drop all native
-  contacts** (H-bond, BS, SS) in which it participates; those pairs fall back to the
-  existing non-native repulsive/excluded-volume term (well depth `NON_NATIVE ≈ 0.000132
-  kcal/mol` — a negligible, *non-zero* floor; essentially pure steric repulsion). Result: a
-  generic self-avoiding chain with transferable backbone — the cleanest "no fold" baseline,
-  and *zero* new parameters.
+There is a **single** IDR model, not two levels. Every residue pair falls into exactly one of
+three classes by how many of its residues are in the disorder mask, and the model just picks
+the energy for each class. The old "Level A / Level B" split collapses into **one continuous
+knob** (`idr_scale`): the pure self-avoiding chain is simply `idr_scale = 0`.
 
-- **Level B — weakly-collapsing IDR (O'Brien `generic-bt`, energy parity).** In addition
-  to A, add the shallow, pair-type-dependent attraction between masked residues (and,
-  optionally, disorder↔folded cross pairs via `cross_scale`):
+| Pair class | Native contacts | Well depth ε_ij | Well position R_ij | O'Brien analog |
+|--|--|--|--|--|
+| **folded–folded** (neither in mask) | kept (Go) | today's HB+BS+scaled_SS, else `NON_NATIVE` | native Cα dist, else K–B sum | Go segment (unchanged) |
+| **IDR–IDR** (both in mask) | removed | `max(NON_NATIVE, idr_scale·ε_BT(i,j))` | per-AA + per-AA | intra-`generic` `0.03·ε_BT` |
+| **IDR–folded** (exactly one in mask) | removed | `NON_NATIVE` (**excluded-volume only**) | per-AA + K–B | cross `interact_scale`, **off by default** |
 
-  ```
-  ε_ij = generic_scale · nscale · ε_BT(i,j)        # kJ/mol;  generic_scale = 0.03 for O'Brien
-  R_ij = Rmin_2[type_i] + Rmin_2[type_j]           # nm;  per-AA, from model_parameters
-  ```
+- **`idr_scale`** (default **0.03**, the *only* knob) controls IDR–IDR attraction. `0` →
+  pure excluded volume (self-avoiding chain); `0.03` → O'Brien-like weak collapse.
+- **IDR–folded is excluded-volume only** — plain non-native. Those pairs need *no* special
+  energy handling: the `apply_disorder` transform (§2.3) sets them to `NON_NATIVE` at the
+  per-residue radius sum (per-AA on the IDR side, K–B on the folded side). This reproduces
+  O'Brien's default (`interact_scale` undefined → steric only, §1.4).
 
-  `generic_scale` is the depth ratio to a native contact of the same pair, so **0.03**
-  reads as "3% of a native contact." Two **design decisions** (2026-07-18):
+> **Extension point (not implemented) — transient IDR↔folded (fuzzy) binding.** If a study ever
+> needs weak IDR↔core attraction, promote the IDR–folded pairs to `max(NON_NATIVE,
+> cross_scale·ε_BT)` with a `cross_scale` knob (default 0) — the direct analog of O'Brien's
+> `interact_scale`, kept separate from `idr_scale` just as O'Brien kept `interact_scale`
+> separate from the intra `0.03` (§1.4). It is deliberately **left out now**: the current use
+> case defines IDR–folded as steric-only, and an always-zero knob is unrequested surface. Adding
+> it later is a small change to `apply_disorder` (§2.3): add a `cross = involves_dis & ~dd` mask
+> and fill `eps_ij[cross] = max(NON_NATIVE, cross_scale·ε_BT)`, not a redesign.
+>
+> **Only `eps_ij` changes — the well position is already correct.** `apply_disorder` sets
+> `rmin_matrix` for *all* `involves_dis` pairs (cross included) to the sum-rule position
+> `rmin_2_nm[IDR](per-AA) + rmin_2_nm[folded](K–B)`. Since the model uses one 12-10-6 term per
+> pair, whose minimum is at `rmin` independent of depth, turning on the attraction only *deepens*
+> that existing well — `rmin_matrix` and `rmin_2_nm` are untouched. (This yields a topo-consistent
+> cross attraction, not a bit-exact O'Brien `interact_scale`, whose well sat at the `rvdw` sum
+> with a per-AA folded side — matching that would also require changing the folded radius, which
+> contradicts the "folded keeps K–B" decision.)
 
-  1. **Well position uses the Rmin/2 sum rule** `Rmin_2_i + Rmin_2_j`, *not* O'Brien's
-     `rvdw_i + rvdw_j`. This makes the attractive well consistent with the excluded-volume
-     term (same Rmin/2 convention) and fixes O'Brien's missing-`2^(1/6)` inconsistency
-     (see §1.2); the well sits ~12% further out — a deliberate, accepted deviation.
-  2. **Reuse the existing `model_parameters` per-AA `Rmin_2`** (the transferable radii) —
-     **no `rvdw.csv` to ship.** These equal `rvdw·2^(1/6)` to ~1% (mean 0.85%, max 1.40%),
-     a negligible difference for a sub-kT well.
+The IDR–IDR attraction uses the **same 12-10-6 well** the model already has — one term per
+pair, no new force. The `max(NON_NATIVE, …)` floor guarantees excluded volume even at
+`idr_scale = 0` (or for the handful of pairs whose `ε_BT ≈ 0` near the BT reference), so the
+chain can never pass through itself.
 
-  So Level B is **energy-parity** with `generic-bt` (`0.03·nscale·ε_BT`) but uses topo's
-  consistent Rmin/2 well position rather than O'Brien's `rvdw` sum.
+#### ε: use the raw BT pair energy, `nscale = 1`
 
-#### Which level for which use case — **Level B is the recommended default for a real IDP**
+```
+ε_BT(i,j) = ss_interaction_energy[i,j] = 4.184 · |raw − 0.6|      # kJ/mol, from bt_potential.csv
+ε_ij      = max(NON_NATIVE, idr_scale · ε_BT(i,j))            # IDR-IDR pairs only
+```
 
-Decided (2026-07-18): for modelling an actual intrinsically disordered protein/region,
-**use Level B.** The reasoning:
+**Design decision — `nscale = 1` (no domain ladder for IDR pairs, 2026-07-18).** In topo,
+`nscale` is the per-structural-class LADDER factor (`topo/optimize/optimize.py`, ~1.15–2.5) —
+*the smallest multiplier that makes a folded domain marginally stable*, a folding-thermodynamics
+calibration. An IDR has no fold and no stability target, so there is no principled ladder value
+to inherit; a masked residue is also not in any `intra_domain`, so its `scaling_matrix` entry is
+ill-defined. We therefore multiply the **raw** per-pair BT matrix `ss_interaction_energy` (from
+`get_ss_interaction_energy`) — **not** `scaled_ss_interaction_energy`, **not** `scaling_matrix·…`,
+and **not** a hand-rolled `(raw − 0.6)` re-read of `bt_potential.csv` (that would drop the
+`abs()`, flipping the sign for 394/400 pairs, and drop the kcal→kJ ×4.184 factor). Reusing
+`ss_interaction_energy` keeps abs, shift, and units identical to every other energy term, from a
+single source of truth. `idr_scale` thus becomes the physically-interpretable coupling —
+calibrate to SAXS/smFRET Rg/ν rather than reading 0.03 as "3% of a native contact"
+(a counterfactual for a region with no native contacts).
 
-- **Flexibility is *not* a reason to prefer A.** Both levels share the identical flexible
-  backbone, and Level B's attraction is **sub-kT (~0.03 RT/pair) and non-specific**, so it
-  cannot lock in a fold or a persistent contact. B samples the same broad, flexible
-  ensemble as A — it only *reweights* it toward more compact configurations. An IDP is
-  flexible because it has **no stable fold**, not because it has **no interactions**; B
-  captures exactly that (no fold, but realistic transient contacts).
-- **Real IDPs are more compact than a self-avoiding walk.** SAXS/smFRET place most IDPs at
-  scaling exponent ν ≈ 0.5–0.55 (between theta and good solvent), vs ν ≈ 0.588 for a pure
-  self-avoiding chain. **Level A (pure excluded volume) systematically over-expands** a
-  typical IDP; Level B's weak `0.03·ε_BT` attraction pulls the ensemble into the observed
-  window without folding it. (This is what O'Brien's `generic-bt` was calibrated for.)
-- **topo's always-on Yukawa makes B the balanced model.** Charged IDPs already get
-  Debye–Hückel charge–charge repulsion (expansion). The physical picture is *repulsion
-  (electrostatics) balanced by weak attraction (hydrophobic/transient)* = **B + Yukawa**;
-  A + Yukawa keeps only the repulsive half and biases further toward over-expansion.
+This is **structurally** O'Brien's `generic-bt` (the intra-IDR attraction) but **deliberately
+decoupled** from topo's folding ladder (`nscale = 1`). It is *not* bit-exact parity with O'Brien's
+`0.03·nscal·ε_BT`: his `nscal` was a single global scale, whereas topo's is per-domain and
+inapplicable to a fold-free region. If bit-exact reproduction were ever required, his global
+`nscal` would be folded into `idr_scale` explicitly.
 
-**When Level A is the better call instead:** a disordered **linker** whose role is reach /
-entropic tethering between folded domains (compaction not the observable); a **strongly
-charged / highly expanded** IDP that genuinely approaches self-avoiding-walk statistics; or
-a deliberately minimal, assumption-free reference ensemble.
+#### R: override the per-residue radius for IDR residues, keep folded K–B
 
-**Calibration.** `generic_scale = 0.03` (O'Brien) is a sensible starting point but is
-tunable — if SAXS/smFRET Rg or ν is available for the target sequence, calibrate
-`generic_scale` to match it.
+The excluded-volume radius is a property of the **residue**, so `apply_disorder` overrides the
+per-residue radius array **in place** (§2.3) and lets the existing sum rule combine pairs:
 
-*(Implementation note: Level A is a strict subset of B — B = A's contact removal + the
-attractive well — so building A's masking first and then adding B's well is a natural build
-order, even though B is the recommended run mode for IDPs.)*
+```
+rmin_2_nm[dis] = Rmin_2_perAA[dis]     # IDR residues -> transferable per-AA (model_parameters)
+                                       #   (folded residues keep their calculate_rmin_2_values K-B value)
+R_ij           = rmin_2_nm_i + rmin_2_nm_j    # sum rule, as today
+```
 
-> **Why masking (not a `nscale = 0` domain) is the right lever.** The existing
-> `domain.yaml` scaling multiplies **only the SS energy** (`scaling_matrix * ss_*`).
-> Setting a domain's `nscale = 0` would zero SS contacts but **leave H-bond and BS
-> contacts intact**, so the region would still fold via backbone H-bonds. A true IDR must
-> remove H-bond + BS + SS together — hence a dedicated mask applied to all three, not a
-> domain scale.
+This yields **IDR–IDR** = per-AA + per-AA, **IDR–folded** = per-AA + K–B, **folded–folded** =
+K–B + K–B (byte-identical to today). Two design decisions ride along:
+
+1. **Override only IDR residues** (not both sides of an IDR-involving pair). A folded residue
+   keeps its own collision radius regardless of partner — physically correct, and it makes the
+   folded core's excluded volume *exactly* unchanged. This is why the override is on the
+   **per-residue `rmin_2_nm` array**, not a per-pair choice (and why the same array stays
+   consistent across the NC↔ribosome channel in CSP, §2.6).
+2. **IDR residues use the transferable per-AA `Rmin_2`** (from `model_parameters`, = O'Brien's
+   `S<aa>` set ≈ `rvdw·2^(1/6)` to ~1%) rather than their **structure-derived K–B** value — the
+   K–B radius is meaningless for arbitrary/disordered input coordinates. **No `rvdw.csv` to
+   ship.** This also fixes O'Brien's missing-`2^(1/6)` inconsistency between his attractive well
+   (`rvdw` sum) and excluded volume (`rvdw·2^(1/6)` sum): topo uses one Rmin/2 convention for
+   both, so the well sits ~12% further out — a deliberate, accepted deviation.
+
+#### Recommended defaults for a real IDP
+
+- **`idr_scale = 0.03`** (weakly-collapsing IDR). Rationale:
+  - **`idr_scale = 0` (self-avoiding) systematically over-expands a typical IDP.** SAXS/smFRET
+    place most IDPs at scaling exponent ν ≈ 0.5–0.55 (between theta and good solvent), vs ν ≈ 0.588
+    for a pure self-avoiding chain. The sub-kT (~0.03 RT/pair), non-specific `0.03·ε_BT` attraction
+    pulls the ensemble into the observed window **without** locking in a fold — it *reweights* the
+    same broad, flexible ensemble toward compaction. An IDP is flexible because it has **no stable
+    fold**, not because it has **no interactions**.
+  - **topo's always-on Yukawa makes this the balanced model.** Charged IDPs already get
+    Debye–Hückel repulsion (expansion); the physical picture is *repulsion balanced by weak
+    attraction* = `idr_scale > 0` + Yukawa. Setting `idr_scale = 0` keeps only the
+    repulsive half and biases further toward over-expansion.
+  - `idr_scale` is **tunable** — if SAXS/smFRET Rg or ν is available, calibrate to match.
+- **`idr_scale = 0` (self-avoiding) is the better call** for: a disordered **linker** whose
+  role is reach / entropic tethering (compaction not the observable); a **strongly charged /
+  highly expanded** IDP that genuinely approaches self-avoiding-walk statistics; or a deliberately
+  minimal, assumption-free reference ensemble.
+- **IDR↔folded is steric-only** (the faithful O'Brien default, §1.4) — no knob. See the §2.1
+  extension note if transient/fuzzy IDR–domain binding is ever needed.
+
+> **Why masking (not a `nscale = 0` domain) is the right lever.** The existing `domain.yaml`
+> scaling multiplies **only the SS energy** (`scaling_matrix * ss_*`). Setting a domain's
+> `nscale = 0` would zero SS contacts but **leave H-bond and BS contacts intact**, so the region
+> would still fold via backbone H-bonds. A true IDR must remove H-bond + BS + SS together — hence
+> a dedicated mask applied to all three, not a domain scale.
 
 ### 2.2 API / plumbing — one file, no new knobs
 
@@ -209,13 +314,15 @@ Disorder is defined as an **optional `disordered:` section inside the existing
 `domain_def` YAML** — *not* a separate file or argument. `domain_def` is already threaded
 end-to-end (INI key → config dataclass → `buildCoarseGrainModel` →
 `build_nonbonded_interaction`), so this adds **no new input file, no new function
-argument, and no new INI key**. The only code changes are the YAML reader and the masking
-step:
+argument, and no new INI key**. The only code changes are the YAML reader and the
+`apply_disorder` transform:
 
 - `topo/utils/nonbonded.py`: `read_yaml_config` also parses the optional `disordered:`
-  section (returning the residue set + `generic_scale` + `cross_scale`);
-  `build_nonbonded_interaction` applies the mask (§2.3). Signature is unchanged except the
-  already-planned `return_rmin_2` — **no** `disorder_def` / `generic_attraction` params.
+  section (returning the residue set + `idr_scale`). **`idr_scale` is optional and defaults to
+  `0.03` when the key is omitted** (only `residues:` is required); an explicit `0` selects the
+  self-avoiding chain. `build_nonbonded_interaction` runs its **folded build unchanged**, then
+  calls a new **`apply_disorder`** transform on the three outputs (§2.3). Signature is unchanged
+  except the already-planned `return_rmin_2` — **no** `disorder_def` / `generic_attraction` params.
 - `read_yaml_config`: relax so `intra_domains` is **optional**. A file with only a
   `disordered:` section = single domain (scale 1.0 everywhere) + mask; a file with only
   domains = today's behavior; both = domains + IDR.
@@ -223,9 +330,23 @@ step:
   already pass `domain_def` through. Continuous-synthesis nascent chains get IDR support
   for free once the reader understands the section.
 
-**Precedence — disorder wins.** The mask is applied *after* domain scaling, so a residue
-listed in both a domain and `disordered:` has its contacts zeroed regardless of its
-`nscale`. The two sections therefore never conflict.
+**Precedence — disorder wins (overlap is allowed and well-defined).** Domain and `disordered:`
+ranges *may* overlap. `apply_disorder` runs **after** the whole folded build — including domain
+scaling (`scaling_matrix · ss_*`) — and **unconditionally overwrites** `eps_ij`, `rmin_matrix`,
+and `rmin_2_nm` for every pair touching a disordered residue (§2.3). So if a residue is listed in
+both a domain and `disordered:`, its domain `nscale` is computed and then discarded; the pair is
+governed entirely by the disorder rules. This holds for **inter-domain** pairs too: **if either
+residue in a pair is disordered, the disorder rules govern it — domain membership of either side
+is irrelevant.** The two sections therefore never conflict. This makes overlap a *feature*: define
+a domain broadly (e.g. `A: 1-100`) and carve a disordered loop out of it (`disordered: 40-50`)
+without splitting the domain definition.
+
+> **Implementation note — log detected overlap.** Because disorder wins *silently*, a residue
+> accidentally left in both sections is disordered with no warning — a typo could quietly
+> disorder part of a domain. `read_yaml_config` should emit an **info** line (not an error —
+> overlap is legal) listing the overlapping residues, e.g.
+> `"IDR overlap: residues 40-50 are in both domain A and disordered:; treating as disordered."`
+> Cheap insurance; keep it a one-line message, not a per-residue dump.
 
 **Unified file format** — residue ranges reuse the syntax already parsed by
 `parse_residue_list` (ints, `"i"`, `"start-end"`). Only `n_residues` is required; all
@@ -244,68 +365,76 @@ inter_domains:
 
 # --- disordered / IDR regions (optional) ---
 disordered:
-  residues: [1-24, 150-165]   # native contacts removed for these residues
-  generic_scale: 0.03         # Level B, RECOMMENDED for a real IDP. 0 -> Level A: NO added
-                              #   attraction (masked pairs keep the non-native excluded-volume
-                              #   floor, ~0.000132 kcal/mol -- NOT zero energy)
-  cross_scale:   0.0          # disorder<->folded attraction (Level B); 0 = excl-vol only
+  residues: [1-24, 150-165]   # native contacts removed for these residues (only required key)
+  idr_scale: 0.03             # OPTIONAL, defaults to 0.03 if omitted. IDR-IDR attraction (the only
+                              #   knob). 0 = self-avoiding chain: masked pairs keep only the
+                              #   excluded-volume floor (~0.000132 kcal/mol -- NOT zero energy).
+                              # IDR-folded pairs are always excluded-volume only (no knob, §2.1).
 ```
 
-Level A vs B is expressed entirely in-file: `generic_scale == 0` → Level A;
-`generic_scale > 0` → Level B (with `cross_scale` optionally adding the disorder↔folded
-term).
+The IDR model is a single continuous knob: `idr_scale = 0` → self-avoiding chain;
+`idr_scale > 0` → weakly-collapsing IDR. IDR↔folded pairs are excluded-volume only. See the
+three-class table in §2.1.
 
-### 2.3 Algorithm (inside `build_nonbonded_interaction`)
+### 2.3 Algorithm — build folded, then `apply_disorder` transform
 
-**Ordering is critical** (three ordered phases). The masking runs before the non-native
-fill; the Level B overwrite runs **after** it. Getting this order wrong either loses the
-excluded volume or clobbers the attraction — see the two guard rails below.
-
-**Phase 1 — mask** (before the non-native fill loop; overrides any domain `nscale`):
+**`build_nonbonded_interaction` builds the normal fully-folded parameters exactly as today** —
+the pair matrices `rmin_matrix` (nm), `eps_ij` (kJ/mol), and the per-residue `rmin_2_nm` (nm,
+from `calculate_rmin_2_values`). Disorder is then a **single transform on those three outputs**,
+called at the very end (after the nm conversion, so everything is in nm). This keeps the folded
+build free of IDR logic and makes the transform independently testable. The model consumes only
+the *combined* pair matrices (plus the per-residue `rmin_2_nm` for CSP, §2.6), never the
+individual HB/BS/SS terms — so a pure output transform is sufficient.
 
 ```python
-# dis_res, generic_scale, cross_scale come from the `disordered:` section of domain_def
-if dis_res:                                                # empty/absent -> skip entirely
-    dis_idx = [resid_to_index[k] for k in resid_to_index if k[1] in dis_res]
-    m = np.zeros(n_residues, bool); m[dis_idx] = True
-    involves_dis = m[:, None] | m[None, :]                 # pair touches a disordered res
-    eps_ij[involves_dis] = 0.0                             # transient; refilled in Phase 2
-    binary_contact_matrix[involves_dis] = 0               # -> treated as non-native
+# Called at the end of build_nonbonded_interaction, only if the `disordered:` section is present.
+# Auxiliary inputs are already in local scope from the folded build:
+#   index_to_resname       -- from get_residue_mapping (per-AA Rmin_2 + resname lookup)
+#   ss_interaction_energy  -- the RAW per-pair BT matrix from get_ss_interaction_energy (line 934),
+#                             already = 4.184*|raw - 0.6| kJ/mol (abs + shift + units applied once)
+def apply_disorder(rmin_matrix, eps_ij, rmin_2_nm,      # the three folded outputs (nm, kJ/mol, nm)
+                   dis_idx, idr_scale,
+                   index_to_resname, ss_interaction_energy):
+    m = np.zeros(len(rmin_2_nm), bool); m[dis_idx] = True
+    involves_dis = m[:, None] | m[None, :]              # pair touches a disordered residue
+    dd           = m[:, None] & m[None, :]              # both residues disordered
+
+    # 1. IDR residues' radius -> transferable per-AA (K-B is meaningless for disordered coords).
+    #    Folded residues are left on their exact folded-run K-B value. This per-residue array
+    #    also feeds the NC<->ribosome excluded volume in CSP (§2.6), so overriding it here keeps
+    #    the intra-chain and NC<->ribosome excluded volume consistent for IDR beads.
+    rmin_2_nm[dis_idx] = [Rmin_2_perAA[index_to_resname[i]] for i in dis_idx]   # nm
+
+    # 2. every IDR-involving pair: drop the native contact -> reposition the well at the sum rule
+    #    of the (now-updated) per-residue radii. IDR-folded comes out per-AA + K-B automatically.
+    rmin_matrix[involves_dis] = (rmin_2_nm[:, None] + rmin_2_nm[None, :])[involves_dis]
+    eps_ij[involves_dis]      = NON_NATIVE_KJ           # excluded-volume floor (covers IDR-folded)
+
+    # 3. IDR-IDR only: the weak generic attraction, never below the floor.
+    eps_ij[dd] = np.maximum(NON_NATIVE_KJ, idr_scale * ss_interaction_energy[dd])
+    return rmin_matrix, eps_ij, rmin_2_nm
 ```
 
-**Phase 2 — existing non-native fill loop (UNCHANGED):** every `binary_contact_matrix[i,j]
-== 0` pair (which now includes all masked pairs) gets `eps_ij = NON_NATIVE_KJ` and
-`rmin = Rmin/2_i + Rmin/2_j`. **This is what makes `generic_scale = 0` safe:** the masked
-pairs come out of Phase 2 with the ~0.000132 kcal/mol excluded-volume floor, *not* zero.
+Three points make this correct and clean:
 
-**Phase 3 — Level B overwrite (only if `generic_scale > 0`, and only AFTER Phase 2):**
+- **No `Rmin_2_eff` intermediate.** The override is applied **in place to `rmin_2_nm`** — the
+  per-residue array the model and CSP actually consume — and `rmin_matrix` for IDR pairs is
+  rebuilt from it. IDR–IDR = per-AA+per-AA, IDR–folded = per-AA+K–B, folded–folded = K–B+K–B.
+- **Folded core exactly unchanged.** `calculate_rmin_2_values` runs on the **unmasked** structure
+  (as today), so every folded residue keeps its exact folded-run K–B radius — the mask cannot
+  perturb it, and arbitrary IDR input coordinates cannot leak into a folded residue's radius.
+  Only `involves_dis` entries of the matrices are overwritten; folded–folded entries are byte-
+  identical to a folded-only run.
+- **The `max(NON_NATIVE_KJ, …)` floor** makes `idr_scale = 0` (and any pair whose `ε_BT ≈ 0`
+  near the BT reference) safe: no pair drops below the excluded-volume floor, so the chain can
+  never pass through itself. One 12-10-6 well per pair — no added term.
 
-```python
-if dis_res and generic_scale > 0:
-    dd = m[:, None] & m[None, :]                           # both residues disordered
-    # for the dd pairs (and disorder<->folded pairs when cross_scale > 0):
-    #   eps_ij[pair]  = generic_scale * eps_BT[pair]       # nscale already in scaling_matrix
-    #   rmin_matrix[pair] = Rmin_2[i] + Rmin_2[j]          # per-AA model_parameters
-    # This REPLACES the Phase-2 floor for those specific pairs (one 12-10-6 per pair,
-    # not an added term). Optional safety: eps = max(NON_NATIVE_KJ, generic_scale*eps_BT)
-    # so Level B is never shallower than the floor.
-```
-
-> **Guard rail 1 — `generic_scale = 0` must NOT zero ε.** Never compute
-> `ε = generic_scale·ε_BT` for masked pairs *unconditionally*: at `generic_scale = 0` that
-> gives `ε = 0`, i.e. **no excluded volume — the chain would pass through itself.** The
-> floor must come from Phase 2; Phase 3 only *overwrites* it when `generic_scale > 0`.
->
-> **Guard rail 2 — Phase 3 after Phase 2.** If the Level B overwrite runs *before* the
-> non-native loop, Phase 2 (which fills every `binary_contact == 0` pair) clobbers it back
-> to the floor. Level B must be applied **after** Phase 2 (or set those pairs'
-> `binary_contact = 1` so Phase 2 skips them).
-
-> **Rmin/2 subtlety for Level A.** `calculate_rmin_2_values` derives each residue's
-> collision radius from the nearest **non-contact** Cα distance. Since masking *increases*
-> the number of non-contact pairs, it must run on the **post-mask**
-> `binary_contact_matrix` (already the case if masking precedes it). No extra work — just
-> ordering.
+> **Why the raw `ss_interaction_energy`, not `scaling_matrix`.** `nscale` lives in
+> `scaling_matrix` and is the per-domain LADDER stability factor (§2.1); the IDR well must not
+> inherit it, so the transform reads the *unscaled* BT matrix. Reusing `ss_interaction_energy`
+> (rather than re-reading `bt_potential.csv` and recomputing `(raw − 0.6)`) also preserves the
+> `abs()` — without it `(raw − 0.6)` goes negative for 394/400 pairs and flips the
+> hydrophobicity ordering — and the kcal→kJ ×4.184 factor.
 
 ### 2.4 What does *not* change (important)
 
@@ -313,16 +442,141 @@ if dis_res and generic_scale > 0:
   already the disordered-appropriate choice (§1).
 - OpenMM force construction (`addCustomNonBondedForce`): unchanged; it consumes the same
   two matrices.
-- Folded-only runs (no `disordered:` section): byte-for-byte identical to today.
+- The folded build inside `build_nonbonded_interaction`: unchanged — `apply_disorder` runs
+  *after* it and only rewrites IDR-involving entries.
+- Folded-only runs (no `disordered:` section): byte-for-byte identical to today (`apply_disorder`
+  is not called). Even *with* a `disordered:` section, folded–folded pairs and every folded
+  residue's K–B radius are untouched.
 
 ### 2.5 No new parameter file
 
-**Decided: reuse the existing `model_parameters[self.model]` per-AA `Rmin_2`** for the
-Level B well position (`R_ij = Rmin_2_i + Rmin_2_j`). No `rvdw.csv` is shipped. These
-transferable radii equal the Perl `%rvdw · 2^(1/6)` to ~1% (mean 0.85%, max 1.40%);
-topo's table is O'Brien's rounded ribosome `S<aa>` set (a few residues share a value,
-e.g. GLN/HIS/ILE/LEU/MET), but the difference is negligible for a sub-kT well. Level A
-needs no radii at all (it reuses the existing K–B excluded-volume term).
+**Decided: reuse the existing `model_parameters[self.model]` per-AA `Rmin_2`** as the IDR
+residues' override radius (`rmin_2_nm[dis_idx]`; the sum rule `R_ij = rmin_2_nm_i + rmin_2_nm_j`
+then combines pairs). No `rvdw.csv` is shipped. These transferable radii equal the Perl
+`%rvdw · 2^(1/6)` to ~1% (mean 0.85%, max 1.40%); topo's table is O'Brien's rounded ribosome
+`S<aa>` set (a few residues share a value, e.g. GLN/HIS/ILE/LEU/MET), but the difference is
+negligible for a sub-kT well. Folded residues need no new radii (they keep the existing K–B
+excluded-volume term).
+
+### 2.6 CSP / ribosome interaction (nascent-chain IDR)
+
+Continuous synthesis gets IDR support **for free** and stays consistent, because the whole
+feature rides the per-residue `rmin_2_nm` array that CSP already threads. The data path:
+
+```
+build_nonbonded_interaction(full_pdb, domain_def, return_rmin_2=True)   # apply_disorder runs here
+   -> rmin_2_full  (per-residue Rmin/2, nm; IDR residues already overridden to per-AA)
+precompute_contacts  returns rmin_2_full                                 (csp/core.py:391)
+   -> per length L:  nascent_rmin_2 = rmin_2_full[:L]                    (csp/core.py:442)
+   -> build_length_model: setParticlesRadii(nascent_rmin_2)             (csp/core.py:522)
+   -> the {nascent}x{ribosome} CustomNonbondedForce combines each nascent particle's Rmin/2
+      with each ribosome bead's Rmin/2 by the sum rule.
+```
+
+Because `apply_disorder` overrides `rmin_2_nm` (§2.3, operation 1) — **not** just the pair matrix —
+the same per-residue radius reaches **both** excluded-volume channels, so they cannot disagree:
+
+| Bead | Rmin/2 for excluded volume | Source |
+|--|--|--|
+| Ribosome bead | **per-AA transferable** | `Ribosome.Rmin_2_nm` (fixed scenery, unchanged) |
+| Nascent **folded** residue | **K–B structure-derived** | `calculate_rmin_2_values` (unchanged) |
+| Nascent **IDR** residue | **per-AA transferable** | `apply_disorder` override |
+
+So an IDR nascent bead meets the ribosome with **per-AA on both sides** — the correct convention
+(its K–B value is meaningless for disordered coordinates, and it matches the ribosome scenery).
+
+> **Requirement.** `apply_disorder` **must** override the per-residue `rmin_2_nm`, not only the
+> `rmin_matrix` pair block. Overriding only the pair matrix would give an IDR bead per-AA against
+> other nascent beads but K–B against the ribosome — an inconsistency. Overriding the array (and
+> rebuilding the pair block from it, §2.3) keeps both channels from one source.
+
+**Safety / independence:**
+
+- **No `disordered:` section → CSP byte-identical.** `precompute_contacts` passes `domain_def`
+  straight through (`csp/core.py:391`); `apply_disorder` is not called when the section is absent.
+- **The L24 free-loop path is independent.** `append_flexible_l24_loop` calls
+  `build_nonbonded_interaction(atomistic_pdb, return_rmin_2=True)` with **no** `domain_def`
+  (`ribosome.py:703`), so `apply_disorder` never fires there; that path keeps its own K–B radius
+  override for the freed *ribosomal-protein* loop (`ribosome.py:756-759`). No cross-contamination.
+  (An IDR *inside* a freed ribosomal loop would be a separate, future concern.)
+
+### 2.7 Native-contact analysis (Q) & the nscale optimizer
+
+topo has **two independent native-contact definitions**, and the IDR mask must reach **both**:
+
+| Path | Function | Consistent today? |
+|--|--|--|
+| **Energy** (the model) | `build_nonbonded_interaction` → `apply_disorder` (§2.3) | ✅ IDR contacts removed |
+| **Analysis (Q)** | `build_native_contacts` / `load_domains`, `topo/analysis/native_contacts.py` | ❌ built from the reference, mask-blind |
+
+The analysis path derives contacts purely from the all-atom reference (heavy-atom cutoff) and
+`load_domains` reads only `intra_domains` — it never sees `disordered:`. Left unfixed, Q counts
+IDR-involving native contacts that the energy function removed and that therefore **never form**,
+sitting permanently in the denominator and **deflating** `Q_protein` and any overlapping
+`Q_domain`. The nscale optimizer uses this Q as its `folded_fraction` stability metric, so with a
+`disordered:` section present it would never reach target and would drive `nscale` to the ceiling.
+
+**Rule (decided 2026-07-18): a pair touching *any* IDR residue is not a native contact.** The
+analysis and optimizer must apply the **same mask as the energy path** — exclude every native
+contact involving a disordered residue from `build_native_contacts` and from the optimizer's Q.
+`load_domains` / the Q driver read the `disordered:` section from the *same* `domain_def` (it is
+already the required `-d/--domain` input) and drop those pairs — the identical one-liner as the
+energy path ("drop pairs where either residue is in `dis_res`").
+
+**Two call sites reuse these functions**, so both get the fix once `native_contacts.py` is updated:
+the standalone Q driver (`native_contacts.main`) and the optimizer's `Scorer`
+(`topo/optimize/optimize.py`), which builds Q via `load_domains` + `build_native_contacts`.
+Concretely: `build_native_contacts` gains an optional `disorder=None` set (default = today's
+behavior, so other callers like `mirror.py` are byte-identical); `load_domains` returns the
+disorder set; and both `main` and `Scorer` pass it through. The optimizer's **energy** side needs
+no change — its `topo-mdrun` subprocess already builds through `build_nonbonded_interaction` and so
+gets `apply_disorder` for free.
+
+**Effective domain membership = domain residues − disordered residues.** Overlap is allowed for
+convenience (§2.2), but **in reality an overlapped residue is disordered only**. So `load_domains`
+also **subtracts** disordered residues from each domain's residue set, so a residue listed in both
+domain A and `disordered:` no longer contributes to `Q_A` (nor to any interface Q). This mirrors
+the energy path exactly, where "disorder wins" already makes such a residue disorder-only (§2.2).
+
+> **Worked example.** `intra_domains: {A: 1-100}` with `disordered: {residues: 40-50}` gives
+> **effective A = {1-39, 51-100}** — a discontinuous set but still **one domain with a hole**, not
+> two pieces. The optimizer calibrates `nscale_A` over all native contacts among {1-39, 51-100},
+> **including the cross-loop 1-39 ↔ 51-100 contacts** (both residues folded → retained), which are
+> exactly what holds the two halves together across the excised loop. Only pairs touching 40-50 are
+> dropped from Q / rescaled in energy (40-50↔40-50 → `idr_scale·ε_BT`; 40-50↔folded → excluded
+> volume). The loop stays tethered — the 39-40 and 50-51 backbone bonds remain — so A folds as one
+> unit joined by a flexible (non-Go) loop.
+
+**The optimizer must SEE the IDR — optimize in the production (IDR-present) condition.** Masking a
+region removes its native contacts, *including* any it made with the domain (interface / contiguous
+contacts) and the folded scaffold it provided, so **the domain is genuinely less stable when the
+IDR is present.** `nscale` must therefore be calibrated with the IDR active, not on the full fold.
+There are two *opposite* ways to get this wrong:
+
+| Optimizer setup | Energy | Q metric | `nscale` error | Domain at production |
+|--|--|--|--|--|
+| Folded-first (optimize with **no** `disordered:` section) | full Go — IDR region folds | full contacts | over-counts the IDR scaffold → **too low** | **under-stable** (may unfold) |
+| Q-blind (IDR masked in energy, but Q counts IDR contacts) | `apply_disorder` | counts IDR pairs | deflated Q → **too high** | **over-stabilized** |
+| **Correct** | `apply_disorder` | **excludes** IDR pairs (this §) | measures foldable core under production energy | **marginally stable** |
+
+So the required setup is: run the optimizer with the **`disordered:` section active** (energy via
+`apply_disorder`) **and** the **masked Q** above. The optimizer then observes the true, IDR-reduced
+stability of the foldable core and raises `nscale` to compensate for the contacts the IDR removed —
+neither under- nor over-shooting. The ladder `nscale` tunes only the **folded** domains; IDR
+residues use `idr_scale` (`nscale = 1`, decoupled) and are outside its scope. *(Folded-first is a
+valid shortcut only in the special case where the disordered region shares no native contacts with
+the optimized domain — but including the IDR is always the robust choice, so don't rely on it.)*
+
+**Net effect (two guarantees):**
+1. **Disorder does not block convergence.** With the masked Q, never-forming IDR contacts are out
+   of the denominator, so `Q` can reach target when the foldable core folds — no artificial cap.
+   *(If the core genuinely cannot fold without the IDR's contacts even at the ladder ceiling
+   `nscale = 2.5044`, the optimizer lands on the ceiling/fallback — a true physical result,
+   correctly reported, not a masking artifact.)*
+2. **Disorder is never scaled by `nscale`.** `apply_disorder` overwrites every pair touching a
+   disordered residue *after* domain scaling, so its `scaling_matrix` (`nscale`) factor is
+   discarded; the residue depends only on `idr_scale`. Varying `nscale` during the search has zero
+   effect on disordered residues — the search acts solely on the folded core.
 
 ---
 
@@ -330,40 +584,78 @@ needs no radii at all (it reuses the existing K–B excluded-volume term).
 
 1. **Regression (no-op):** a folded PDB with `disorder_def=None` and with an *empty*
    disorder list must produce identical `rmin_matrix` / `energy_matrix`. → `np.allclose`.
-2. **Contact removal (Level A):** mask an α-helix's residues; assert every native contact
-   (H-bond/BS/SS) touching a masked residue is gone from `energy_matrix`, and those pairs
-   now carry `NON_NATIVE_KJ`. Assert non-masked–non-masked contacts are unchanged.
-3. **Behavioural:** short MD (a small folded domain + a masked N-terminal tail). Confirm
+   Also assert **folded–folded pairs are untouched** even *with* a `disordered:` section
+   present (only IDR-involving pairs change).
+2. **Contact removal + self-avoiding (`idr_scale=0`):** mask an α-helix's residues; assert
+   every native contact (H-bond/BS/SS) touching a masked residue is gone from `energy_matrix`
+   and those pairs now carry `NON_NATIVE_KJ`. Assert non-masked–non-masked contacts are
+   unchanged, and that masked residues' overridden `rmin_2_nm` equals the per-AA
+   `model_parameters` value (not their K–B value), while folded residues' `rmin_2_nm` is
+   byte-identical to the folded-only run.
+3. **IDR–folded is excluded-only:** with `idr_scale>0`, assert every IDR–folded pair (exactly
+   one residue masked) carries exactly `NON_NATIVE_KJ` (no attraction leaks across the boundary)
+   at well position `rmin_2_nm[IDR] (per-AA) + rmin_2_nm[folded] (K–B)`.
+4. **Behavioural:** short MD (a small folded domain + a masked N-terminal tail). Confirm
    energies finite, the tail's radius of gyration expands relative to the fully-Go run,
    and the folded core RMSD stays low. Use the Tutorial-13 short-debug pattern.
-4. **Level B parity (optional):** build a fully-`GENERIC-bt` chain in the Perl and the
-   same chain fully-masked with `generic_scale=0.03` in topo; compare the per-pair
-   ε and Rmin tables (expect match up to unit conventions).
+5. **ε construction (unit test):** for a chain with a masked region and `idr_scale=0.03`,
+   assert `energy_matrix[i,j] == max(NON_NATIVE_KJ, idr_scale·ss_interaction_energy[i,j])`
+   for IDR–IDR pairs, and the raw BT identity `ss_interaction_energy == 4.184·|raw−0.6|` from
+   `bt_potential.csv` — with **no** `scaling_matrix`/`nscale` factor (the `nscale=1` decoupling,
+   §2.1). A Perl `GENERIC-bt` comparison is *not* bit-exact: O'Brien's `0.03·nscal·ε_BT` carries
+   his global `nscal`, deliberately dropped here — the per-pair *shape* (which pairs are deepest)
+   should match, but absolute depths differ by his `nscal`.
+6. **Floor guard (`idr_scale=0`):** assert every masked pair still carries exactly
+   `NON_NATIVE_KJ` (excluded volume preserved — the chain cannot pass through itself).
+7. **CSP consistency (§2.6):** with a nascent-chain IDR, assert the per-residue `rmin_2_full`
+   returned by `precompute_contacts` has per-AA values at IDR indices and K–B elsewhere, and
+   that the value fed to `setParticlesRadii` (NC↔ribosome channel) matches the radius used in
+   the NC↔NC pair matrix for the same residue. Regression: with **no** `disordered:` section,
+   a CSP contact build is byte-identical to today.
+8. **Overlap precedence (§2.2):** define a domain with `nscale ≠ 1` and a `disordered:` range
+   that overlaps it. Assert every pair touching an overlapped residue is governed by the disorder
+   rules (`NON_NATIVE` or `idr_scale·ε_BT`), i.e. **identical** to a run where the same
+   residues are disordered but *not* in any domain — the domain `nscale` has no effect on them.
+   Non-overlapped domain residues keep their scaled contacts.
+9. **Default `idr_scale` (§2.2):** a `disordered:` section with `residues:` but **no** `idr_scale`
+   key must produce `energy_matrix` / `rmin_matrix` identical to the same file with an explicit
+   `idr_scale: 0.03`. → `np.allclose`.
+10. **Q analysis excludes IDR contacts (§2.7):** with a `disordered:` section in `domain_def`,
+    assert `build_native_contacts` yields **no** pair touching a disordered residue (in
+    `Q_protein`, any `Q_domain`, and interfaces), and that a residue listed in both a domain and
+    `disordered:` is **absent** from that domain's Q set (effective membership = domain − disorder).
+    Regression: with no `disordered:` section, the native-contact lists are byte-identical to today.
 
 ---
 
 ## 4. Open questions for the user
 
-1. ~~**Level A vs B default.**~~ **RESOLVED (2026-07-18): Level B is the default for a real
-   IDP** (`generic_scale = 0.03`); Level A is for flexible linkers / strongly-expanded IDPs
-   / a minimal reference. Rationale in §2.1 ("Which level for which use case"). Build order
-   may still start with A's masking (A ⊂ B), but B is the recommended run mode.
-2. **Excluded-volume radius source for masked residues (RECOMMENDED, not yet locked).**
-   Today Level A leaves masked residues on the **structure-derived K–B** `Rmin/2` (from the
-   arbitrary IDR input coordinates), while Level B's attractive well uses the **per-AA
-   `model_parameters` `Rmin_2`**. Recommendation: give masked residues the per-AA `Rmin_2`
-   for excluded volume in **both** levels — it is conformation-independent (K–B is
-   meaningless for a disordered chain) and makes A and B differ **only in well depth ε**.
-   Trade-off: masked residues then use a different radius *source* than the folded chain
-   (per-AA vs K–B), which is intentional. Confirm at implementation.
-3. **Disorder↔folded interactions.** When a masked tail passes near the folded core,
-   should it feel (i) only excluded volume (Level A), or (ii) the weak generic attraction
-   (Level B `cross_scale > 0`)? O'Brien's `interact_scale` is the analog.
-4. **Input geometry.** Masking a region of a *folded* PDB keeps that region's native
-   (folded) starting coordinates. If you want a genuinely extended IDR start, we should
-   also generate an extended-chain segment for those residues (analog of the Perl
-   `create_unstructured_pdb.pl`). Is an extended-start needed, or is masking-in-place
-   enough for the intended use?
-5. **Scope.** The `disordered:` section is one flat residue set per system (this spec).
-   Do you need per-chain masks (e.g. residue 1-24 of chain A only)? If so, the `residues:`
-   entries would need chain-qualified keys; otherwise a bare residue list is enough.
+1. ~~**Level A vs B default.**~~ **RESOLVED (2026-07-18): one model, one knob.** `idr_scale
+   = 0.03` (weakly-collapsing) is the default for a real IDP; `idr_scale = 0` (self-avoiding)
+   is for flexible linkers / strongly-expanded IDPs / a minimal reference. There are no longer
+   two "levels" — see the three-class table in §2.1.
+2. ~~**Excluded-volume radius source for masked residues.**~~ **RESOLVED (2026-07-18): per-AA
+   for IDR residues, K–B for folded.** `apply_disorder` overrides the per-residue `rmin_2_nm`
+   array in place (§2.3): IDR residues take the conformation-independent per-AA `model_parameters`
+   `Rmin_2` (K–B is meaningless for disordered coords); folded residues keep their K–B value
+   regardless of partner. Intentional mixed radius *source*; the folded core is exactly unchanged,
+   and the same array keeps NC↔NC and NC↔ribosome excluded volume consistent (§2.6).
+3. ~~**Disorder↔folded interactions.**~~ **RESOLVED (2026-07-18): excluded-volume only, no knob.**
+   IDR–folded pairs are plain non-native (steric), reproducing O'Brien's `interact_scale`-undefined
+   default (§1.4). No `cross_scale` is implemented — the current use case defines IDR–folded as
+   steric-only, and an always-zero knob is unrequested surface. Transient/fuzzy IDR↔core attraction
+   is a documented one-line **extension point** (§2.1) — the `interact_scale` analog — to add only
+   if a study needs it.
+4. ~~**Input geometry.**~~ **RESOLVED (2026-07-18): mask a single folded structure in place — no
+   extended-chain segment needed.** The equilibrium IDR ensemble is set by the *potential* (no
+   native contacts + flexible transferable backbone + `idr_scale` attraction), **not** by the
+   starting coordinates. With its native contacts removed, the region is no longer held in the
+   folded conformation and relaxes toward the disordered ensemble, forgetting its folded start; the
+   initial relaxation is discarded in the analysis step, as is routine for any MD run. So **no
+   `create_unstructured_pdb.pl` analog is required.** (Moot for CSP anyway: the nascent chain's
+   simulated coordinates come from the seeding scheme (`cold_start_positions`), not from folded PDB
+   coordinates — see `write_subset_structure`.)
+5. ~~**Scope.**~~ **RESOLVED (2026-07-18): single-chain only — a bare residue list, no chain
+   qualifier.** The `disordered:` section is one flat residue set per system (`residues:` reuses
+   `parse_residue_list`). Chain-qualified keys (e.g. "1-24 of chain A only") are a future extension
+   if multi-chain masking is ever needed; not implemented now.
