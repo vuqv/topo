@@ -20,8 +20,9 @@ mechanisms:
    **topo already applies all of this globally** — so an IDR in topo needs nothing extra
    here.
 2. **`GENERIC` non-bonded potential** — the segment gets **no STRIDE and no native/Go
-   contacts**; instead every non-local pair gets a **weak, uniform, non-specific**
-   attraction, with excluded volume from `2·rvdw`.
+   contacts**; instead every non-local pair gets a **weak, non-specific** attraction
+   (`0.3·nscal·ε_BT(i,j)` — the depth still varies by residue-pair type), with excluded
+   volume from `2·rvdw`.
 
 Because topo already supplies the generic backbone and self-avoidance, **the whole IDR
 feature reduces to per-residue contact masking inside `build_nonbonded_interaction`**
@@ -68,10 +69,10 @@ a structured segment to a disordered one *in the real config*, **only `pot` chan
 |--|--|--|
 | STRIDE / H-bonds | run; native H-bonds | **skipped** (line 1121) |
 | Native SS / BS contacts | built from structure | **none** (line 1028) |
-| Non-local pair interaction | Go wells at native Cα distance | **weak uniform** attraction (below) |
+| Non-local pair interaction | Go wells at native Cα distance | **weak, non-specific** attraction on *every* pair (below) |
 | Excluded volume | K–B nearest-neighbour | `2·rvdw(resname)` (line 1638) |
 
-The weak uniform attraction, written to `NBFIX` for every non-local pair |i−j| ≥ 3
+The weak attraction, written to `NBFIX` for every non-local pair |i−j| ≥ 3
 (lines 1866–1874, `casm = 0` branch):
 
 ```
@@ -79,7 +80,10 @@ The weak uniform attraction, written to `NBFIX` for every non-local pair |i−j|
 r_ij  = rvdw(res_i) + rvdw(res_j)            # sum of side-chain vdW radii
 ```
 
-i.e. a shallow, **non-specific** attraction between all residues in the segment — a weakly
+It is **non-specific in coverage** (it acts on *every* non-local pair, not just native
+contacts) with a **uniform 0.3·nscal prefactor**, but its **depth is pair-type dependent**
+via `ε_BT(res_i, res_j)` — so the well is chemically heterogeneous, not the same for all
+pairs. Physically: a weak, sequence-modulated, non-fold-encoding attraction — a weakly
 collapsing self-avoiding chain, *not* a Go fold. The `%rvdw` side-chain vdW-radii table
 (Perl lines 720–745) is the only extra parameter it needs; it is **not currently shipped in
 topo**.
@@ -115,7 +119,7 @@ vs `G<n>` (structured) (lines 1229–1235); cross-segment interactions optionall
   baseline, and *zero* new parameters.
 
 - **Level B — weakly-collapsing IDR (O'Brien `generic-bt` parity).** In addition to A,
-  add the shallow uniform attraction `ε = 0.3·nscale·ε_BT(i,j)` at `r = rvdw_i + rvdw_j`
+  add the shallow, pair-type-dependent attraction `ε = 0.3·nscale·ε_BT(i,j)` at `r = rvdw_i + rvdw_j`
   for pairs where **both** residues are in the disorder mask (and, optionally, for
   disorder↔folded cross pairs via a separate scale). Requires shipping the `%rvdw` table.
 
@@ -199,7 +203,7 @@ if dis_res:                                                # empty/absent -> ski
     eps_ij[involves_dis] = 0.0
     binary_contact_matrix[involves_dis] = 0                # -> non-native / excluded-vol
 
-    # Level B (generic_scale > 0): shallow uniform attraction.
+    # Level B (generic_scale > 0): shallow attraction, depth = generic_scale * eps_BT(i,j).
     if generic_scale > 0:
         dd = m[:, None] & m[None, :]                       # both disordered
         # + optional disorder<->folded term when cross_scale > 0
