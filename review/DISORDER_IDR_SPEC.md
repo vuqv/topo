@@ -22,7 +22,7 @@ mechanisms:
 2. **`GENERIC` non-bonded potential** — the segment gets **no STRIDE and no native/Go
    contacts**; instead every non-local pair gets a **weak, non-specific** attraction
    (`0.03·nscal·ε_BT(i,j)` — the depth still varies by residue-pair type), with excluded
-   volume from `2·rvdw`.
+   volume via the 12-10-6 sum rule `Rmin/2(i) + Rmin/2(j)`.
 
 Because topo already supplies the generic backbone and self-avoidance, **the whole IDR
 feature reduces to per-residue contact masking inside `build_nonbonded_interaction`**
@@ -70,30 +70,37 @@ a structured segment to a disordered one *in the real config*, **only `pot` chan
 | STRIDE / H-bonds | run; native H-bonds | **skipped** (line 1121) |
 | Native SS / BS contacts | built from structure | **none** (line 1028) |
 | Non-local pair interaction | Go wells at native Cα distance | **weak, non-specific** attraction on *every* pair (below) |
-| Excluded volume | K–B nearest-neighbour | `2·rvdw(resname)` (line 1638) |
+| Excluded volume (non-native repulsion) | per-atom `Rmin/2 = (K–B nearest non-contact)·2^(1/6)/2` | per-atom `Rmin/2 = rvdw·2^(1/6)` (from `sigmin = 2·rvdw`, L1638→L1697) |
 
-The weak attraction, written to `NBFIX` for every non-local pair |i−j| ≥ 3
-(lines 1866–1874, `casm = 0` branch):
+The nonbonded potential is **12-10-6** (O'Brien's custom CHARMM), and CHARMM combines the
+per-atom half-radii by the **sum rule**, so the excluded-volume *pair* distance is
+`R_ij = Rmin/2(i) + Rmin/2(j)` in **both** columns (the `2·rvdw` at L1638 is a per-atom
+`sigmin`, never the pair distance). eps for this term = 0.000132 kcal/mol.
+
+The weak attraction is a separate `NBFIX` override, written for every non-local pair
+|i−j| ≥ 3 (lines 1866–1874, `casm = 0` branch):
 
 ```
-ε_ij  = (0.3 / 10) · ε_BT(res_i, res_j)      # = 0.03 · nscal · ε_BT  (nscal is inside eps)
-r_ij  = rvdw(res_i) + rvdw(res_j)            # sum of side-chain vdW radii
+ε_ij  = 0.03 · nscal · ε_BT(res_i, res_j)    # 3% of a native contact of the same pair
+R_ij  = rvdw(res_i) + rvdw(res_j)            # attractive-well position (NOTE: no 2^(1/6))
 ```
 
-> **Effective factor is 0.03, not 0.3.** The literal prefactor is `0.3/10 = 0.03`. A
-> **native** SS contact of the same residue pair is written as `ε_BT` with *no* prefactor
-> (line 1762), so a generic pair attracts at **3% of a native contact**, not 30%. The
-> author's comment (line 104) says "0.3*nscal" but the code applies the extra `/10`. When
-> porting to topo, **match the code: use 0.03.** The `/10` is not a unit conversion (both
-> NBFIX entries are kcal/mol) — it is a genuine, generic-term-only 10× weakening.
+Note the two distances differ: the excluded-volume repulsion uses `Rmin/2(i)+Rmin/2(j) =
+2^(1/6)·(rvdw_i+rvdw_j)`, while this attractive NBFIX well sits at `rvdw_i+rvdw_j` (no
+2^(1/6)) — slightly inside the pure excluded-volume minimum.
+
+> **Strength = 0.03.** A **native** SS contact of the same residue pair has depth
+> `nscal·ε_BT` (line 1762), so a generic pair attracts at **3% of a native contact**. Use
+> `0.03` when porting to topo.
 
 It is **non-specific in coverage** (it acts on *every* non-local pair, not just native
 contacts) with a **uniform 0.03·nscal prefactor**, but its **depth is pair-type dependent**
 via `ε_BT(res_i, res_j)` — so the well is chemically heterogeneous, not the same for all
 pairs. Physically: a weak, sequence-modulated, non-fold-encoding attraction — a weakly
-collapsing self-avoiding chain, *not* a Go fold. The `%rvdw` side-chain vdW-radii table
-(Perl lines 720–745) is the only extra parameter it needs; it is **not currently shipped in
-topo**.
+collapsing self-avoiding chain, *not* a Go fold. In the original this uses the `%rvdw`
+table (Perl lines 720–745) for the well position; the topo port instead reuses the
+existing per-AA `Rmin_2` radii (equal to `rvdw·2^(1/6)` within ~1%), so **no new
+parameter file is needed** — see §2.1 / §2.5.
 
 ### 1.3 Region granularity
 
@@ -119,20 +126,69 @@ vs `G<n>` (structured) (lines 1229–1235); cross-segment interactions optionall
 
 ### 2.1 Two levels (pick per study)
 
-- **Level A — self-avoiding IDR (recommended default).** For any residue in the disorder
-  mask, **drop all native contacts** (H-bond, BS, SS) in which it participates; those
-  pairs fall back to the existing non-native repulsive/excluded-volume term. Result: a
-  generic self-avoiding chain with transferable backbone — the cleanest "no fold"
-  baseline, and *zero* new parameters.
+- **Level A — self-avoiding IDR.** For any residue in the disorder mask, **drop all native
+  contacts** (H-bond, BS, SS) in which it participates; those pairs fall back to the
+  existing non-native repulsive/excluded-volume term (well depth `NON_NATIVE ≈ 0.000132
+  kcal/mol` — a negligible, *non-zero* floor; essentially pure steric repulsion). Result: a
+  generic self-avoiding chain with transferable backbone — the cleanest "no fold" baseline,
+  and *zero* new parameters.
 
-- **Level B — weakly-collapsing IDR (O'Brien `generic-bt` parity).** In addition to A,
-  add the shallow, pair-type-dependent attraction `ε = generic_scale·nscale·ε_BT(i,j)` at
-  `r = rvdw_i + rvdw_j` for pairs where **both** residues are in the disorder mask (and,
-  optionally, for disorder↔folded cross pairs via `cross_scale`). **O'Brien parity =
-  `generic_scale = 0.03`** (the effective code factor `0.3/10`; see §1.2 — the "0.3" in
-  his comment omits the `/10`). `generic_scale` is defined as the true depth ratio to a
-  native contact of the same pair, so 0.03 reads as "3% of a native contact." Requires
-  shipping the `%rvdw` table.
+- **Level B — weakly-collapsing IDR (O'Brien `generic-bt`, energy parity).** In addition
+  to A, add the shallow, pair-type-dependent attraction between masked residues (and,
+  optionally, disorder↔folded cross pairs via `cross_scale`):
+
+  ```
+  ε_ij = generic_scale · nscale · ε_BT(i,j)        # kJ/mol;  generic_scale = 0.03 for O'Brien
+  R_ij = Rmin_2[type_i] + Rmin_2[type_j]           # nm;  per-AA, from model_parameters
+  ```
+
+  `generic_scale` is the depth ratio to a native contact of the same pair, so **0.03**
+  reads as "3% of a native contact." Two **design decisions** (2026-07-18):
+
+  1. **Well position uses the Rmin/2 sum rule** `Rmin_2_i + Rmin_2_j`, *not* O'Brien's
+     `rvdw_i + rvdw_j`. This makes the attractive well consistent with the excluded-volume
+     term (same Rmin/2 convention) and fixes O'Brien's missing-`2^(1/6)` inconsistency
+     (see §1.2); the well sits ~12% further out — a deliberate, accepted deviation.
+  2. **Reuse the existing `model_parameters` per-AA `Rmin_2`** (the transferable radii) —
+     **no `rvdw.csv` to ship.** These equal `rvdw·2^(1/6)` to ~1% (mean 0.85%, max 1.40%),
+     a negligible difference for a sub-kT well.
+
+  So Level B is **energy-parity** with `generic-bt` (`0.03·nscale·ε_BT`) but uses topo's
+  consistent Rmin/2 well position rather than O'Brien's `rvdw` sum.
+
+#### Which level for which use case — **Level B is the recommended default for a real IDP**
+
+Decided (2026-07-18): for modelling an actual intrinsically disordered protein/region,
+**use Level B.** The reasoning:
+
+- **Flexibility is *not* a reason to prefer A.** Both levels share the identical flexible
+  backbone, and Level B's attraction is **sub-kT (~0.03 RT/pair) and non-specific**, so it
+  cannot lock in a fold or a persistent contact. B samples the same broad, flexible
+  ensemble as A — it only *reweights* it toward more compact configurations. An IDP is
+  flexible because it has **no stable fold**, not because it has **no interactions**; B
+  captures exactly that (no fold, but realistic transient contacts).
+- **Real IDPs are more compact than a self-avoiding walk.** SAXS/smFRET place most IDPs at
+  scaling exponent ν ≈ 0.5–0.55 (between theta and good solvent), vs ν ≈ 0.588 for a pure
+  self-avoiding chain. **Level A (pure excluded volume) systematically over-expands** a
+  typical IDP; Level B's weak `0.03·ε_BT` attraction pulls the ensemble into the observed
+  window without folding it. (This is what O'Brien's `generic-bt` was calibrated for.)
+- **topo's always-on Yukawa makes B the balanced model.** Charged IDPs already get
+  Debye–Hückel charge–charge repulsion (expansion). The physical picture is *repulsion
+  (electrostatics) balanced by weak attraction (hydrophobic/transient)* = **B + Yukawa**;
+  A + Yukawa keeps only the repulsive half and biases further toward over-expansion.
+
+**When Level A is the better call instead:** a disordered **linker** whose role is reach /
+entropic tethering between folded domains (compaction not the observable); a **strongly
+charged / highly expanded** IDP that genuinely approaches self-avoiding-walk statistics; or
+a deliberately minimal, assumption-free reference ensemble.
+
+**Calibration.** `generic_scale = 0.03` (O'Brien) is a sensible starting point but is
+tunable — if SAXS/smFRET Rg or ν is available for the target sequence, calibrate
+`generic_scale` to match it.
+
+*(Implementation note: Level A is a strict subset of B — B = A's contact removal + the
+attractive well — so building A's masking first and then adding B's well is a natural build
+order, even though B is the recommended run mode for IDPs.)*
 
 > **Why masking (not a `nscale = 0` domain) is the right lever.** The existing
 > `domain.yaml` scaling multiplies **only the SS energy** (`scaling_matrix * ss_*`).
@@ -189,7 +245,9 @@ inter_domains:
 # --- disordered / IDR regions (optional) ---
 disordered:
   residues: [1-24, 150-165]   # native contacts removed for these residues
-  generic_scale: 0.0          # 0 = Level A (self-avoiding); O'Brien parity = 0.03 (x nscale x eps_BT)
+  generic_scale: 0.03         # Level B, RECOMMENDED for a real IDP. 0 -> Level A: NO added
+                              #   attraction (masked pairs keep the non-native excluded-volume
+                              #   floor, ~0.000132 kcal/mol -- NOT zero energy)
   cross_scale:   0.0          # disorder<->folded attraction (Level B); 0 = excl-vol only
 ```
 
@@ -199,9 +257,11 @@ term).
 
 ### 2.3 Algorithm (inside `build_nonbonded_interaction`)
 
-After the existing `eps_ij` / `binary_contact_matrix` are assembled (with domain scaling
-already applied) and **before** the non-native fill loop — so the mask overrides any
-domain `nscale`:
+**Ordering is critical** (three ordered phases). The masking runs before the non-native
+fill; the Level B overwrite runs **after** it. Getting this order wrong either loses the
+excluded volume or clobbers the attraction — see the two guard rails below.
+
+**Phase 1 — mask** (before the non-native fill loop; overrides any domain `nscale`):
 
 ```python
 # dis_res, generic_scale, cross_scale come from the `disordered:` section of domain_def
@@ -209,21 +269,37 @@ if dis_res:                                                # empty/absent -> ski
     dis_idx = [resid_to_index[k] for k in resid_to_index if k[1] in dis_res]
     m = np.zeros(n_residues, bool); m[dis_idx] = True
     involves_dis = m[:, None] | m[None, :]                 # pair touches a disordered res
-
-    # Level A: remove native contacts touching any disordered residue.
-    eps_ij[involves_dis] = 0.0
-    binary_contact_matrix[involves_dis] = 0                # -> non-native / excluded-vol
-
-    # Level B (generic_scale > 0): shallow attraction, depth = generic_scale * eps_BT(i,j).
-    if generic_scale > 0:
-        dd = m[:, None] & m[None, :]                       # both disordered
-        # + optional disorder<->folded term when cross_scale > 0
-        # eps set to generic_scale * eps_BT; rmin set to rvdw_i + rvdw_j (needs %rvdw table)
+    eps_ij[involves_dis] = 0.0                             # transient; refilled in Phase 2
+    binary_contact_matrix[involves_dis] = 0               # -> treated as non-native
 ```
 
-The subsequent non-native loop (`binary_contact_matrix[i,j] == 0 → NON_NATIVE_KJ`,
-sum-rule Rmin) then automatically handles every de-contacted pair for Level A. Level B
-overwrites those specific entries with the weak well afterwards.
+**Phase 2 — existing non-native fill loop (UNCHANGED):** every `binary_contact_matrix[i,j]
+== 0` pair (which now includes all masked pairs) gets `eps_ij = NON_NATIVE_KJ` and
+`rmin = Rmin/2_i + Rmin/2_j`. **This is what makes `generic_scale = 0` safe:** the masked
+pairs come out of Phase 2 with the ~0.000132 kcal/mol excluded-volume floor, *not* zero.
+
+**Phase 3 — Level B overwrite (only if `generic_scale > 0`, and only AFTER Phase 2):**
+
+```python
+if dis_res and generic_scale > 0:
+    dd = m[:, None] & m[None, :]                           # both residues disordered
+    # for the dd pairs (and disorder<->folded pairs when cross_scale > 0):
+    #   eps_ij[pair]  = generic_scale * eps_BT[pair]       # nscale already in scaling_matrix
+    #   rmin_matrix[pair] = Rmin_2[i] + Rmin_2[j]          # per-AA model_parameters
+    # This REPLACES the Phase-2 floor for those specific pairs (one 12-10-6 per pair,
+    # not an added term). Optional safety: eps = max(NON_NATIVE_KJ, generic_scale*eps_BT)
+    # so Level B is never shallower than the floor.
+```
+
+> **Guard rail 1 — `generic_scale = 0` must NOT zero ε.** Never compute
+> `ε = generic_scale·ε_BT` for masked pairs *unconditionally*: at `generic_scale = 0` that
+> gives `ε = 0`, i.e. **no excluded volume — the chain would pass through itself.** The
+> floor must come from Phase 2; Phase 3 only *overwrites* it when `generic_scale > 0`.
+>
+> **Guard rail 2 — Phase 3 after Phase 2.** If the Level B overwrite runs *before* the
+> non-native loop, Phase 2 (which fills every `binary_contact == 0` pair) clobbers it back
+> to the floor. Level B must be applied **after** Phase 2 (or set those pairs'
+> `binary_contact = 1` so Phase 2 skips them).
 
 > **Rmin/2 subtlety for Level A.** `calculate_rmin_2_values` derives each residue's
 > collision radius from the nearest **non-contact** Cα distance. Since masking *increases*
@@ -239,10 +315,14 @@ overwrites those specific entries with the weak well afterwards.
   two matrices.
 - Folded-only runs (no `disordered:` section): byte-for-byte identical to today.
 
-### 2.5 New parameter to ship (Level B only)
+### 2.5 No new parameter file
 
-Add `topo/parameters/data/rvdw.csv` = the Perl `%rvdw` table (21 rows, Å). Loaded like
-`bt_potential.csv` (path-resolved under `parameters/data/`). Not needed for Level A.
+**Decided: reuse the existing `model_parameters[self.model]` per-AA `Rmin_2`** for the
+Level B well position (`R_ij = Rmin_2_i + Rmin_2_j`). No `rvdw.csv` is shipped. These
+transferable radii equal the Perl `%rvdw · 2^(1/6)` to ~1% (mean 0.85%, max 1.40%);
+topo's table is O'Brien's rounded ribosome `S<aa>` set (a few residues share a value,
+e.g. GLN/HIS/ILE/LEU/MET), but the difference is negligible for a sub-kT well. Level A
+needs no radii at all (it reuses the existing K–B excluded-volume term).
 
 ---
 
@@ -257,25 +337,33 @@ Add `topo/parameters/data/rvdw.csv` = the Perl `%rvdw` table (21 rows, Å). Load
    energies finite, the tail's radius of gyration expands relative to the fully-Go run,
    and the folded core RMSD stays low. Use the Tutorial-13 short-debug pattern.
 4. **Level B parity (optional):** build a fully-`GENERIC-bt` chain in the Perl and the
-   same chain fully-masked with `generic_attraction=yes` in topo; compare the per-pair
-   ε and Rmin tables (expect match up to the CHARMM `/10` and unit conventions).
+   same chain fully-masked with `generic_scale=0.03` in topo; compare the per-pair
+   ε and Rmin tables (expect match up to unit conventions).
 
 ---
 
 ## 4. Open questions for the user
 
-1. **Level A vs B default.** Is the intended IDR a *self-avoiding* chain (Level A, no new
-   params) or a *weakly-collapsing* chain (Level B, needs `%rvdw` + generic attraction)?
-   Recommendation: ship **Level A** first (small, parameter-free), add B behind the
-   `generic_attraction` toggle if a study needs collapse.
-2. **Disorder↔folded interactions.** When a masked tail passes near the folded core,
+1. ~~**Level A vs B default.**~~ **RESOLVED (2026-07-18): Level B is the default for a real
+   IDP** (`generic_scale = 0.03`); Level A is for flexible linkers / strongly-expanded IDPs
+   / a minimal reference. Rationale in §2.1 ("Which level for which use case"). Build order
+   may still start with A's masking (A ⊂ B), but B is the recommended run mode.
+2. **Excluded-volume radius source for masked residues (RECOMMENDED, not yet locked).**
+   Today Level A leaves masked residues on the **structure-derived K–B** `Rmin/2` (from the
+   arbitrary IDR input coordinates), while Level B's attractive well uses the **per-AA
+   `model_parameters` `Rmin_2`**. Recommendation: give masked residues the per-AA `Rmin_2`
+   for excluded volume in **both** levels — it is conformation-independent (K–B is
+   meaningless for a disordered chain) and makes A and B differ **only in well depth ε**.
+   Trade-off: masked residues then use a different radius *source* than the folded chain
+   (per-AA vs K–B), which is intentional. Confirm at implementation.
+3. **Disorder↔folded interactions.** When a masked tail passes near the folded core,
    should it feel (i) only excluded volume (Level A), or (ii) the weak generic attraction
    (Level B `cross_scale > 0`)? O'Brien's `interact_scale` is the analog.
-3. **Input geometry.** Masking a region of a *folded* PDB keeps that region's native
+4. **Input geometry.** Masking a region of a *folded* PDB keeps that region's native
    (folded) starting coordinates. If you want a genuinely extended IDR start, we should
    also generate an extended-chain segment for those residues (analog of the Perl
    `create_unstructured_pdb.pl`). Is an extended-start needed, or is masking-in-place
    enough for the intended use?
-4. **Scope.** The `disordered:` section is one flat residue set per system (this spec).
+5. **Scope.** The `disordered:` section is one flat residue set per system (this spec).
    Do you need per-chain masks (e.g. residue 1-24 of chain A only)? If so, the `residues:`
    entries would need chain-qualified keys; otherwise a bare residue list is enough.
