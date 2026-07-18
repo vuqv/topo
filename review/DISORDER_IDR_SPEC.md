@@ -95,6 +95,12 @@ parameter needed for (b); it is **not currently shipped in topo**.
 
 ### 2.2 API / plumbing — one file, no new knobs
 
+> **Naming note (deferred).** The key/arg stays `domain_def` for now. Once the file also
+> carries a `disordered:` section it is really a *protein-architecture* definition (folded
+> domains + interfaces + disordered regions), so a clearer name (evoking the protein's
+> architecture/layout) is planned — to be decided later. `domain_def` will be kept as a
+> deprecated alias when that rename happens, so nothing here breaks.
+
 Disorder is defined as an **optional `disordered:` section inside the existing
 `domain_def` YAML** — *not* a separate file or argument. `domain_def` is already threaded
 end-to-end (INI key → config dataclass → `buildCoarseGrainModel` →
