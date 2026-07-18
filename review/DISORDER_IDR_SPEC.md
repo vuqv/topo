@@ -21,7 +21,7 @@ mechanisms:
    here.
 2. **`GENERIC` non-bonded potential** — the segment gets **no STRIDE and no native/Go
    contacts**; instead every non-local pair gets a **weak, non-specific** attraction
-   (`0.3·nscal·ε_BT(i,j)` — the depth still varies by residue-pair type), with excluded
+   (`0.03·nscal·ε_BT(i,j)` — the depth still varies by residue-pair type), with excluded
    volume from `2·rvdw`.
 
 Because topo already supplies the generic backbone and self-avoidance, **the whole IDR
@@ -76,12 +76,19 @@ The weak attraction, written to `NBFIX` for every non-local pair |i−j| ≥ 3
 (lines 1866–1874, `casm = 0` branch):
 
 ```
-ε_ij  = (0.3 / 10) · ε_BT(res_i, res_j)      # = 0.3·nscal scaled, /10 CHARMM factor
+ε_ij  = (0.3 / 10) · ε_BT(res_i, res_j)      # = 0.03 · nscal · ε_BT  (nscal is inside eps)
 r_ij  = rvdw(res_i) + rvdw(res_j)            # sum of side-chain vdW radii
 ```
 
+> **Effective factor is 0.03, not 0.3.** The literal prefactor is `0.3/10 = 0.03`. A
+> **native** SS contact of the same residue pair is written as `ε_BT` with *no* prefactor
+> (line 1762), so a generic pair attracts at **3% of a native contact**, not 30%. The
+> author's comment (line 104) says "0.3*nscal" but the code applies the extra `/10`. When
+> porting to topo, **match the code: use 0.03.** The `/10` is not a unit conversion (both
+> NBFIX entries are kcal/mol) — it is a genuine, generic-term-only 10× weakening.
+
 It is **non-specific in coverage** (it acts on *every* non-local pair, not just native
-contacts) with a **uniform 0.3·nscal prefactor**, but its **depth is pair-type dependent**
+contacts) with a **uniform 0.03·nscal prefactor**, but its **depth is pair-type dependent**
 via `ε_BT(res_i, res_j)` — so the well is chemically heterogeneous, not the same for all
 pairs. Physically: a weak, sequence-modulated, non-fold-encoding attraction — a weakly
 collapsing self-avoiding chain, *not* a Go fold. The `%rvdw` side-chain vdW-radii table
@@ -119,9 +126,13 @@ vs `G<n>` (structured) (lines 1229–1235); cross-segment interactions optionall
   baseline, and *zero* new parameters.
 
 - **Level B — weakly-collapsing IDR (O'Brien `generic-bt` parity).** In addition to A,
-  add the shallow, pair-type-dependent attraction `ε = 0.3·nscale·ε_BT(i,j)` at `r = rvdw_i + rvdw_j`
-  for pairs where **both** residues are in the disorder mask (and, optionally, for
-  disorder↔folded cross pairs via a separate scale). Requires shipping the `%rvdw` table.
+  add the shallow, pair-type-dependent attraction `ε = generic_scale·nscale·ε_BT(i,j)` at
+  `r = rvdw_i + rvdw_j` for pairs where **both** residues are in the disorder mask (and,
+  optionally, for disorder↔folded cross pairs via `cross_scale`). **O'Brien parity =
+  `generic_scale = 0.03`** (the effective code factor `0.3/10`; see §1.2 — the "0.3" in
+  his comment omits the `/10`). `generic_scale` is defined as the true depth ratio to a
+  native contact of the same pair, so 0.03 reads as "3% of a native contact." Requires
+  shipping the `%rvdw` table.
 
 > **Why masking (not a `nscale = 0` domain) is the right lever.** The existing
 > `domain.yaml` scaling multiplies **only the SS energy** (`scaling_matrix * ss_*`).
@@ -178,7 +189,7 @@ inter_domains:
 # --- disordered / IDR regions (optional) ---
 disordered:
   residues: [1-24, 150-165]   # native contacts removed for these residues
-  generic_scale: 0.0          # 0 = Level A (self-avoiding); >0 = Level B (x eps_BT)
+  generic_scale: 0.0          # 0 = Level A (self-avoiding); O'Brien parity = 0.03 (x nscale x eps_BT)
   cross_scale:   0.0          # disorder<->folded attraction (Level B); 0 = excl-vol only
 ```
 
