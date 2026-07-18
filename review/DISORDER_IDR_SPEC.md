@@ -578,6 +578,32 @@ the optimized domain — but including the IDR is always the robust choice, so d
    discarded; the residue depends only on `idr_scale`. Varying `nscale` during the search has zero
    effect on disordered residues — the search acts solely on the folded core.
 
+### 2.8 Edge case — fully-disordered protein (fully IDP)
+
+If *every* residue is in `disordered:` (a whole IDP, or any unit whose contacts are all masked),
+the divide-by-zero is **already guarded at all three sites** — no new guard code is needed:
+
+- `calculate_rmin_2_values` (energy): `if not_in_contact_with_i: … else: 0.0` — never `np.min([])`.
+- `build_native_contacts` (Q): returns empty `pairs` when there are none.
+- `fraction_native_contacts` (Q): **returns `np.nan` when `pairs.shape[0] == 0`** — the Q divide guard.
+
+**Energy path works:** the folded build runs on the input structure (which has contacts) and is then
+fully overwritten by `apply_disorder` — every pair becomes IDR–IDR (`idr_scale·ε_BT`, per-AA radii),
+no native contacts, all radii finite. A valid weakly-collapsing (or self-avoiding) homopolymer-like
+chain.
+
+**Optimizer — "nothing to optimize" must be explicit.** With all contacts masked, every unit's
+Q = NaN → `folded_fraction` treats NaN as folded (`np.isnan(v) | (v > q_threshold)`) → returns 1.0
+→ the optimizer would **silently "converge" in round 1 having changed nothing.** That is benign but
+misleading. Two required touches:
+
+1. **Relax `load_domains`** so `intra_domains` is optional (a fully-IDP `domain_def` is just
+   `disordered:` + `n_residues`), returning an **empty** domains dict — consistent with §2.2.
+2. **Guard the optimizer:** if the masked `Q_protein` has **zero** native contacts (fully IDP, or
+   nothing foldable remains), log *"no foldable contacts remain — nothing to optimize"* and exit
+   cleanly, rather than reporting a vacuous convergence. (There is genuinely no `nscale` to tune —
+   all residues use `idr_scale`, §2.7.)
+
 ---
 
 ## 3. Validation plan
@@ -625,6 +651,19 @@ the optimized domain — but including the IDR is always the robust choice, so d
     `Q_protein`, any `Q_domain`, and interfaces), and that a residue listed in both a domain and
     `disordered:` is **absent** from that domain's Q set (effective membership = domain − disorder).
     Regression: with no `disordered:` section, the native-contact lists are byte-identical to today.
+11. **Fully-IDP edge case (§2.8):** with **every** residue disordered — assert (a) energy build
+    finishes with all pairs IDR–IDR and finite radii (no divide-by-zero); (b) `build_native_contacts`
+    returns empty and `fraction_native_contacts` returns `NaN` (not a crash); (c) `load_domains`
+    accepts a `domain_def` with **no** `intra_domains` (empty domains dict); (d) the optimizer
+    detects zero foldable contacts and exits with "nothing to optimize" rather than a vacuous
+    convergence.
+
+> **Baseline (already written): `tests/test_idr_baseline.py`.** Characterization tests that pin the
+> *current* output of `build_nonbonded_interaction` and `build_native_contacts` on
+> `tutorials/01_single_domain_quickstart/P0CX28_clean.pdb` (106 res). They are the green floor for
+> the no-op guarantee (tests 1/7/10): they pass today and must stay green after IDR whenever no
+> `disordered:` section is present. Add the masked variants (tests 2/3/5/6/8/9/10/11) as the reader
+> lands.
 
 ---
 
