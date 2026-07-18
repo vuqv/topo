@@ -93,49 +93,66 @@ parameter needed for (b); it is **not currently shipped in topo**.
 > remove H-bond + BS + SS together — hence a dedicated mask applied to all three, not a
 > domain scale.
 
-### 2.2 API / plumbing
+### 2.2 API / plumbing — one file, no new knobs
 
-New optional argument threaded exactly like `domain_def`:
+Disorder is defined as an **optional `disordered:` section inside the existing
+`domain_def` YAML** — *not* a separate file or argument. `domain_def` is already threaded
+end-to-end (INI key → config dataclass → `buildCoarseGrainModel` →
+`build_nonbonded_interaction`), so this adds **no new input file, no new function
+argument, and no new INI key**. The only code changes are the YAML reader and the masking
+step:
 
-- `topo/utils/nonbonded.py`:
-  `build_nonbonded_interaction(pdb_file, domain_def=None, stride_output_file=None,
-  disorder_def=None, *, generic_attraction=False, return_rmin_2=False)`.
-- `topo/core/models.py::buildCoarseGrainModel(..., disorder_def=None)` → forwards to the
-  call above.
-- `topo/utils/config.py`: add `disorder_def: Optional[str] = None` to the config
-  dataclass + `build_kwargs()` (guarded like `domain_def`, lines 154–155) and read from
-  the INI (`disorder_def = ...`, mirroring line 485). Also expose a `generic_attraction`
-  boolean toggle (default `no`).
-- `topo/csp/core.py::build_contacts_from_pdb` (line ~374): accept and forward
-  `disorder_def` so continuous-synthesis nascent chains can mark regions disordered too.
+- `topo/utils/nonbonded.py`: `read_yaml_config` also parses the optional `disordered:`
+  section (returning the residue set + `generic_scale` + `cross_scale`);
+  `build_nonbonded_interaction` applies the mask (§2.3). Signature is unchanged except the
+  already-planned `return_rmin_2` — **no** `disorder_def` / `generic_attraction` params.
+- `read_yaml_config`: relax so `intra_domains` is **optional**. A file with only a
+  `disordered:` section = single domain (scale 1.0 everywhere) + mask; a file with only
+  domains = today's behavior; both = domains + IDR.
+- `topo/core/models.py`, `topo/utils/config.py`, `topo/csp/core.py`: **unchanged** — they
+  already pass `domain_def` through. Continuous-synthesis nascent chains get IDR support
+  for free once the reader understands the section.
 
-**Disorder-mask file format** — reuse the residue-range syntax already parsed by
-`parse_residue_list` (accepts ints, `"i"`, and `"start-end"`). Minimal YAML:
+**Precedence — disorder wins.** The mask is applied *after* domain scaling, so a residue
+listed in both a domain and `disordered:` has its contacts zeroed regardless of its
+`nscale`. The two sections therefore never conflict.
+
+**Unified file format** — residue ranges reuse the syntax already parsed by
+`parse_residue_list` (ints, `"i"`, `"start-end"`). Only `n_residues` is required; all
+three sections are optional:
 
 ```yaml
-# disorder.yaml
+# domain_def.yaml  — the SAME file already passed as domain_def
 n_residues: 283
+
+# --- domain scaling of native side-chain contacts (optional, unchanged) ---
+intra_domains:
+  A: { residues: [1-50],   nscale: 1.0 }
+  B: { residues: [60-283], nscale: 1.0 }
+inter_domains:
+  A-B: 0.5
+
+# --- disordered / IDR regions (optional) ---
 disordered:
-  - 1-24          # N-terminal IDR
-  - 150-165       # internal loop
-# optional (Level B): scale for disorder<->folded cross attraction (default 0.0 = none)
-cross_scale: 0.0
-generic_scale: 0.3   # multiplies epsilon_BT for disorder<->disorder generic attraction
+  residues: [1-24, 150-165]   # native contacts removed for these residues
+  generic_scale: 0.0          # 0 = Level A (self-avoiding); >0 = Level B (x eps_BT)
+  cross_scale:   0.0          # disorder<->folded attraction (Level B); 0 = excl-vol only
 ```
 
-A bare newline/whitespace list of ranges would also be acceptable; YAML keeps it uniform
-with `domain.yaml`.
+Level A vs B is expressed entirely in-file: `generic_scale == 0` → Level A;
+`generic_scale > 0` → Level B (with `cross_scale` optionally adding the disorder↔folded
+term).
 
 ### 2.3 Algorithm (inside `build_nonbonded_interaction`)
 
-After the existing `eps_ij` / `binary_contact_matrix` are assembled and **before** the
-non-native fill loop:
+After the existing `eps_ij` / `binary_contact_matrix` are assembled (with domain scaling
+already applied) and **before** the non-native fill loop — so the mask overrides any
+domain `nscale`:
 
 ```python
-if disorder_def is not None:
-    dis_res = parse_disorder(disorder_def)                 # -> set of 1-based resids
-    dis_idx = np.array([resid_to_index[k] for k in keys    # map to 0-based matrix idx
-                        if k[1] in dis_res])
+# dis_res, generic_scale, cross_scale come from the `disordered:` section of domain_def
+if dis_res:                                                # empty/absent -> skip entirely
+    dis_idx = [resid_to_index[k] for k in resid_to_index if k[1] in dis_res]
     m = np.zeros(n_residues, bool); m[dis_idx] = True
     involves_dis = m[:, None] | m[None, :]                 # pair touches a disordered res
 
@@ -143,10 +160,10 @@ if disorder_def is not None:
     eps_ij[involves_dis] = 0.0
     binary_contact_matrix[involves_dis] = 0                # -> non-native / excluded-vol
 
-    # Level B (optional): shallow uniform attraction among disordered residues.
-    if generic_attraction:
+    # Level B (generic_scale > 0): shallow uniform attraction.
+    if generic_scale > 0:
         dd = m[:, None] & m[None, :]                       # both disordered
-        # + optional cross term via cross_scale (disorder<->folded)
+        # + optional disorder<->folded term when cross_scale > 0
         # eps set to generic_scale * eps_BT; rmin set to rvdw_i + rvdw_j (needs %rvdw table)
 ```
 
@@ -166,7 +183,7 @@ overwrites those specific entries with the weak well afterwards.
   already the disordered-appropriate choice (§1).
 - OpenMM force construction (`addCustomNonBondedForce`): unchanged; it consumes the same
   two matrices.
-- Folded-only runs (`disorder_def=None`): byte-for-byte identical to today.
+- Folded-only runs (no `disordered:` section): byte-for-byte identical to today.
 
 ### 2.5 New parameter to ship (Level B only)
 
@@ -205,4 +222,6 @@ Add `topo/parameters/data/rvdw.csv` = the Perl `%rvdw` table (21 rows, Å). Load
    also generate an extended-chain segment for those residues (analog of the Perl
    `create_unstructured_pdb.pl`). Is an extended-start needed, or is masking-in-place
    enough for the intended use?
-4. **Scope.** Single mask file per system (this spec), or per-chain/per-domain masks?
+4. **Scope.** The `disordered:` section is one flat residue set per system (this spec).
+   Do you need per-chain masks (e.g. residue 1-24 of chain A only)? If so, the `residues:`
+   entries would need chain-qualified keys; otherwise a bare residue list is enough.
