@@ -16,8 +16,8 @@ authors:
   - family-names: Vu
     given-names: Quyen
     orcid: "https://orcid.org/0000-0002-9863-0486"
-version: "2026.1"
-date-released: "2026-07-12"
+version: "2026.2"
+date-released: "2026-07-18"
 license: "GPL-3.0-or-later"
 # Concept DOI (Zenodo) — always resolves to the latest version.
 doi: "10.5281/zenodo.21360706"

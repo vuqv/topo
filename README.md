@@ -212,7 +212,7 @@ tests/           Test suite
 If TOPO contributed to your work, please cite it (and give the repo a ⭐):
 
 > Vu, Q. (2026). *TOPO: a topology-based coarse-grained model for folded
-> proteins* (Version 2026.1) [Computer software]. Zenodo.
+> proteins* (Version 2026.2) [Computer software]. Zenodo.
 > https://doi.org/10.5281/zenodo.21360706
 
 The DOI above is the **concept DOI** (always the latest release); use
