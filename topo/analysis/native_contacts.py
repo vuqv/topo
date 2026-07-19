@@ -66,26 +66,41 @@ def load_universe(*args, **kwargs):
 def load_domains(domain_yaml, n_res):
     """Read domains from domain.yaml as 0-based residue-index sets.
 
+    An optional ``disordered:`` section marks IDR residues (spec §2.7): those
+    residues are **subtracted** from every domain (effective membership =
+    domain - disordered), mirroring the energy path where "disorder wins", and
+    returned as a set so the caller can also drop any IDR-involving native
+    contact from Q. ``intra_domains`` is optional (spec §2.8): a fully-IDP
+    ``domain_def`` is just ``disordered:`` + ``n_residues`` and yields an empty
+    domains dict.
+
     Returns
     -------
     domains : dict[str, np.ndarray]
-        Domain name -> sorted array of 0-based residue indices.
+        Domain name -> sorted array of 0-based residue indices (IDR residues removed).
     n_residues : int
         ``n_residues`` declared in the file (validated against the structure).
+    disorder : set[int]
+        0-based indices of disordered residues (empty when no ``disordered:`` section).
     """
     import yaml  # local import: only needed here
 
     with open(domain_yaml) as fh:
         cfg = yaml.safe_load(fh)
 
-    if "intra_domains" not in cfg:
-        raise ValueError(f"{domain_yaml}: missing required 'intra_domains' section")
-
     n_residues = int(cfg.get("n_residues", n_res))
+
+    # Disordered / IDR residues (0-based). Subtracted from every domain below and
+    # returned so the caller can drop IDR-involving native contacts from Q.
+    disorder = set()
+    dis_cfg = cfg.get("disordered")
+    if dis_cfg is not None:
+        disorder = {r - 1 for r in parse_residue_list(dis_cfg["residues"])}
 
     domains = {}
     assigned = set()
-    for name, values in cfg["intra_domains"].items():
+    # intra_domains optional: a fully-disordered protein has none (empty dict).
+    for name, values in cfg.get("intra_domains", {}).items():
         resnums = parse_residue_list(values["residues"])     # 1-based
         idx = np.array(sorted(r - 1 for r in resnums), dtype=int)  # -> 0-based
         if idx.size == 0:
@@ -96,10 +111,15 @@ def load_domains(domain_yaml, n_res):
             raise ValueError(
                 f"Domain {name}: residue numbers must be within 1..{n_residues}"
             )
+        # Effective domain = listed residues minus disordered (spec §2.7). A fully
+        # disordered domain collapses to an empty set (Q = NaN, treated as folded).
+        idx = np.array(sorted(set(idx.tolist()) - disorder), dtype=int)
         domains[name] = idx
         assigned.update(idx.tolist())
 
-    unassigned = set(range(n_residues)) - assigned
+    # Residues that are neither in a domain nor disordered contribute to Q_protein
+    # but to no per-domain Q; disordered residues are excluded from Q entirely.
+    unassigned = set(range(n_residues)) - assigned - disorder
     if unassigned:
         print(
             f"[warning] {len(unassigned)} residue(s) are not assigned to any "
@@ -107,7 +127,7 @@ def load_domains(domain_yaml, n_res):
             file=sys.stderr,
         )
 
-    return domains, n_residues
+    return domains, n_residues, disorder
 
 
 # --------------------------------------------------------------------------- #
@@ -134,7 +154,7 @@ def reference_residue_geometry(ref_universe):
 
 
 def build_native_contacts(group1, group2, heavy_positions, heavy_res,
-                          ca_positions, cutoff, local_separation):
+                          ca_positions, cutoff, local_separation, disorder=None):
     """Build the native-contact list for one domain or interface.
 
     Parameters
@@ -154,6 +174,11 @@ def build_native_contacts(group1, group2, heavy_positions, heavy_res,
         Heavy-atom distance defining a contact (Å).
     local_separation : int
         Minimum sequence separation (abs(i - j) > local_separation).
+    disorder : set[int] or None, optional
+        0-based indices of disordered (IDR) residues. Any native contact with
+        **either** residue in this set is dropped, matching the energy path where
+        IDR pairs carry no native contact (spec §2.7). ``None`` (default) keeps
+        the pre-IDR behavior, so other callers are byte-identical.
 
     Returns
     -------
@@ -193,6 +218,13 @@ def build_native_contacts(group1, group2, heavy_positions, heavy_res,
     lo = np.minimum(ri, rj)
     hi = np.maximum(ri, rj)
     pairs = np.unique(np.stack([lo, hi], axis=1), axis=0)
+
+    # Drop every pair touching a disordered residue (spec §2.7): the energy path
+    # removes these native contacts, so they must not sit in the Q denominator.
+    if disorder and pairs.shape[0] > 0:
+        dis = np.fromiter(disorder, dtype=int, count=len(disorder))
+        keep = ~(np.isin(pairs[:, 0], dis) | np.isin(pairs[:, 1], dis))
+        pairs = pairs[keep]
 
     if pairs.shape[0] == 0:
         return pairs.reshape(0, 2), np.zeros(0, dtype=float)
@@ -298,7 +330,7 @@ def main():
     )
 
     # --- domains & interfaces ---
-    domains, n_residues = load_domains(args.domain, n_res)
+    domains, n_residues, disorder = load_domains(args.domain, n_res)
     if n_residues != n_res:
         raise ValueError(
             f"domain.yaml n_residues={n_residues} but reference has {n_res} "
@@ -310,18 +342,22 @@ def main():
     print("=== Native contacts from all-atom reference ===")
     print(f"Definition: heavy-atom distance <= {args.cutoff} Å; "
           f"sequence separation > {args.local_separation}")
+    if disorder:
+        print(f"  IDR: {len(disorder)} disordered residue(s) -- their native "
+              f"contacts are excluded from every Q (spec §2.7)")
 
     units = {}  # column name -> (pairs, native_dist)
 
     pairs, dnat = build_native_contacts(None, None, heavy_positions, heavy_res,
-                                  ca_positions, args.cutoff, args.local_separation)
+                                  ca_positions, args.cutoff, args.local_separation,
+                                  disorder=disorder)
     units["Q_protein"] = (pairs, dnat)
     print(f"  whole protein           : {pairs.shape[0]} native contacts")
 
     for name, idx in domains.items():
         pairs, dnat = build_native_contacts(set(idx.tolist()), None, heavy_positions,
                                       heavy_res, ca_positions, args.cutoff,
-                                      args.local_separation)
+                                      args.local_separation, disorder=disorder)
         units[f"Q_{name}"] = (pairs, dnat)
         print(f"  domain {name:<16}: {pairs.shape[0]} native contacts")
 
@@ -329,7 +365,7 @@ def main():
         pairs, dnat = build_native_contacts(set(domains[a].tolist()),
                                       set(domains[b].tolist()), heavy_positions,
                                       heavy_res, ca_positions, args.cutoff,
-                                      args.local_separation)
+                                      args.local_separation, disorder=disorder)
         units[f"Q_{a}-{b}"] = (pairs, dnat)
         note = "" if pairs.shape[0] else "  (no contacts -> Q = NaN)"
         print(f"  interface {a}-{b:<11}: {pairs.shape[0]} native contacts{note}")

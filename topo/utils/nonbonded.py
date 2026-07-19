@@ -40,6 +40,7 @@ import yaml
 from typing import Dict, List, Tuple, Set, Optional
 
 from topo.utils.external import run_stride
+from topo.parameters.model_parameters import parameters as _MODEL_PARAMETERS, protein_list as _PROTEIN_LIST
 # import logging
 
 # Configure logging
@@ -64,6 +65,18 @@ NON_NATIVE_KJ         = 0.000132 * KCAL_TO_KJ
 # CSV value BEFORE conversion (eps = KCAL_TO_KJ * |raw - BT_SHIFT_KCAL|), so it is a
 # kcal/mol reference level, not a kJ energy -- hence kept out of the block above.
 BT_SHIFT_KCAL = 0.6
+
+# Per-AA transferable Rmin/2 (nm), the excluded-volume radius used for disordered
+# (IDR) residues, whose structure-derived Karanicolas-Brooks radius is meaningless
+# for arbitrary/disordered coordinates (spec review/DISORDER_IDR_SPEC.md §2.5). Only
+# the "topo" model is defined; these are O'Brien's per-AA S<aa> radii
+# (= rvdw*2^(1/6) to ~1%), so no new parameter file is shipped.
+IDR_RMIN_2_NM = {aa: _MODEL_PARAMETERS["topo"][aa]["Rmin_2"] for aa in _PROTEIN_LIST}
+
+# Default IDR-IDR attraction scale when a `disordered:` section omits `idr_scale`
+# (spec §2.2). 0 selects the pure self-avoiding chain; 0.03 reproduces O'Brien's
+# default weak collapse.
+DEFAULT_IDR_SCALE = 0.03
 
 
 # -----------------------------------------------------------------------------
@@ -612,7 +625,7 @@ def parse_residue_list(residue_items: List) -> List[int]:
                 residues.append(int(item))
     return residues
 
-def read_yaml_config(filepath: str) -> Tuple[Dict, Dict, Dict]:
+def read_yaml_config(filepath: str) -> Tuple[Dict, Dict, Dict, Optional[Dict]]:
     """
     Read and parse domain definition YAML (intra/inter nscales, residue lists).
 
@@ -621,10 +634,19 @@ def read_yaml_config(filepath: str) -> Tuple[Dict, Dict, Dict]:
     interact at ``nscale = 1.0``). Per-domain values scale intra-domain contacts;
     per-interface values scale contacts between two domains.
 
-    Required keys: ``intra_domains``, ``n_residues``. Optional: ``inter_domains``
-    (omit for single-domain proteins; then inter_nscales will be empty).
-    Residues not listed in any domain are assigned to domain ``'X'`` with
-    intra nscale 1.0 and inter 1.0 to all other domains.
+    Required key: ``n_residues``. All three sections are optional (spec §2.2):
+    ``intra_domains`` (omit for a single unscaled domain), ``inter_domains``
+    (omit for single-domain proteins; then inter_nscales will be empty), and
+    ``disordered`` (omit for a fully-folded protein). Residues not listed in any
+    domain are assigned to domain ``'X'`` with intra nscale 1.0 and inter 1.0 to
+    all other domains.
+
+    The optional ``disordered:`` section marks intrinsically-disordered (IDR)
+    residues; it carries ``residues:`` (required, same syntax as a domain's
+    residue list) and ``idr_scale:`` (optional, default
+    :data:`DEFAULT_IDR_SCALE` = 0.03 -- the IDR-IDR attraction knob). It is
+    returned as the fourth value (``None`` when absent) and consumed by
+    :func:`apply_disorder` inside :func:`build_nonbonded_interaction`.
 
     The per-domain scaling key is ``nscale``. The legacy key ``strength`` is still
     accepted as a deprecated alias (a one-time deprecation notice is printed).
@@ -643,6 +665,9 @@ def read_yaml_config(filepath: str) -> Tuple[Dict, Dict, Dict]:
     inter_nscales : dict
         (domain1, domain2) -> float (inter-domain nscale); symmetric keys
         (d1, d2) and (d2, d1) are both set.
+    disorder : dict or None
+        ``None`` when there is no ``disordered:`` section; otherwise
+        ``{'residues': [int, ...], 'idr_scale': float}`` (1-based residue numbers).
 
     Raises
     ------
@@ -661,8 +686,11 @@ def read_yaml_config(filepath: str) -> Tuple[Dict, Dict, Dict]:
           B: { residues: [51-110], nscale: 1.0 }
         inter_domains:
           A-B: 0.5
+        disordered:            # optional; None when absent
+          residues: [1-24]
+          idr_scale: 0.03
 
-    >>> dom, intra, inter = read_yaml_config("domain.yaml")
+    >>> dom, intra, inter, disorder = read_yaml_config("domain.yaml")
     >>> dom["A"][:3]
     [1, 2, 3]
     >>> inter[("A", "B")]
@@ -675,7 +703,9 @@ def read_yaml_config(filepath: str) -> Tuple[Dict, Dict, Dict]:
         print(f"Domain configuration file not found: {filepath}")
         raise
 
-    intra = config['intra_domains']
+    # intra_domains optional (spec §2.2): a file with only a `disordered:` section
+    # (or only n_residues) becomes a single unscaled domain via the 'X' fallback below.
+    intra = config.get('intra_domains', {})
     # inter_domains optional: single-domain proteins have no inter-domain pairs
     inter = config.get('inter_domains', {})
     n_residues = int(config['n_residues'])
@@ -731,7 +761,22 @@ def read_yaml_config(filepath: str) -> Tuple[Dict, Dict, Dict]:
                 inter_nscales[('X', other)] = 1.0
                 inter_nscales[(other, 'X')] = 1.0
 
-    return domain_to_residues, intra_nscales, inter_nscales
+    # Parse the optional disordered / IDR section (residue set + idr_scale).
+    disorder = None
+    dis_cfg = config.get('disordered')
+    if dis_cfg is not None:
+        dis_residues = parse_residue_list(dis_cfg['residues'])
+        idr_scale = float(dis_cfg.get('idr_scale', DEFAULT_IDR_SCALE))
+        disorder = {'residues': dis_residues, 'idr_scale': idr_scale}
+        # Overlap with an explicit domain is legal -- disorder wins (spec §2.2) -- but
+        # a residue accidentally left in both sections is disordered silently, so log
+        # it as info (not an error). `all_residues` holds only explicit-domain residues.
+        overlap = sorted(set(dis_residues) & all_residues)
+        if overlap:
+            print(f"[info] {filepath}: IDR overlap -- residues {overlap} are in both a "
+                  f"domain and 'disordered:'; treating them as disordered.")
+
+    return domain_to_residues, intra_nscales, inter_nscales, disorder
 
 def get_scaling_ss_matrix(domain_def: str) -> np.ndarray:
     """
@@ -755,8 +800,18 @@ def get_scaling_ss_matrix(domain_def: str) -> np.ndarray:
         (all residues that appear in domain_to_residues). Values are floats
         (typically 0.0 to 1.0) used to scale SS contact energies.
     """
-    domain_to_residues, intra_nscales, inter_nscales = read_yaml_config(domain_def)
-    
+    domain_to_residues, intra_nscales, inter_nscales, _disorder = read_yaml_config(domain_def)
+    return _scaling_matrix_from_config(domain_to_residues, intra_nscales, inter_nscales)
+
+
+def _scaling_matrix_from_config(domain_to_residues: Dict, intra_nscales: Dict,
+                                inter_nscales: Dict) -> np.ndarray:
+    """Build the SS-energy scaling matrix from already-parsed domain config.
+
+    Split out of :func:`get_scaling_ss_matrix` so :func:`build_nonbonded_interaction`
+    can parse the domain YAML once (for both scaling and the disorder section) rather
+    than reading it twice. See :func:`get_scaling_ss_matrix` for the returned matrix.
+    """
     # Build residue to domain mapping
     residue_to_domain = {}
     residue_list = []
@@ -838,6 +893,72 @@ def calculate_rmin_2_values(binary_contact_matrix: np.ndarray, ca_distances: np.
         else:
             rmin_2.append(0.0)  # fallback value
     return rmin_2
+
+def apply_disorder(rmin_matrix: np.ndarray, eps_ij: np.ndarray, rmin_2_nm: np.ndarray,
+                   dis_idx: np.ndarray, idr_scale: float,
+                   index_to_resname: Dict[int, str],
+                   ss_interaction_energy: np.ndarray):
+    """Transform a folded non-bonded build into an IDR-aware one (spec §2.3).
+
+    Runs at the very end of :func:`build_nonbonded_interaction`, after the folded
+    build is complete and everything is in nm. It overwrites -- **in place** -- only
+    the entries that touch a disordered residue, leaving folded-folded pairs and every
+    folded residue's Karanicolas-Brooks radius byte-identical to a folded-only run.
+
+    Three pair classes result (spec §2.1): folded-folded (untouched, Go),
+    IDR-IDR (``max(NON_NATIVE_KJ, idr_scale * eps_BT)``), and IDR-folded
+    (excluded-volume only). The well position for every IDR-involving pair is the
+    sum rule of the per-residue radii, with IDR residues switched to the
+    transferable per-AA :data:`IDR_RMIN_2_NM` and folded residues kept on K-B.
+
+    Overriding the per-residue ``rmin_2_nm`` array (not merely the pair matrix) is a
+    requirement: the same array feeds the NC<->ribosome excluded volume in CSP
+    (spec §2.6), so both excluded-volume channels stay consistent for IDR beads.
+
+    Parameters
+    ----------
+    rmin_matrix : np.ndarray, shape (n, n)
+        Folded pairwise well positions (nm). Modified in place.
+    eps_ij : np.ndarray, shape (n, n)
+        Folded pairwise well depths (kJ/mol). Modified in place.
+    rmin_2_nm : np.ndarray, shape (n,)
+        Per-residue Rmin/2 (nm). IDR entries are overridden in place.
+    dis_idx : np.ndarray of int
+        0-based indices of the disordered residues.
+    idr_scale : float
+        IDR-IDR attraction scale (0 -> self-avoiding chain).
+    index_to_resname : dict
+        0-based index -> three-letter residue name (from :func:`get_residue_mapping`).
+    ss_interaction_energy : np.ndarray, shape (n, n)
+        The RAW per-pair BT energy matrix (kJ/mol) from
+        :func:`get_ss_interaction_energy` (abs + shift + kcal->kJ already applied);
+        NOT the domain-scaled version -- the IDR well must not inherit ``nscale``.
+
+    Returns
+    -------
+    rmin_matrix, eps_ij, rmin_2_nm : np.ndarray
+        The same three arrays, now IDR-aware.
+    """
+    m = np.zeros(len(rmin_2_nm), dtype=bool)
+    m[dis_idx] = True
+    involves_dis = m[:, None] | m[None, :]     # pair touches a disordered residue
+    dd = m[:, None] & m[None, :]               # both residues disordered
+
+    # 1. IDR residues' radius -> transferable per-AA (K-B is meaningless for
+    #    disordered coords). Folded residues keep their exact K-B value.
+    rmin_2_nm[dis_idx] = [IDR_RMIN_2_NM[index_to_resname[i]] for i in dis_idx]
+
+    # 2. Every IDR-involving pair: drop the native contact, reposition the well at
+    #    the sum rule of the (now-updated) per-residue radii, at the excluded-volume
+    #    floor. IDR-folded comes out per-AA + K-B automatically.
+    rmin_matrix[involves_dis] = (rmin_2_nm[:, None] + rmin_2_nm[None, :])[involves_dis]
+    eps_ij[involves_dis] = NON_NATIVE_KJ
+
+    # 3. IDR-IDR only: the weak generic attraction, never below the floor (so the
+    #    chain cannot pass through itself even at idr_scale = 0).
+    eps_ij[dd] = np.maximum(NON_NATIVE_KJ, idr_scale * ss_interaction_energy[dd])
+    return rmin_matrix, eps_ij, rmin_2_nm
+
 
 def build_nonbonded_interaction(
     pdb_file: str,
@@ -928,8 +1049,12 @@ def build_nonbonded_interaction(
     if domain_def is None:
         # Single domain: all residues scaled by 1.0
         scaling_matrix = np.ones((n_residues, n_residues))
+        disorder = None
     else:
-        scaling_matrix = get_scaling_ss_matrix(domain_def)
+        # Parse the YAML once for both the scaling matrix and the disorder section.
+        domain_to_residues, intra_nscales, inter_nscales, disorder = read_yaml_config(domain_def)
+        scaling_matrix = _scaling_matrix_from_config(
+            domain_to_residues, intra_nscales, inter_nscales)
     ss_contact_matrix = get_ss_contact_matrix(u, cutoff=DEFAULT_CUTOFF)
     ss_interaction_energy = get_ss_interaction_energy(u)
     
@@ -963,22 +1088,35 @@ def build_nonbonded_interaction(
 
     # Convert to nm for OpenMM compatibility
     rmin_matrix /= DISTANCE_TO_NM
-    
+
+    # Per-residue Karanicolas-Brooks collision radius Rmin/2 (nm) -- O'Brien's nascent
+    # excluded-volume radius (the A1..An values in his .prm), used for the nascent side
+    # of the NC<->ribosome excluded volume (see tutorials/15_claude_fix/
+    # TOPO_OBrien_NCribosome_nonbonded_compare.md). calculate_rmin_2_values already
+    # returns Rmin/2 (Angstrom); just convert to nm. Computed unconditionally (not only
+    # under return_rmin_2) because apply_disorder overrides it in place below.
+    rmin_2_nm = np.asarray(rmin_2, dtype=float) / DISTANCE_TO_NM   # Angstrom -> nm
+
     # Report contact statistics over unique residue pairs (upper triangle, i < j).
     # Native contacts are residue pairs flagged in the binary contact matrix;
     # all remaining pairs interact through the non-native (excluded-volume) term.
+    # (These count the folded build; the disorder transform below removes IDR pairs.)
     n_native = int(np.triu(binary_contact_matrix, k=1).sum())
     n_pairs = n_residues * (n_residues - 1) // 2
     n_non_native = n_pairs - n_native
     print(f"  native contacts: {n_native}  |  non-native pairs: {n_non_native}  "
           f"(of {n_pairs} residue pairs)")
+
+    # Disorder / IDR transform (spec §2.3): after the fully-folded build, overwrite
+    # every pair touching a disordered residue (and those residues' per-residue radius).
+    # Not called when there is no `disordered:` section -> folded runs stay byte-identical.
+    if disorder is not None:
+        dis_idx = np.asarray(disorder['residues'], dtype=int) - 1   # 1-based -> 0-based
+        rmin_matrix, eps_ij, rmin_2_nm = apply_disorder(
+            rmin_matrix, eps_ij, rmin_2_nm, dis_idx, disorder['idr_scale'],
+            index_to_resname, ss_interaction_energy)
+
     if return_rmin_2:
-        # Per-residue Karanicolas-Brooks collision radius Rmin/2 (nm) -- O'Brien's nascent
-        # excluded-volume radius (the A1..An values in his .prm), used for the nascent side
-        # of the NC<->ribosome excluded volume (see tutorials/15_claude_fix/
-        # TOPO_OBrien_NCribosome_nonbonded_compare.md). calculate_rmin_2_values already
-        # returns Rmin/2 (Angstrom); just convert to nm.
-        rmin_2_nm = np.asarray(rmin_2, dtype=float) / DISTANCE_TO_NM   # Angstrom -> nm
         return rmin_matrix, eps_ij, rmin_2_nm
     return rmin_matrix, eps_ij
 

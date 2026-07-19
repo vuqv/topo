@@ -292,7 +292,7 @@ class Scorer:
             count=heavy.n_atoms,
         )
 
-        domains, n_residues = ncmod.load_domains(domain_yaml, self.n_res)
+        domains, n_residues, disorder = ncmod.load_domains(domain_yaml, self.n_res)
         if n_residues != self.n_res:
             raise ValueError(
                 f"domain.yaml n_residues={n_residues} but reference has "
@@ -302,15 +302,18 @@ class Scorer:
         self.interfaces = list(itertools.combinations(self.domain_names, 2))
 
         # Build the native-contact list (pairs + reference Cα distances) per unit.
+        # `disorder` drops every IDR-involving contact so Q measures only the
+        # foldable core -- the same mask the energy path applies (spec §2.7).
         self.units = {}   # key -> (pairs, native_dist)
         for name, idx in domains.items():
             self.units[("domain", name)] = ncmod.build_native_contacts(
                 set(idx.tolist()), None, heavy_positions, heavy_res,
-                ca_positions, cutoff, local_separation)
+                ca_positions, cutoff, local_separation, disorder=disorder)
         for a, b in self.interfaces:
             self.units[("interface", (a, b))] = ncmod.build_native_contacts(
                 set(domains[a].tolist()), set(domains[b].tolist()),
-                heavy_positions, heavy_res, ca_positions, cutoff, local_separation)
+                heavy_positions, heavy_res, ca_positions, cutoff, local_separation,
+                disorder=disorder)
 
     def unit_keys(self):
         """Return all scoring-unit keys (domain and interface) as a list.
@@ -488,6 +491,16 @@ def _optimize_loop(log, pdb, domain_path, raw_cfg, sim_options, out_root,
         unit_class[("interface", (a, b))] = "interface"
 
     level = {k: 0 for k in scorer.unit_keys()}   # per-unit ladder index
+
+    # Fully-IDP (or every foldable contact masked): there is genuinely no nscale to
+    # tune (all residues use idr_scale, spec §2.7/§2.8). Exit cleanly with an explicit
+    # message rather than a vacuous "converged in round 1 having changed nothing".
+    if sum(scorer.n_contacts(k) for k in scorer.unit_keys()) == 0:
+        log(f"# Nscale optimization for {Path(pdb).name}")
+        log("# No foldable native contacts remain (fully disordered, or all contacts "
+            "masked by the `disordered:` section) -- nothing to optimize.")
+        log(f"# Using the input domain_def unchanged: {domain_path}")
+        return Path(domain_path), True
 
     # Units with too few native contacts are too weakly structured to fold:
     # pin them at the first ladder level and exclude them from optimization.
@@ -693,7 +706,7 @@ def parse_args(argv=None):
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     p.add_argument("-f", "--config", required=True,
-                   help="optimize.ini (minimal config; see Tutorial 5).")
+                   help="optimize.ini (minimal config; see Tutorial A.5).")
     p.add_argument("-o", "--outdir", default=None,
                    help="Optimization root dir. Overrides 'outdir' in the "
                         "config file; defaults to opt_out when neither is set.")
