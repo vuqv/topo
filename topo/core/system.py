@@ -939,16 +939,15 @@ class system:
             self.reportEnergy(sim, header='Minimized potential energy', section=False)
             self.positions = state.getPositions()
         elif np.max(forces) > threshold:
-            # minimize=False: we do not relax the structure, but a force above the
-            # threshold signals an unstable/clashing input -- surface it with a warning
-            # instead of passing silently.
-            warnings.warn(
-                f"Largest force on a particle is {np.max(forces):.3g} kJ/mol/nm, above the "
-                f"threshold {threshold} kJ/mol/nm, but minimize=False so the structure was "
-                f"not relaxed -- the configuration may be unstable (consider building/running "
-                f"with minimization).",
-                RuntimeWarning,
-            )
+            # minimize=False: the structure is not relaxed. A force above the
+            # threshold is normal for a structure-based model on an unminimized
+            # input (angle/torsion terms sit off their minima) and is usually
+            # benign -- the thermostat relaxes it in the first steps. Print a short
+            # notice in the energy-check section rather than a RuntimeWarning, whose
+            # "system.py:NNN: RuntimeWarning" prefix reads like an error.
+            print(f'    note: max force {np.max(forces):.3g} kJ/mol/nm > '
+                  f'{threshold} kJ/mol/nm threshold (input not minimized; usually '
+                  f'benign -- set minimize=yes to relax it).')
 
     def addParticles(self) -> None:
         """
