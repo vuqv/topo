@@ -15,7 +15,7 @@ the same `domain.yaml` file, adding one section.
 
 ## The system
 
-`P28566` (5-HT\ :sub:`1E` receptor, 365 residues) modelled from its **AlphaFold**
+`P28566` (5-HT<sub>1E</sub> receptor, 365 residues) modelled from its **AlphaFold**
 structure. We treat it as **one folded domain plus two intrinsically disordered
 regions (IDRs)**:
 
