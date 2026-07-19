@@ -32,6 +32,7 @@ see :doc:`citation` for the full list with DOIs.
    modules/introduction
    usage/external_dependencies
    citation
+   changelog
 
 .. toctree::
    :maxdepth: 2
