@@ -1,4 +1,4 @@
-# Tutorial 4 — Many copies in one run (better GPU utilization)
+# Tutorial A.4 — Many copies in one run (better GPU utilization)
 
 **Goal:** run **many non-interacting copies** of a single chain in one simulation,
 so a GPU (which is wasted on one ~100-bead chain) stays busy and you collect
@@ -8,7 +8,7 @@ multi-chain trajectory back into per-chain DCDs for normal analysis.
 **Time:** the 10-copy demo finishes in a few seconds on a CPU; the real win is on
 a GPU.
 
-**Prerequisite:** [Tutorial 1](01_single_domain.md).
+**Prerequisite:** [Tutorial A.1](A1_single_domain.md).
 
 ![10-copy trajectory](img/process.gif)
 
@@ -49,7 +49,7 @@ independence of the copies is preserved.
 | File | Role |
 |------|------|
 | `P0CX28_clean.pdb` | Single-chain input structure (106 residues). |
-| `domain.yaml` | Calibrated single-domain nscale (2.5044), as in Tutorial 1 (syntax: [Domain definition file](../usage/domain_definition.rst)). |
+| `domain.yaml` | Calibrated single-domain nscale (2.5044), as in Tutorial A.1 (syntax: [Domain definition file](../usage/domain_definition.rst)). |
 | `md.ini` | Config; note the **`n_copies`** and `copy_shift` options. |
 | `run_simulation.py` | Optional one-line shim to `topo.mdrun` (prefer `topo-mdrun -f md.ini`); the shared runner replicates automatically when `n_copies > 1`. |
 | `split_chains.py` | Optional shim around `topo.split_chains` (prefer `python -m topo.utils.multichain`); splits the multi-chain DCD into per-chain DCDs. |
@@ -73,7 +73,7 @@ else:
 # ... everything below runs on (system, topology, positions) unchanged ...
 ```
 
-So Tutorials 1–3 and this one use the **same** runner (`topo.mdrun`); only
+So Tutorials A.1–A.3 and this one use the **same** runner (`topo.mdrun`); only
 `n_copies` in `md.ini` differs.
 
 `make_noninteracting_copies` is the package primitive that takes the single-chain
@@ -94,7 +94,7 @@ device = CPU           ; <-- set to GPU on a CUDA machine; that's the point
 ```bash
 topo-mdrun -f md.ini                     # or: python -m topo.mdrun -f md.ini
 ```
-The **same** standard runner is used as in Tutorials 1–3; because `n_copies = 10`
+The **same** standard runner is used as in Tutorials A.1–A.3; because `n_copies = 10`
 its `if cfg.n_copies > 1` branch replicates the model via
 `topo.make_noninteracting_copies`. Output goes to the `traj/` run folder (DCD +
 PSF only, no PDB): `traj/traj.dcd` (all chains), `traj/traj.log`, `traj/traj.chk`,
@@ -172,4 +172,4 @@ trajectory for no aggregate gain (and eventually runs into GPU memory limits).
 ## Try next
 - Switch `device = GPU` and compare ns/day for `n_copies = 1` vs `50` — the
   per-copy cost drops sharply once the GPU is filled.
-- Apply the same pattern to the multidomain system from Tutorial 2.
+- Apply the same pattern to the multidomain system from Tutorial A.2.

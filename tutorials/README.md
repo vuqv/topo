@@ -15,33 +15,34 @@ builds on Part A.
 
 Model a folded protein as a one-bead-per-residue structure-based (Gō-like) model
 and run / analyze its dynamics: the basic workflow, multidomain scaling, restarts
-and outputs, many copies at once, contact-nscale optimization, and temperature
-protocols.
+and outputs, many copies at once, contact-nscale optimization, temperature
+protocols, and disordered (IDR) regions.
 
 | # | Tutorial | What you learn |
 |---|----------|----------------|
-| 1 | [Single-domain quickstart](01_single_domain.md) | The minimal workflow: a config file, one PDB, run an MD simulation, read the outputs. |
-| 2 | [Multidomain & domain scaling](02_multidomain.md) | Multidomain proteins: per-domain contact scaling via `domain.yaml`, including a discontiguous domain. |
-| 3 | [Restart & outputs](03_restart.md) | Continuing a run from a checkpoint, and a tour of every output file. |
-| 4 | [Many copies in one run](04_multicopy.md) | Run N non-interacting chains at once to fill the GPU, then split into per-chain trajectories. |
-| 5 | [Optimizing the contact nscale](05_opt_nscal.md) | Automatically search the per-domain/interface `nscale` (*n*<sub>scale</sub>) that keeps each domain folded, instead of hard-coding it. |
-| 6 | [Temperature annealing & quenching](06_anneal.md) | Run a temperature protocol — hold the protein hot to unfold it, then T-jump (or slow-cool) back to `ref_t` to study refolding. |
+| A.1 | [Single-domain quickstart](A1_single_domain.md) | The minimal workflow: a config file, one PDB, run an MD simulation, read the outputs. |
+| A.2 | [Multidomain & domain scaling](A2_multidomain.md) | Multidomain proteins: per-domain contact scaling via `domain.yaml`, including a discontiguous domain. |
+| A.3 | [Restart & outputs](A3_restart.md) | Continuing a run from a checkpoint, and a tour of every output file. |
+| A.4 | [Many copies in one run](A4_multicopy.md) | Run N non-interacting chains at once to fill the GPU, then split into per-chain trajectories. |
+| A.5 | [Optimizing the contact nscale](A5_opt_nscal.md) | Automatically search the per-domain/interface `nscale` (*n*<sub>scale</sub>) that keeps each domain folded, instead of hard-coding it. |
+| A.6 | [Temperature annealing & quenching](A6_anneal.md) | Run a temperature protocol — hold the protein hot to unfold it, then T-jump (or slow-cool) back to `ref_t` to study refolding. |
+| A.7 | [Disordered / IDR regions](A7_idr_mixed.md) | Mark part of a chain intrinsically disordered via a `disordered:` section — the folded core keeps its shape while the tails/loops stay flexible. |
 
 ## Part B — Translation (protein synthesis)
 
 Grow the nascent chain **residue by residue**, so it can fold *as it is
 synthesized*. Both tutorials build on the Part A model and use codon-resolved
 kinetics; they differ only in how the ribosome exit tunnel is represented — an
-analytic bore (7) vs an explicit truncated ribosome (8). See the
+analytic bore (B.1) vs an explicit truncated ribosome (B.2). See the
 [protein synthesis overview](../usage/synthesis_overview.md) for the
 biology and which model to use, and
-[the ribosome structure](../usage/ribosome_preparation.md) for where tutorial 8's
+[the ribosome structure](../usage/ribosome_preparation.md) for where tutorial B.2's
 `ribosome_trunc.pdb` comes from (four organisms ship ready-made).
 
 | # | Tutorial | What it is |
 |---|----------|------------|
-| 7 | [Synthesis through an analytic tunnel](07_translation_cylinder.md) | The exit tunnel is modelled analytically as a cylindrical bore through an infinite wall (a "hole in a wall") — **no explicit ribosome beads**. The nascent chain is the only system, so it is fast and never jams, and the protein **folds co-translationally** as it extrudes and clears the bore. |
-| 8 | [Synthesis on a coarse-grained ribosome](08_ribosome_synthesis.md) | The ribosome-based counterpart: grow the chain through TOPO's own truncated **coarse-grained ribosome** (`ribosome_trunc.pdb`, standalone — no CHARMM inputs), with codon-resolved kinetics and equilibrium-PTC seeding, then eject the completed protein. Worked on 4c5c (306 aa) and P0CX28 (106 aa). |
+| B.1 | [Synthesis through an analytic tunnel](B1_translation_cylinder.md) | The exit tunnel is modelled analytically as a cylindrical bore through an infinite wall (a "hole in a wall") — **no explicit ribosome beads**. The nascent chain is the only system, so it is fast and never jams, and the protein **folds co-translationally** as it extrudes and clears the bore. |
+| B.2 | [Synthesis on a coarse-grained ribosome](B2_ribosome_synthesis.md) | The ribosome-based counterpart: grow the chain through TOPO's own truncated **coarse-grained ribosome** (`ribosome_trunc.pdb`, standalone — no CHARMM inputs), with codon-resolved kinetics and equilibrium-PTC seeding, then eject the completed protein. Worked on 4c5c (306 aa) and P0CX28 (106 aa). |
 
 The **ready-to-run files** for each tutorial (PDB, `md.ini`, `run_simulation.py`,
 …) live in the matching folder under
@@ -74,7 +75,7 @@ The force field has these terms:
   contacts (pairs of residues close together in the folded structure) get an
   attractive well; everything else is repulsive. Contact nscales come from
   hydrogen bonds (via **STRIDE**), backbone–sidechain and sidechain–sidechain
-  geometry, and optional **per-domain scaling** (Tutorial 2).
+  geometry, and optional **per-domain scaling** (Tutorial A.2).
 
 Because the native state is the energy minimum, TOPO is used to study
 folding/unfolding, domain motions, and mechanical/thermal stability.

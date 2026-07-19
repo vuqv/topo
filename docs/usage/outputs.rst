@@ -28,7 +28,7 @@ After ``topo-mdrun -f md.ini`` finishes, the run folder contains:
      - **Topology** of the CA model (atoms, masses, charges, bonds). Needed to load the ``.dcd`` in analysis tools.
    * - ``<outname>.chk``
      - binary
-     - **Checkpoint** — full dynamical state (positions **and** velocities), every ``nstchk`` steps. Used to restart (:doc:`../tutorials/03_restart`).
+     - **Checkpoint** — full dynamical state (positions **and** velocities), every ``nstchk`` steps. Used to restart (:doc:`../tutorials/A3_restart`).
    * - ``<outname>_final.pdb``
      - text
      - **Last conformation** (CA PDB). Reuse as ``init_position`` to seed a follow-up run.
@@ -43,11 +43,11 @@ After ``topo-mdrun -f md.ini`` finishes, the run folder contains:
 
 * ``<outname>_multi.psf`` — written when ``n_copies > 1``: the combined
   multi-chain topology matching the multi-copy ``.dcd`` (the plain ``.psf``
-  remains the single-chain topology). See :doc:`../tutorials/04_multicopy`.
+  remains the single-chain topology). See :doc:`../tutorials/A4_multicopy`.
 * ``<outname>_quench.dcd`` / ``<outname>_quench.log`` — written when
   ``anneal = yes``: the quench-phase trajectory and log, kept separate from the
   production ``.dcd`` / ``.log`` so the hot phase never contaminates your
-  production ensemble. See :doc:`../tutorials/06_anneal`.
+  production ensemble. See :doc:`../tutorials/A6_anneal`.
 * ``<pdb_prefix>_stride.dat`` — cached STRIDE hydrogen-bond output, written **next
   to the input PDB** (not in the run folder) the first time the model is built.
   Reused automatically on later runs; delete to force regeneration.
@@ -86,7 +86,7 @@ temperature, speed (ns/day), and estimated time remaining. The energies are in
 On a **restart**, the reporter *appends* to the existing ``.log`` and ``.dcd``
 (no repeated header), so a multi-stage run stays one continuous record. In an
 **annealing** run, the quench writes ``_quench.log`` and the production log's
-step counter is reset to 0 (see :doc:`../tutorials/06_anneal`).
+step counter is reset to 0 (see :doc:`../tutorials/A6_anneal`).
 
 Parsing the log in Python
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -160,4 +160,4 @@ reference:
 From there, compute RMSD, radius of gyration, or the native-contact score *Q*
 (:doc:`native_contacts`). For multi-copy runs, split the combined DCD into
 per-copy trajectories first with :func:`topo.split_chains`
-(:doc:`../tutorials/04_multicopy`).
+(:doc:`../tutorials/A4_multicopy`).

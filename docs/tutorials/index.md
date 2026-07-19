@@ -6,12 +6,13 @@
 :hidden:
 :caption: Part A — Coarse-grained simulation
 
-01_single_domain
-02_multidomain
-03_restart
-04_multicopy
-05_opt_nscal
-06_anneal
+A1_single_domain
+A2_multidomain
+A3_restart
+A4_multicopy
+A5_opt_nscal
+A6_anneal
+A7_idr_mixed
 ```
 
 ```{toctree}
@@ -19,6 +20,6 @@
 :hidden:
 :caption: Part B — Protein synthesis
 
-07_translation_cylinder
-08_ribosome_synthesis
+B1_translation_cylinder
+B2_ribosome_synthesis
 ```

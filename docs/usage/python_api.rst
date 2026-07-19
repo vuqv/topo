@@ -198,7 +198,7 @@ Multi-copy replication and splitting
 ------------------------------------
 
 Pack independent copies of a chain into one system, then split the combined
-trajectory afterwards (:doc:`../tutorials/04_multicopy`):
+trajectory afterwards (:doc:`../tutorials/A4_multicopy`):
 
 .. code-block:: python
 

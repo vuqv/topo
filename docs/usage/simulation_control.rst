@@ -181,7 +181,7 @@ description).
      - bool
      - no
      - ``no``
-     - Temperature protocol. ``no`` → constant-temperature equilibrium at ``ref_t`` (one phase). ``yes`` → a **quench** phase (hold at ``t_high``, then quench/cool to ``ref_t``; written to ``<outname>_quench.dcd``/``.log``) followed by a **production** phase (``md_steps`` at ``ref_t``; written to ``<outname>.dcd``/``.log``). Requires ``tcoupl = yes``. See :doc:`../tutorials/06_anneal`.
+     - Temperature protocol. ``no`` → constant-temperature equilibrium at ``ref_t`` (one phase). ``yes`` → a **quench** phase (hold at ``t_high``, then quench/cool to ``ref_t``; written to ``<outname>_quench.dcd``/``.log``) followed by a **production** phase (``md_steps`` at ``ref_t``; written to ``<outname>.dcd``/``.log``). Requires ``tcoupl = yes``. See :doc:`../tutorials/A6_anneal`.
    * - ``t_high``
      - float [K]
      - if ``anneal = yes``
@@ -246,7 +246,7 @@ description).
      - int
      - no
      - ``1``
-     - Number of independent, **non-interacting** copies of the input chain to pack into one simulation (better GPU utilization; ``n_copies`` trajectories per run). ``1`` disables replication. See :doc:`../tutorials/04_multicopy`.
+     - Number of independent, **non-interacting** copies of the input chain to pack into one simulation (better GPU utilization; ``n_copies`` trajectories per run). ``1`` disables replication. See :doc:`../tutorials/A4_multicopy`.
    * - ``copy_shift``
      - float [nm]
      - no
@@ -402,7 +402,7 @@ Temperature protocol (``anneal`` / ``t_high`` / ``anneal_*``)
     ``anneal_steps`` must be **many** relaxation times (and long enough to actually
     unfold the protein) — with a production-typical ``tau_t = 0.05`` ps⁻¹ (≈20 ps
     relaxation) that means a hold of many nanoseconds. Annealing requires
-    ``tcoupl = yes``. See :doc:`../tutorials/06_anneal` for a full walkthrough.
+    ``tcoupl = yes``. See :doc:`../tutorials/A6_anneal` for a full walkthrough.
 
 Periodic boundary conditions
     Turning ``pbc`` on affects the non-bonded forces and how coordinates are
@@ -422,7 +422,7 @@ Multi-copy runs (``n_copies`` / ``copy_shift``)
     :func:`topo.make_noninteracting_copies` whenever ``n_copies > 1``; afterwards
     split the combined trajectory into per-copy DCDs with
     :func:`topo.split_chains` (memory-bounded streaming; CLI
-    ``python -m topo.utils.multichain``). See :doc:`../tutorials/04_multicopy` for
+    ``python -m topo.utils.multichain``). See :doc:`../tutorials/A4_multicopy` for
     a complete walkthrough.
 
 Output layout (``output_dir`` / ``outname``)

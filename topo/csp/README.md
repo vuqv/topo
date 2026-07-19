@@ -12,7 +12,7 @@ topo-csp -f csp.ini
 python -m topo.csp -f csp.ini
 ```
 
-See **[Tutorial 8](../../tutorials/08_ribosome_synthesis/)** for runnable, validated
+See **[Tutorial B.2](../../tutorials/B2_ribosome_synthesis/)** for runnable, validated
 examples — 4c5c (smoke `csp_debug.ini`, full-length `csp_val.ini`) and P0CX28 — and
 [`review/TODO.md`](../../review/TODO.md) for the done/remaining matrix.
 

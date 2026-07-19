@@ -6,7 +6,7 @@ Optimization control options
 Optimizer parameters are read from an ``.ini`` file (e.g. ``optimize.ini``) by
 :func:`topo.optimize.read_optimize_config`. For *why* the nscale needs
 optimizing at all, see :doc:`nscale_optimization`; for a worked run see the
-tutorial :doc:`../tutorials/05_opt_nscal`.
+tutorial :doc:`../tutorials/A5_opt_nscal`.
 
 * The file is a flat list of ``key = value`` lines.
 * Comments: inline or on their own line, starting with ``;`` or ``#``.

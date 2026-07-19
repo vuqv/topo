@@ -1,7 +1,7 @@
-# Tutorial 7 — Protein synthesis through an analytic exit tunnel
+# Tutorial B.1 — Protein synthesis through an analytic exit tunnel
 
 This is the **structure-based (topo) twin** of cosmo's tutorial 09. The
-ribosome-based runner ([Tutorial 8](08_ribosome_synthesis.md))
+ribosome-based runner ([Tutorial B.2](B2_ribosome_synthesis.md))
 builds the ribosome from **explicit beads** and threads the nascent chain through
 the coarse-grained exit tunnel. Here the tunnel is modelled
 **analytically** instead: a cylindrical **bore** of radius `r` along the X-axis
@@ -54,11 +54,11 @@ on the tunnel axis at the PTC `(x_lo, 0, 0)`; new residues are seeded there.
 ## Run
 
 ```bash
-cd tutorials/07_translation_cylinder
+cd tutorials/B1_translation_cylinder
 topo-cylinder -f cylinder.ini          # or: python -m topo.csp.cylinder -f cylinder.ini
 ```
 
-All parameters live in [`cylinder.ini`](https://github.com/vuqv/topo/blob/main/tutorials/07_translation_cylinder/cylinder.ini). The
+All parameters live in [`cylinder.ini`](https://github.com/vuqv/topo/blob/main/tutorials/B1_translation_cylinder/cylinder.ini). The
 nascent chain is the 106-residue P0CX28, with `domain.yaml` + the precomputed STRIDE
 for the contact map, and `P0CX28_mrna.txt` for the codon kinetics. Tunnel defaults:
 bore radius **0.9 nm**, length **10.0 nm** (`x_lo=0`, `x_exit=10`), axis on X, mouth

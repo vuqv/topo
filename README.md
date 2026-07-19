@@ -148,7 +148,7 @@ every domain/interface stays folded:
 topo-optimize -f optimize.ini -o opt_out
 ```
 
-See [tutorials/05_opt_nscal/](tutorials/05_opt_nscal/) for the optimizer.
+See [tutorials/A5_opt_nscal/](tutorials/A5_opt_nscal/) for the optimizer.
 
 ### B · Protein synthesis
 
@@ -160,8 +160,8 @@ topo-csp -f csp.ini                    # explicit coarse-grained ribosome
 topo-cylinder -f cylinder.ini          # analytic cylindrical tunnel
 ```
 
-See [tutorials/08_ribosome_synthesis/](tutorials/08_ribosome_synthesis/) and
-[tutorials/07_translation_cylinder/](tutorials/07_translation_cylinder/).
+See [tutorials/B2_ribosome_synthesis/](tutorials/B2_ribosome_synthesis/) and
+[tutorials/B1_translation_cylinder/](tutorials/B1_translation_cylinder/).
 
 ## Tutorials
 
@@ -169,14 +169,14 @@ Ready-to-run, ordered examples live in [`tutorials/`](tutorials/):
 
 | #  | Tutorial                         | Topic                                                    |
 | -- | -------------------------------- | ------------------------------------------------------- |
-| 1  | `01_single_domain_quickstart`    | Build and run your first single-domain simulation.       |
-| 2  | `02_multidomain_domain_scaling`  | Per-domain and per-interface contact scaling.            |
-| 3  | `03_restart_and_outputs`         | Checkpoint/resume and the files a run writes.            |
-| 4  | `04_multicopy`                   | Many independent, non-interacting copies in one job.     |
-| 5  | `05_opt_nscal`                   | Automatically calibrate the contact `nscale`.            |
-| 6  | `06_anneal_quench`               | Temperature ramps to melt/quench and observe (un)folding.|
-| 7  | `07_translation_cylinder`        | Co-translational synthesis through an analytic tunnel.    |
-| 8  | `08_ribosome_synthesis`          | Co-translational synthesis on a CG ribosome.             |
+| 1  | `A1_single_domain_quickstart`    | Build and run your first single-domain simulation.       |
+| 2  | `A2_multidomain_domain_scaling`  | Per-domain and per-interface contact scaling.            |
+| 3  | `A3_restart_and_outputs`         | Checkpoint/resume and the files a run writes.            |
+| 4  | `A4_multicopy`                   | Many independent, non-interacting copies in one job.     |
+| 5  | `A5_opt_nscal`                   | Automatically calibrate the contact `nscale`.            |
+| 6  | `A6_anneal_quench`               | Temperature ramps to melt/quench and observe (un)folding.|
+| 7  | `B1_translation_cylinder`        | Co-translational synthesis through an analytic tunnel.    |
+| 8  | `B2_ribosome_synthesis`          | Co-translational synthesis on a CG ribosome.             |
 
 ## Documentation
 

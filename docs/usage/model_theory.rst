@@ -440,7 +440,7 @@ provide chain self-avoidance without biasing toward any non-native fold.
 
    Splitting the well depth into H-bond + backbone–sidechain + sidechain–sidechain
    parts is what makes the **per-domain scaling** (:doc:`domain_definition`) and
-   the **nscale optimizer** (:doc:`../tutorials/05_opt_nscal`) possible: the
+   the **nscale optimizer** (:doc:`../tutorials/A5_opt_nscal`) possible: the
    scale factor :math:`n_\mathrm{scale}` multiplies **only the sidechain–sidechain
    part**, leaving the backbone hydrogen-bond and backbone–sidechain energies
    untouched. You can therefore tune the stability of one domain or one interface
@@ -625,7 +625,7 @@ diffusive (as for a protein in water) rather than ballistic.
   run — the standard production protocol.
 * **Annealing/quenching** (``anneal = yes``) adds a hot *quench* phase before
   production, to unfold the protein and watch it refold; see
-  :doc:`../tutorials/06_anneal`.
+  :doc:`../tutorials/A6_anneal`.
 * **Pressure coupling** (a Monte-Carlo barostat) and **periodic boundary
   conditions** are available (``pcoupl``/``pbc``) but are rarely needed for a
   single implicit-solvent chain.
@@ -649,7 +649,7 @@ only marginally folded. Three pages cover why and how to set it:
   per domain and per interface (start here).
 * :doc:`domain_definition` — the file format, per-domain and per-interface
   scaling, discontiguous domains, and decoupling.
-* :doc:`../tutorials/05_opt_nscal` — the automatic optimizer that searches a
+* :doc:`../tutorials/A5_opt_nscal` — the automatic optimizer that searches a
   discrete nscale ladder for the smallest :math:`n_\mathrm{scale}` that keeps
   each domain and interface folded across many trajectories.
 

@@ -53,6 +53,7 @@ see :doc:`citation` for the full list with DOIs.
 
    usage/simulation_control
    usage/domain_definition
+   usage/disordered_regions
    usage/native_contacts
    usage/mirror_detection
    usage/outputs

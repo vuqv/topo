@@ -12,7 +12,7 @@ So: run these first for a green baseline, implement IDR, then keep them green. W
 ``disordered:`` reader lands, add the *masked* variants (spec tests 2, 3, 5, 6, 8, 9, 10) that
 assert the changed behavior; these baseline tests stay as the regression floor.
 
-Fixture: ``tutorials/01_single_domain_quickstart/P0CX28_clean.pdb`` (106 residues, all-atom).
+Fixture: ``tutorials/A1_single_domain_quickstart/P0CX28_clean.pdb`` (106 residues, all-atom).
 STRIDE must be importable/on PATH (it is vendored under ``assets/``); the run is deterministic,
 so the pinned values below are exact fingerprints of the current build.
 
@@ -24,7 +24,7 @@ import numpy as np
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-PDB = REPO_ROOT / "tutorials" / "01_single_domain_quickstart" / "P0CX28_clean.pdb"
+PDB = REPO_ROOT / "tutorials" / "A1_single_domain_quickstart" / "P0CX28_clean.pdb"
 
 # Tolerance for pinned float aggregates. The pipeline is deterministic given a fixed
 # STRIDE + MDAnalysis, so a tight relative tolerance is appropriate; loosen only if a

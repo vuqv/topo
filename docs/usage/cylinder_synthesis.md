@@ -10,7 +10,7 @@ in-tunnel segment extended so the chain threads out the exit and folds
 **co-translationally** once it clears the bore.
 
 - **CLI:** `topo-cylinder -f cylinder.ini` (or `python -m topo.csp.cylinder -f cylinder.ini`)
-- **Worked example:** Tutorial 7 (`tutorials/07_translation_cylinder/`, the 106-residue P0CX28).
+- **Worked example:** Tutorial B.1 (`tutorials/B1_translation_cylinder/`, the 106-residue P0CX28).
 - **Module:** [`topo.csp.cylinder`](../topo) — a parallel module to the explicit-bead
   `topo.csp.protocol`. It **reuses** the shared low-level engine `topo.csp.core`
   (one-time contact precompute, build-once-subset length model, seed / restrain /
@@ -34,7 +34,7 @@ All paths in the INI are relative to the working directory; run from the tutoria
 folder.
 
 ```bash
-cd tutorials/07_translation_cylinder
+cd tutorials/B1_translation_cylinder
 topo-cylinder -f cylinder.ini          # -> synth_out/
 
 # stitch the per-length trajectories into a movie AND draw the analytic tunnel
@@ -148,7 +148,7 @@ place:** {doc}`synthesis_control` — the *shared* keys (inputs, kinetics, integ
 post-synthesis, `resume`) plus the **Cylinder-runner-only** `tunnel_*` geometry keys
 (`tunnel_radius`, `tunnel_length`, `tunnel_x_lo`, `tunnel_center`, `tunnel_k`,
 `tunnel_mouth_round`) that define the analytic bore. A runnable `cylinder.ini` example is
-on that page and in `tutorials/07_translation_cylinder/`.
+on that page and in `tutorials/B1_translation_cylinder/`.
 
 Two cylinder-specific points: there is **no `ribosome` PDB** (the tunnel is analytic), and
 `time_stage_1` / `time_stage_2` are accepted but have **no effect** — with a single MD

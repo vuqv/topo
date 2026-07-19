@@ -11,7 +11,7 @@ kinetics with the explicit ribosome replaced by a cylindrical bore — see
 
 - **CLI:** `topo-csp -f csp.ini` (or `python -m topo.csp -f csp.ini`)
 - **Movie tool:** `topo-csp-movie -o <out_root> [--ribosome ribo.pdb]`
-- **Worked example:** Tutorial 8 (`tutorials/08_ribosome_synthesis/`) — a smoke run
+- **Worked example:** Tutorial B.2 (`tutorials/B2_ribosome_synthesis/`) — a smoke run
   (`csp_debug.ini`, L = 1 → 8) and a full-length validation (`csp_val.ini`, L = 1 → 306)
   on 4c5c, plus a second protein (P0CX28).
 - **Architecture:** CSP is a thin outer loop. The per-length MD work — building the
@@ -30,8 +30,8 @@ All paths in the INI are relative to the working directory; run from the tutoria
 folder. A GPU is recommended (the explicit-ribosome system has ~4,600 ribosome beads).
 
 ```bash
-# Run the CSP on 4c5c (Tutorial 8)
-cd tutorials/08_ribosome_synthesis/4c5c
+# Run the CSP on 4c5c (Tutorial B.2)
+cd tutorials/B2_ribosome_synthesis/4c5c
 topo-csp -f csp_debug.ini       # smoke run -> synth_out_debug/  (or csp_val.ini -> synth_out/ for full length)
 
 # Stitch the per-stage trajectories into one VMD movie
@@ -121,7 +121,7 @@ them as **three MD sub-stages per residue**.
   (smaller-x) C-terminus hold plane, `x₀ = min(A-target.x, P-target.x)` —
   the P-site, where the C-terminus is tethered — so the held C-terminus sits on the plane
   and the chain grows away from it. It is recomputed for whatever ribosome PDB you supply,
-  so it never goes stale; for Tutorial 8's `ribosome_trunc.pdb` it is **x₀ ≈ 1.05 nm**.
+  so it never goes stale; for Tutorial B.2's `ribosome_trunc.pdb` it is **x₀ ≈ 1.05 nm**.
 - **Thermostat.** Langevin dynamics at `ref_t = 310 K`, friction `tau_t = 0.05 /ps`,
   timestep `dt = 0.015 ps`.
 - **Optional flexible exit-tunnel loop.** The ribosome is rigid by default, but
@@ -388,7 +388,7 @@ synthesis). Step counts may additionally be clamped to
 `[min_steps_per_stage, max_steps_per_stage]` for tractability — a clamp on **MD steps
 only**; the sampled dwell **times in seconds** are recorded untouched in `dwell_times.dat`.
 
-**(e) Worked example (real 4c5c mRNA, Tutorial 8).** The first residues of
+**(e) Worked example (real 4c5c mRNA, Tutorial B.2).** The first residues of
 `4c5c_mrna.txt` and their `τ` from the default E. coli 310 K table:
 
 | residue | codon | τ (s) |
@@ -409,7 +409,7 @@ mean(t3) = τ(ACU) − time_stage_1 − time_stage_2
          = 0.023025 s          # mean of the exponential; sampled t3 = −mean·ln(U)
 ```
 
-Then → MD steps at Tutorial 8's `scale_factor = 216564650`, `dt = 0.015 ps`:
+Then → MD steps at Tutorial B.2's `scale_factor = 216564650`, `dt = 0.015 ps`:
 
 ```text
 t_sim = 0.023025 s × 1e9 / 216564650 = 0.10632 ns
@@ -432,7 +432,7 @@ and one-sided tunnel wall remain. Biologically this is **termination** — relea
 free the finished protein. With the tether gone, the chain **diffuses out of the tunnel
 along +x** (the one-sided wall biases motion forward) and clears the ribosome. Each phase
 is skipped when its step count is `0`. For a longer, dedicated egress demonstration, raise
-`ejection_steps` in the Tutorial 8 `csp_val.ini`.
+`ejection_steps` in the Tutorial B.2 `csp_val.ini`.
 
 The ejection is **extendable**, but extension is opt-in via `restart` (default `no`):
 `ejection_steps` is the *cumulative* free-run length. If the chain has not fully left the
@@ -476,7 +476,7 @@ energy → ~10¹³ kJ/mol), corrupting that stage's frames. The guard
 the timestep halved and the step count doubled** — and because the dwell time is
 `n_steps · dt`, halving `dt` and doubling `n_steps` **leaves the dwell time exactly
 unchanged** (up to 6 halvings). Watch for `[stability] …` lines in the log. With the
-default `AllBonds` seeding the guard essentially never fires: Tutorial 8's full-length run
+default `AllBonds` seeding the guard essentially never fires: Tutorial B.2's full-length run
 (`csp_val.ini`, L = 1 → 306, `AllBonds`) completes all 919 stages with zero blow-ups.
 
 ---
@@ -538,7 +538,7 @@ kinetic-dwell boundaries; and only stage 3 writes `traj_final.pdb`. There is no 
 **`dwell_times.dat`** records, per residue, the codon, the three sampled dwell **times in
 seconds** (`t1`/`t2`/`t3`), their nanosecond equivalents, and the integer MD step counts —
 the physical schedule, independent of any step clamp. This is the file to compare against a
-reference run for quantitative validation (Tutorial 8). It is drawn **once** before the run
+reference run for quantitative validation (Tutorial B.2). It is drawn **once** before the run
 and doubles as the **immutable plan** for resume (its `#PTC` header pins the restraint
 geometry); see {doc}`synthesis_resume`.
 
@@ -637,5 +637,5 @@ See the {doc}`API reference <../topo>` for the autodocumented `topo.csp.protocol
   Hamiltonian CSP uses, restricted to the synthesized residues).
 - {doc}`API reference <../topo>` — the shared low-level engine `topo.csp.core`
   (`run_length`, `RunParams`), `topo.csp.ribosome`, and `topo.csp.kinetics`.
-- Tutorial 8 (`tutorials/08_ribosome_synthesis/`) — runnable, validated CSP examples on
+- Tutorial B.2 (`tutorials/B2_ribosome_synthesis/`) — runnable, validated CSP examples on
   4c5c (smoke `csp_debug.ini` + full-length `csp_val.ini`) and P0CX28.

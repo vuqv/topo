@@ -43,6 +43,18 @@ article table.docutils .literal {
     overflow-wrap: anywhere;
 }
 
+/* Keep inline math inside cells from forcing overflow. A MathJax equation is an
+   atomic box that will not line-wrap, so a wide one (e.g. max(eps_NN, ...)) can
+   spill into the neighbouring column. Cap it to the cell width and let it scroll
+   horizontally within the cell as a graceful fallback. Targets both the docutils
+   .math span and the mjx-container MathJax swaps in at runtime. */
+article table.docutils .math,
+article table.docutils mjx-container {
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+}
+
 /* 3. Compact sidebar brand.
       Furo sizes the logo to the full sidebar width by default, which pushes the
       nav down and hides content. Cap the mark small and tighten the surrounding

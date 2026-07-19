@@ -1,8 +1,8 @@
-# Tutorial 8 — Protein synthesis on a coarse-grained ribosome
+# Tutorial B.2 — Protein synthesis on a coarse-grained ribosome
 
 **Goal:** synthesize a protein **residue by residue on TOPO's own coarse-grained
 ribosome**, using codon-resolved kinetics with `topo-csp`. This is the
-ribosome-based counterpart to [Tutorial 7](07_translation_cylinder.md),
+ribosome-based counterpart to [Tutorial B.1](B1_translation_cylinder.md),
 which replaces the physical ribosome with an analytic cylindrical tunnel.
 
 Everything here is **standalone TOPO**: the ribosome is a truncated CG bead model
@@ -26,16 +26,16 @@ and is ejected once complete.
 > see [Visualizing the synthesis process](../usage/synthesis_visualization.md).
 
 **Prerequisite:** the coarse-grained model of
-[Tutorial 1](01_single_domain.md) and
+[Tutorial A.1](A1_single_domain.md) and
 the domain-scaling idea of
-[Tutorial 2](02_multidomain.md).
+[Tutorial A.2](A2_multidomain.md).
 
 ## Two worked systems
 
 | System | Residues | Notes |
 |--------|----------|-------|
 | `4c5c/` | 306, multidomain | Full-length synthesis `L = 1 → 306`, then ejection. The main validation case. |
-| `P0CX28/` | 106, single-domain | The single-domain protein from Tutorial 1, `L = 1 → 106`, `nscale = 2.5044`. |
+| `P0CX28/` | 106, single-domain | The single-domain protein from Tutorial A.1, `L = 1 → 106`, `nscale = 2.5044`. |
 
 ## Files (per system)
 

@@ -1,4 +1,4 @@
-# Tutorial 3 — Restarting a run & understanding the outputs
+# Tutorial A.3 — Restarting a run & understanding the outputs
 
 **Goal:** learn how to (a) **continue** a simulation from a checkpoint — essential
 for long production runs that exceed a wall-clock limit or get interrupted — and
@@ -6,7 +6,7 @@ for long production runs that exceed a wall-clock limit or get interrupted — a
 
 **Time:** two short runs, ~2 seconds each.
 
-**Prerequisite:** do [Tutorial 1](01_single_domain.md) first. This
+**Prerequisite:** do [Tutorial A.1](A1_single_domain.md) first. This
 tutorial reuses the same single-domain protein (`P0CX28`).
 
 ![P0CX28 continued trajectory](img/process.gif)
@@ -107,4 +107,4 @@ print(u.atoms.n_atoms, "CA beads,", len(u.trajectory), "frames")
 
 - Split a longer run into 3+ stages (`md_steps = 15000`, `20000`, …) to mimic a
   cluster job that resubmits itself until it reaches the target length.
-- Apply the same restart pattern to the multidomain run from Tutorial 2.
+- Apply the same restart pattern to the multidomain run from Tutorial A.2.

@@ -1,7 +1,7 @@
-# Tutorial 5 — Optimizing the contact nscale (*n*<sub>scale</sub>)
+# Tutorial A.5 — Optimizing the contact nscale (*n*<sub>scale</sub>)
 
 **Goal:** instead of *hard-coding* the per-domain and per-interface contact
-nscales in `domain.yaml` (as in [Tutorial 2](02_multidomain.md)),
+nscales in `domain.yaml` (as in [Tutorial A.2](A2_multidomain.md)),
 this tutorial **searches** for them automatically, so the force field is just
 strong enough to keep the native structure of every domain and interface folded.
 
@@ -13,8 +13,8 @@ strong enough to keep the native structure of every domain and interface folded.
 **Time:** minutes on a GPU (10 copies × short MD × up to 6 rounds); longer for a
 production-length protocol.
 
-**Prerequisites:** [Tutorial 2](02_multidomain.md)
-(what `nscale` does) and [Tutorial 4](04_multicopy.md)
+**Prerequisites:** [Tutorial A.2](A2_multidomain.md)
+(what `nscale` does) and [Tutorial A.4](A4_multicopy.md)
 (the multi-copy runs the optimizer uses to collect independent trajectories).
 
 ![stability trajectory at a candidate nscale](img/process.gif)
@@ -183,7 +183,7 @@ default worth knowing: `dt = 0.015` ps, the model's 15 fs timestep).
 
 ## 6. The `domain.yaml` — note the `class` field
 
-Same format as Tutorial 2, plus a **`class`** per domain (the only field the
+Same format as Tutorial A.2, plus a **`class`** per domain (the only field the
 optimizer needs beyond `residues`):
 
 ```yaml

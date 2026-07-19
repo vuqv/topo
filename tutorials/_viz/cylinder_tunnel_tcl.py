@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Emit a VMD scenery script that draws Tutorial 7's analytic exit tunnel.
+"""Emit a VMD scenery script that draws Tutorial B.1's analytic exit tunnel.
 
 The cylinder synthesis (`topo-cylinder`) has **no ribosome beads** -- the tunnel
 is a pure force. To *show* it in the process GIF we draw it as VMD ``graphics``

@@ -1,4 +1,4 @@
-# Tutorial 2 — Multidomain proteins & per-domain contact scaling
+# Tutorial A.2 — Multidomain proteins & per-domain contact scaling
 
 **Goal:** simulate a multidomain protein and control the contact-energy nscale
 **within** each domain and **across** domain interfaces using a `domain.yaml`
@@ -7,7 +7,7 @@ multidomain enzyme.
 
 **Time:** ~4 seconds on a CPU.
 
-**Prerequisite:** do [Tutorial 1](01_single_domain.md) first.
+**Prerequisite:** do [Tutorial A.1](A1_single_domain.md) first.
 
 ![1AKE 300 K trajectory](img/process.gif)
 
@@ -72,7 +72,7 @@ Reading it out:
 ## Step-by-step
 
 ### 1. Note the one change in `md.ini`
-Compared with Tutorial 1, the only addition is:
+Compared with Tutorial A.1, the only addition is:
 ```ini
 domain_def = domain.yaml
 ```
@@ -91,7 +91,7 @@ In the build log you'll see `Domain definition file: domain.yaml`, a
 summary, confirming the 214×214 contact matrices were built with your scaling applied.
 
 ### 3. Outputs
-Same set as Tutorial 1, in the `traj/` run folder:
+Same set as Tutorial A.1, in the `traj/` run folder:
 `traj/traj.log`, `traj/traj.dcd`, `traj/traj.chk`, `traj/traj.psf`,
 `traj/traj_final.pdb`, `traj/traj_runinfo.log` (plus the cached STRIDE
 `*_stride.dat` next to the input PDB).
@@ -117,4 +117,4 @@ discontiguous, decoupled, 3+ domains, partial assignment):
   first at elevated temperature while A stays folded.
 - Set `inter_domains: A-B: 0.0` to decouple the domains and observe them moving
   independently.
-- Continue to **Tutorial 3** to learn restarting and the output files in depth.
+- Continue to **Tutorial A.3** to learn restarting and the output files in depth.

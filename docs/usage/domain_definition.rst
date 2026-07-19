@@ -10,6 +10,15 @@ by :func:`topo.utils.nonbonded.read_yaml_config` and
 It is **optional**: if you omit ``domain_def``, every SS contact is scaled by
 1.0 (i.e. no domain scaling at all).
 
+.. note::
+
+   **Disordered / IDR regions live in this same file.** The domain_def file can
+   also carry an optional ``disordered:`` section that marks residues as
+   intrinsically disordered (native contacts removed + a weak non-specific
+   attraction). When that section is present, ``intra_domains`` becomes optional
+   too — a file with only ``disordered:`` + ``n_residues`` is valid. See
+   :doc:`disordered_regions` for the full treatment and syntax.
+
 .. tip::
 
    **Where to get domain boundaries.** If your simulation uses a native
@@ -108,11 +117,13 @@ Any key **not** in this table is silently ignored by the reader.
        used to detect unassigned residues. Must match the structure being
        simulated.
    * - ``intra_domains``
-     - **yes**
+     - usually
      - mapping
      - One entry per domain. Each key is a **domain name** (see naming rules
        below); each value is a mapping with ``residues`` and ``nscale`` (and
-       optionally ``class``).
+       optionally ``class``). Required for a folded protein; **optional** when a
+       ``disordered:`` section is present (a fully-disordered chain has no
+       domains — see :doc:`disordered_regions`).
    * - ``intra_domains.<name>.residues``
      - **yes**
      - list
@@ -195,7 +206,7 @@ How it is interpreted
   backbone–sidechain contributions are not affected by these factors.
 * ``class`` is an **optional** per-domain field (``alpha``, ``beta`` or
   ``alpha-beta``; ``a``/``b``/``c`` accepted). It is used **only** by the nscale
-  optimizer (:doc:`../tutorials/05_opt_nscal`) to pick which *n*\ :sub:`scale`
+  optimizer (:doc:`../tutorials/A5_opt_nscal`) to pick which *n*\ :sub:`scale`
   ladder a domain climbs, and is **ignored** by the runner — the YAML reader only
   reads ``residues`` and ``nscale``. Include it on domains you intend to
   optimize; omit it otherwise.
@@ -209,13 +220,53 @@ How it is interpreted
    than removing them. To intentionally **decouple** two domains (remove their
    inter-domain native contacts), set the pair explicitly to ``0.0``.
 
-.. note::
+Unassigned residues — the auto ``X`` domain
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-   **Unassigned residues** (any residue in ``1..n_residues`` not listed in a
-   domain) are automatically collected into a domain named ``'X'`` with intra
-   nscale ``1.0`` and inter nscale ``1.0`` to every other domain. This is a
-   convenience fallback; for reproducible runs it is best to assign every
-   residue explicitly so no residue silently lands in ``X``.
+Any residue in ``1..n_residues`` that you do **not** list in an ``intra_domains``
+block is not dropped — after parsing, the reader gathers all such residues into a
+single automatically-created domain named ``X``. Its ``nscale`` behavior is fixed
+and worth understanding in full:
+
+* **Every contact touching an unassigned residue is scaled by 1.0.** ``X`` is
+  given intra ``nscale = 1.0`` *and* inter ``nscale = 1.0`` to every real domain.
+  So both an ``X``–``X`` contact (both residues unassigned) and an ``X``–``A``
+  contact (one unassigned, one in domain ``A``) use a factor of ``1.0``, whatever
+  ``A``'s own ``nscale`` is. Unassigned residues are effectively "everything left
+  at the raw, uncalibrated scale".
+* **1.0 means *kept*, not *removed*.** A scale of ``1.0`` leaves the
+  sidechain–sidechain well depths at their unscaled values; it does **not** delete
+  any native contacts. Unassigned residues therefore still form all of their
+  native contacts (H-bond, backbone–sidechain, and SS at raw strength) and **fold
+  normally** — ``X`` is simply the un-tuned default, *not* a flexible or
+  disordered region. (To actually *remove* a region's native contacts and make it
+  disordered, use the ``disordered:`` section instead — see
+  :doc:`disordered_regions`.)
+* **``X`` is one bucket, regardless of sequence position.** All unassigned
+  residues land in the *same* ``X`` even if they are scattered across the chain
+  (e.g. an N-terminal tail and a C-terminal tail). A contact between two such
+  residues is treated as **intra-``X``** (scale 1.0), not as an interface between
+  two separate pieces.
+* **You cannot set ``X``'s nscale from the file.** ``X`` is synthesized *after*
+  the YAML is parsed and is always ``1.0``; there is no key to change it, and a
+  block you write named ``X`` is overwritten whenever any residue is left
+  unassigned (hence the "do not name a domain ``X``" rule in *Field reference*).
+  To give those residues any scale other than ``1.0``, **assign them to a named
+  domain** — either their own domain or an existing one (a single whole-chain
+  domain is the way to apply one uniform factor everywhere; see Scenario 1).
+* **The optimizer does not tune ``X``.** The nscale optimizer
+  (:doc:`nscale_optimization`) only optimizes the domains you name (and their
+  interfaces); unassigned residues are simulated at ``1.0`` every round but are
+  never a scoring unit and never climb the ladder. If you want a region's
+  stability calibrated, give it a name and a ``class``.
+
+.. tip::
+
+   For reproducible, intentional runs it is best to **assign every residue
+   explicitly** so nothing silently lands in ``X`` at scale 1.0. Relying on ``X``
+   is fine for a quick run or a genuinely default-scale linker/tail, but a
+   forgotten residue range is indistinguishable from a deliberate one once it is
+   in ``X``. Scenario 6 shows the auto-``X`` fallback in use.
 
 
 Scenarios

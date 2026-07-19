@@ -10,7 +10,7 @@ and for **every domain and domain–domain interface** declared in your
 ``domain.yaml``.
 
 It is the same scorer the nscale optimizer uses internally
-(:doc:`../tutorials/05_opt_nscal`), exposed as a standalone command and a small
+(:doc:`../tutorials/A5_opt_nscal`), exposed as a standalone command and a small
 Python API.
 
 
@@ -217,7 +217,7 @@ uses):
 Typical workflow
 ----------------
 
-1. **Run a simulation** (:doc:`../tutorials/01_single_domain`) producing
+1. **Run a simulation** (:doc:`../tutorials/A1_single_domain`) producing
    ``traj/traj.psf`` and ``traj/traj.dcd``.
 2. **Score it** against the structure you built from::
 
@@ -226,7 +226,7 @@ Typical workflow
 
 3. **Plot / interpret.** A stable folded run sits near ``Q ≈ 1``; raising
    ``ref_t`` toward the melting temperature drives *Q* down as native contacts
-   break. In an annealing run (:doc:`../tutorials/06_anneal`), score the
+   break. In an annealing run (:doc:`../tutorials/A6_anneal`), score the
    ``_quench`` trajectory to confirm *Q* → 0 (the protein really unfolded) and
    the production trajectory to watch *Q* climb back as it refolds.
 

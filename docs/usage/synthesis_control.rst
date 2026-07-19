@@ -35,7 +35,7 @@ Once TOPO is installed (``pip install -e .`` from the repo root):
     topo-csp-movie -o synth_out --ribosome ribosome_trunc.pdb
 
 A GPU is recommended for ``topo-csp``: the truncated ribosome adds several thousand rigid
-beads. See :doc:`../tutorials/08_ribosome_synthesis` for a runnable, validated example.
+beads. See :doc:`../tutorials/B2_ribosome_synthesis` for a runnable, validated example.
 
 Example control files
 ---------------------

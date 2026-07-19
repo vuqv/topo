@@ -27,21 +27,24 @@ protein can be made more or less stable.
 
 .. rubric:: Tutorials
 
-* :doc:`1 · Single-domain quickstart <tutorials/01_single_domain>` — build and
+* :doc:`A.1 · Single-domain quickstart <tutorials/A1_single_domain>` — build and
   run your first simulation of a small single-domain protein, then read its
   outputs.
-* :doc:`2 · Multidomain & per-domain contact scaling <tutorials/02_multidomain>`
+* :doc:`A.2 · Multidomain & per-domain contact scaling <tutorials/A2_multidomain>`
   — control contact-energy stability **within** each domain and **across**
   interfaces with a ``domain.yaml``.
-* :doc:`3 · Restart & outputs <tutorials/03_restart>` — checkpoint and resume a
+* :doc:`A.3 · Restart & outputs <tutorials/A3_restart>` — checkpoint and resume a
   run, and understand every file it writes.
-* :doc:`4 · Many independent copies <tutorials/04_multicopy>` — replicate one
+* :doc:`A.4 · Many independent copies <tutorials/A4_multicopy>` — replicate one
   protein into many non-interacting copies in a single job.
-* :doc:`5 · Optimizing the contact scale (nscale) <tutorials/05_opt_nscal>` —
+* :doc:`A.5 · Optimizing the contact scale (nscale) <tutorials/A5_opt_nscal>` —
   automatically calibrate the per-domain and per-interface ``nscale`` so every
   unit stays folded.
-* :doc:`6 · Anneal & quench <tutorials/06_anneal>` — drive temperature ramps to
+* :doc:`A.6 · Anneal & quench <tutorials/A6_anneal>` — drive temperature ramps to
   melt, quench, and observe (un)folding.
+* :doc:`A.7 · Disordered / IDR regions <tutorials/A7_idr_mixed>` — mark part of a
+  chain intrinsically disordered with a ``disordered:`` section; the folded core
+  keeps its shape while the tails and loops stay flexible.
 
 .. rubric:: Reference
 
@@ -60,16 +63,16 @@ B. Protein synthesis
 Grow the nascent chain **N→C, one residue at a time**, so the protein can fold
 co-translationally as it emerges from the exit tunnel. Both tutorials layer
 codon-resolved kinetics on the Part A model but differ in how the ribosome exit
-tunnel is represented — and so in which runner they use: Tutorial 7 uses
-``topo-cylinder`` (an analytic tunnel), Tutorial 8 uses ``topo-csp`` (an explicit
+tunnel is represented — and so in which runner they use: Tutorial B.1 uses
+``topo-cylinder`` (an analytic tunnel), Tutorial B.2 uses ``topo-csp`` (an explicit
 coarse-grained ribosome).
 
 .. rubric:: Tutorials
 
-* :doc:`7 · Synthesis through an analytic tunnel <tutorials/07_translation_cylinder>`
+* :doc:`B.1 · Synthesis through an analytic tunnel <tutorials/B1_translation_cylinder>`
   — the exit tunnel is a cylindrical bore through a wall (no explicit ribosome
   beads); fast, never jams, and the chain folds co-translationally on egress.
-* :doc:`8 · Synthesis on a coarse-grained ribosome <tutorials/08_ribosome_synthesis>`
+* :doc:`B.2 · Synthesis on a coarse-grained ribosome <tutorials/B2_ribosome_synthesis>`
   — the ribosome-based counterpart: grow the chain through TOPO's own truncated
   CG ribosome, then eject the completed protein (worked on 4c5c and P0CX28).
 

@@ -1,4 +1,4 @@
-# Tutorial 1 — Single-domain quickstart
+# Tutorial A.1 — Single-domain quickstart
 
 **Goal:** run your first TOPO simulation end-to-end and understand the inputs and
 outputs. We use a small single-domain protein (`P0CX28`, 106 residues) and the
@@ -33,7 +33,7 @@ keeps the fold stable. CA trace coloured N→C (blue→red).*
   sidechain–sidechain contact energies. It is tuned so the model reproduces a
   target property (here, realistic stability at 300 K); for `P0CX28` the
   calibrated value is **2.5044**. The raw, unscaled value (1.0) would leave the
-  protein under-stabilized and only marginally folded. Tutorial 2 generalizes
+  protein under-stabilized and only marginally folded. Tutorial A.2 generalizes
   this to *different* nscales per domain and across domain interfaces. For the
   full `domain.yaml` syntax — every key, its type, and the YAML basics — see
   [Domain definition file](../usage/domain_definition.rst).
@@ -90,7 +90,7 @@ named `traj.*`:
 |------|------------|
 | `traj/traj.log` | Fixed-width, space-aligned energy/temperature log (one line every `nstlog` steps). |
 | `traj/traj.dcd` | Trajectory (coordinates every `nstxout` steps) — open with VMD/MDAnalysis. |
-| `traj/traj.chk` | Binary checkpoint (positions + velocities) for restarting (Tutorial 3). |
+| `traj/traj.chk` | Binary checkpoint (positions + velocities) for restarting (Tutorial A.3). |
 | `traj/traj.psf` | Topology of the CA model (for loading the DCD in analysis tools). |
 | `traj/traj_final.pdb` | Last conformation (CA PDB); reuse as `init_position` to seed a follow-up run. |
 | `traj/traj_runinfo.log` | Run provenance: package versions, hardware, GPU, timing. |
@@ -110,7 +110,7 @@ a non-exploding potential energy mean the run is healthy.
   `vmd traj/traj.psf traj/traj.dcd`.
 - Raise `ref_t` toward the protein's unfolding temperature and look for the
   potential energy climbing as native contacts break.
-- Move on to **Tutorial 2** to handle a multidomain protein.
+- Move on to **Tutorial A.2** to handle a multidomain protein.
 
 > Tip: each run overwrites the `traj/` folder. To keep a run, copy the folder
 > aside or point `output_dir` at a new folder (e.g. `output_dir = runs/P0CX28_T300`).

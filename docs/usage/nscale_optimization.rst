@@ -28,7 +28,7 @@ This page explains **why a raw, unscaled model is rarely usable as-is** and why
 the right value is chosen **per domain and per interface** rather than globally.
 For the file format see :doc:`domain_definition`; for the options that drive the
 automatic search see :doc:`optimization_control`; for a worked run see the
-tutorial :doc:`../tutorials/05_opt_nscal`.
+tutorial :doc:`../tutorials/A5_opt_nscal`.
 
 
 The raw model is under-stabilized
@@ -59,7 +59,7 @@ A multidomain protein is not uniformly stable. Its domains differ in
   :math:`\beta` domain, and a mixed :math:`\alpha/\beta` domain reach the same
   marginal stability at *different* contact strengths (this is why the calibrated
   ladder is indexed by structural class; see Table 1 in
-  :doc:`../tutorials/05_opt_nscal`);
+  :doc:`../tutorials/A5_opt_nscal`);
 * **size and contact density** — a small, sparsely packed domain needs a deeper
   well to stay folded than a large, densely packed one;
 * **interface character** — the contacts *between* two domains form their own
@@ -103,7 +103,7 @@ Rather than tuning by hand, TOPO restricts :math:`n_\mathrm{scale}` to a small,
 median fallback, calibrated on a training set of 19 small single-domain proteins
 (`Leininger et al., PNAS 116, 5523–5532, 2019
 <https://www.pnas.org/doi/full/10.1073/pnas.1813003116>`_). The
-:doc:`optimizer <../tutorials/05_opt_nscal>` then starts every domain and
+:doc:`optimizer <../tutorials/A5_opt_nscal>` then starts every domain and
 interface at the bottom of its ladder and, round by round, raises only the units
 that fail a stability test (all trajectories keeping *Q* above threshold for
 nearly all frames), freezing each one as soon as it holds. The result is the
@@ -116,7 +116,7 @@ Where to go next
 
 * :doc:`domain_definition` — the ``domain.yaml`` format: per-domain and
   per-interface scaling, discontiguous domains, and decoupling.
-* :doc:`../tutorials/05_opt_nscal` — the hands-on optimizer tutorial (the ladder,
+* :doc:`../tutorials/A5_opt_nscal` — the hands-on optimizer tutorial (the ladder,
   the per-round search, and the recommended ``ntraj`` / ``min_contacts`` settings).
 * :doc:`native_contacts` — the *Q* score that measures how folded each unit is.
 * :doc:`model_theory` — the full potential energy function that

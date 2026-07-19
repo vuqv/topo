@@ -51,7 +51,7 @@ entry points it uses).
 | **`optimization.py`** (implemented) | **Top-level driver:** reads `optimize.ini`; owns ladder, per-unit levels, per-round Q, stability decision, convergence/fallback, final `domain.yaml`. |
 | **`optimize.ini`** | Minimal user config (essentials + optimizer controls); the driver fills implicit defaults and expands it into each `round_N/md.ini`. |
 | `domain.yaml` | Initial domains: `residues` + `class`. The driver writes a fresh `round_N/domain.yaml` with the current `nscale` each round. |
-| `run_simulation.py` | The MD engine, **invoked by `optimization.py`** each round with the generated `round_N/md.ini`. **`n_copies = ntraj`** gives the N independent trajectories in **one** run (Tutorial 4). |
+| `run_simulation.py` | The MD engine, **invoked by `optimization.py`** each round with the generated `round_N/md.ini`. **`n_copies = ntraj`** gives the N independent trajectories in **one** run (Tutorial A.4). |
 | **`topo.split_chains`** (package) | Splits the combined multi-copy DCD into N per-copy DCDs (`traj_<k>.dcd`). Memory-bounded chunked streaming (handles DCDs too large for memory); `optimization.py` calls it in-process. Also a `python -m topo.utils.multichain` CLI. |
 | **`topo.analysis.native_contacts`** (package module) | Per-domain / per-interface *Q* from `domain.yaml` + reference PDB + CG PSF/DCD. `optimization.py` imports it in-process (builds native contacts once, reuses each round); also a `python -m topo.analysis.native_contacts` CLI. Generalized from an earlier AK-specific `calc_OP.py` template (since removed). |
 
@@ -122,7 +122,7 @@ for round in 1 .. MAX_LEVEL+1:
 
     # 3. run ntraj INDEPENDENT trajectories in ONE simulation (multi-copy).
     #    Set n_copies = ntraj in md.ini -> run_simulation.py replicates the chain
-    #    into ntraj non-interacting copies (Tutorial 4), then split per chain.
+    #    into ntraj non-interacting copies (Tutorial A.4), then split per chain.
     run_simulation.py -f round_dir/md.ini          # md.ini: n_copies = ntraj,
                                                     #         domain_def = round_dir/domain.yaml
     split_chains(round_dir/traj/traj.dcd,  # -> traj_0.dcd .. traj_{ntraj-1}.dcd
@@ -205,7 +205,7 @@ function is_stable(unit u):
    `round_N/md.ini` per round (`n_copies = ntraj`, `domain_def`, `output_dir`,
    `ref_t`), invokes `run_simulation.py`, then splits in-process with
    `topo.split_chains`. Copy independence is guaranteed by the
-   multi-copy primitive (Tutorial 4).
+   multi-copy primitive (Tutorial A.4).
 3. ~~**`nscale` is required by the parser**~~ **Not an issue.** The parser reads
    `nscale` with a hard lookup ([nonbonded.py:649](../../topo/utils/nonbonded.py#L649)),
    but step 2 always writes a concrete value for every domain and interface from

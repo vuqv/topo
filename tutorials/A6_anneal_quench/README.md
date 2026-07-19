@@ -1,4 +1,4 @@
-# Tutorial 6 — Temperature annealing & quenching
+# Tutorial A.6 — Temperature annealing & quenching
 
 **Goal:** drive a simulation through a **temperature protocol** instead of a
 single constant temperature — hold the protein hot enough to unfold, then bring
@@ -7,7 +7,7 @@ quench** or a **linear cooling ramp**.
 
 **Time:** two short runs, ~2–3 seconds each.
 
-**Prerequisite:** do [Tutorial 1](01_single_domain.md)
+**Prerequisite:** do [Tutorial A.1](A1_single_domain.md)
 first — this reuses the same single-domain protein (`P0CX28`) and its calibrated
 `domain.yaml`.
 
@@ -19,7 +19,7 @@ first — this reuses the same single-domain protein (`P0CX28`) and its calibrat
 
 ## The idea: a temperature *protocol* in two phases
 
-An ordinary run (Tutorials 1–4) is **equilibrium**: one Langevin thermostat held
+An ordinary run (Tutorials A.1–A.4) is **equilibrium**: one Langevin thermostat held
 at `ref_t` for all `md_steps`. Annealing (`anneal = yes`) splits the run into
 **two phases**, each writing its **own** trajectory and log:
 
@@ -120,7 +120,7 @@ That has two consequences:
 
 | File | Role |
 |------|------|
-| `P0CX28_clean.pdb` | Input structure (same single domain as Tutorial 1). |
+| `P0CX28_clean.pdb` | Input structure (same single domain as Tutorial A.1). |
 | `domain.yaml` | Calibrated contact `nscale` — folded at 300 K, unfolds at 600 K (syntax: [Domain definition file](../usage/domain_definition.rst)). |
 | `md.ini` | **Delta T-jump quench** (`anneal_ramp = jump`). |
 | `md_linear.ini` | **Linear cooling ramp** (`anneal_ramp = linear`). |
@@ -176,14 +176,14 @@ flat at 300 K.
 
 ### 3. (Optional) Confirm unfolding/refolding
 For a real study you'd track the fraction of native contacts *Q* with
-`topo.analysis` (see Tutorial 5's machinery): *Q* should fall toward 0 across
+`topo.analysis` (see Tutorial A.5's machinery): *Q* should fall toward 0 across
 `traj_quench.dcd` (the hot hold) and climb back toward 1 across `traj.dcd` (the
 `ref_t` production). With the tiny demo step counts here this is only
 illustrative — increase `anneal_steps` and `md_steps` for a meaningful curve.
 
 ## Annealing + restart
 
-Restart (Tutorial 3) applies to the **production phase only** — the quench is a
+Restart (Tutorial A.3) applies to the **production phase only** — the quench is a
 short, one-time preparation that is never restarted. Because the checkpoint holds
 production state and the production clock starts at 0, a restart behaves exactly
 like restarting a normal run:
@@ -222,5 +222,5 @@ want.)
 - Switch the demo to production-like coupling (`tau_t = 0.05`) and lengthen
   `anneal_steps` accordingly to see the realistic relaxation timescale.
 - Generate many independent refolding trajectories at once by combining this
-  protocol with **multi-copy** runs (Tutorial 4): set `n_copies > 1` to launch a
+  protocol with **multi-copy** runs (Tutorial A.4): set `n_copies > 1` to launch a
   batch of quenches in a single GPU job.

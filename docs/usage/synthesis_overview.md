@@ -61,5 +61,5 @@ scope".
   the tRNA tether/PTC anchors, the 3-stage mechanics, the codon→MD-step kinetics.
 * {doc}`cylinder_synthesis` — the analytic-tunnel runner.
 * {doc}`synthesis_control` — the `csp.ini` / `cylinder.ini` parameter reference.
-* {doc}`../tutorials/07_translation_cylinder` and
-  {doc}`../tutorials/08_ribosome_synthesis` — hands-on, ready-to-run examples.
+* {doc}`../tutorials/B1_translation_cylinder` and
+  {doc}`../tutorials/B2_ribosome_synthesis` — hands-on, ready-to-run examples.
