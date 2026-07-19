@@ -49,6 +49,20 @@ def _mask(end=MASK_END, n=N_RES):
 
 
 # --------------------------------------------------------------------------- #
+# Range-compression helper for the IDR overlap log line
+# --------------------------------------------------------------------------- #
+def test_format_residue_ranges():
+    """Consecutive residues collapse to a-b so the overlap log stays short."""
+    from topo.utils.nonbonded import format_residue_ranges as f
+    assert f([]) == "[]"
+    assert f([42]) == "[42]"
+    assert f([3, 1, 2, 5, 6, 7, 10]) == "[1-3, 5-7, 10]"          # sorted + deduped runs
+    assert f([2, 2, 3, 3, 4]) == "[2-4]"                          # duplicates collapse
+    # a fully contiguous block (an IDR spanning a domain) is one range, not N numbers
+    assert f(list(range(18, 165))) == "[18-164]"
+
+
+# --------------------------------------------------------------------------- #
 # Energy path — apply_disorder (§2.3)
 # --------------------------------------------------------------------------- #
 def test_contact_removal_self_avoiding(tmp_path, monkeypatch):

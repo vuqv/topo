@@ -625,6 +625,44 @@ def parse_residue_list(residue_items: List) -> List[int]:
                 residues.append(int(item))
     return residues
 
+
+def format_residue_ranges(nums: List[int]) -> str:
+    """Compress a list of residue numbers into a compact ``[a-b, c, d-e]`` string.
+
+    The inverse of :func:`parse_residue_list`: consecutive runs collapse to
+    ``start-end`` so a long contiguous block prints as one range instead of
+    thousands of numbers (e.g. an IDR covering residues 18..164 prints ``[18-164]``).
+    Duplicates are removed and the output is sorted.
+
+    Parameters
+    ----------
+    nums : list of int
+        Residue numbers (any order, duplicates allowed).
+
+    Returns
+    -------
+    str
+        e.g. ``"[18-164, 177-219, 279-363]"``; ``"[]"`` for an empty list.
+
+    Example
+    -------
+    >>> format_residue_ranges([3, 1, 2, 5, 6, 7, 10])
+    '[1-3, 5-7, 10]'
+    """
+    ordered = sorted(set(nums))
+    if not ordered:
+        return "[]"
+    parts = []
+    start = prev = ordered[0]
+    for n in ordered[1:]:
+        if n == prev + 1:
+            prev = n
+        else:
+            parts.append(f"{start}-{prev}" if start != prev else f"{start}")
+            start = prev = n
+    parts.append(f"{start}-{prev}" if start != prev else f"{start}")
+    return "[" + ", ".join(parts) + "]"
+
 def read_yaml_config(filepath: str) -> Tuple[Dict, Dict, Dict, Optional[Dict]]:
     """
     Read and parse domain definition YAML (intra/inter nscales, residue lists).
@@ -773,8 +811,9 @@ def read_yaml_config(filepath: str) -> Tuple[Dict, Dict, Dict, Optional[Dict]]:
         # it as info (not an error). `all_residues` holds only explicit-domain residues.
         overlap = sorted(set(dis_residues) & all_residues)
         if overlap:
-            print(f"[info] {filepath}: IDR overlap -- residues {overlap} are in both a "
-                  f"domain and 'disordered:'; treating them as disordered.")
+            print(f"[info] {filepath}: IDR overlap -- residues "
+                  f"{format_residue_ranges(overlap)} are in both a domain and "
+                  f"'disordered:'; treating them as disordered.")
 
     return domain_to_residues, intra_nscales, inter_nscales, disorder
 
@@ -1097,20 +1136,29 @@ def build_nonbonded_interaction(
     rmin_2_nm = np.asarray(rmin_2, dtype=float) / DISTANCE_TO_NM   # Angstrom -> nm
 
     # Report contact statistics over unique residue pairs (upper triangle, i < j).
-    # Native contacts are residue pairs flagged in the binary contact matrix;
-    # all remaining pairs interact through the non-native (excluded-volume) term.
-    # (These count the folded build; the disorder transform below removes IDR pairs.)
+    # Native contacts are residue pairs flagged in the binary contact matrix, derived
+    # from the INPUT STRUCTURE; all remaining pairs interact through the non-native
+    # (excluded-volume) term. For an IDR-containing protein this count is then reduced
+    # by the disorder transform below (see the IDR-masking line).
     n_native = int(np.triu(binary_contact_matrix, k=1).sum())
     n_pairs = n_residues * (n_residues - 1) // 2
     n_non_native = n_pairs - n_native
-    print(f"  native contacts: {n_native}  |  non-native pairs: {n_non_native}  "
-          f"(of {n_pairs} residue pairs)")
+    print(f"  native contacts (input structure): {n_native}  |  non-native pairs: "
+          f"{n_non_native}  (of {n_pairs} residue pairs)")
 
     # Disorder / IDR transform (spec §2.3): after the fully-folded build, overwrite
     # every pair touching a disordered residue (and those residues' per-residue radius).
     # Not called when there is no `disordered:` section -> folded runs stay byte-identical.
     if disorder is not None:
         dis_idx = np.asarray(disorder['residues'], dtype=int) - 1   # 1-based -> 0-based
+        # Inform how the input-structure native contacts are modified: every native
+        # contact touching a disordered residue is removed (it can never form).
+        dis_mask = np.zeros(n_residues, dtype=bool)
+        dis_mask[dis_idx] = True
+        involves_dis = dis_mask[:, None] | dis_mask[None, :]
+        n_idr_native = int(np.triu((binary_contact_matrix == 1) & involves_dis, k=1).sum())
+        print(f"  IDR masking: {n_idr_native} native contact(s) touch a disordered "
+              f"residue -> excluded; {n_native - n_idr_native} native contact(s) kept")
         rmin_matrix, eps_ij, rmin_2_nm = apply_disorder(
             rmin_matrix, eps_ij, rmin_2_nm, dis_idx, disorder['idr_scale'],
             index_to_resname, ss_interaction_energy)
