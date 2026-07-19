@@ -1091,8 +1091,7 @@ def build_nonbonded_interaction(
 
     # Per-residue Karanicolas-Brooks collision radius Rmin/2 (nm) -- O'Brien's nascent
     # excluded-volume radius (the A1..An values in his .prm), used for the nascent side
-    # of the NC<->ribosome excluded volume (see tutorials/15_claude_fix/
-    # TOPO_OBrien_NCribosome_nonbonded_compare.md). calculate_rmin_2_values already
+    # of the NC<->ribosome excluded volume. calculate_rmin_2_values already
     # returns Rmin/2 (Angstrom); just convert to nm. Computed unconditionally (not only
     # under return_rmin_2) because apply_disorder overrides it in place below.
     rmin_2_nm = np.asarray(rmin_2, dtype=float) / DISTANCE_TO_NM   # Angstrom -> nm

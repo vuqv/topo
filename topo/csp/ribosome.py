@@ -17,8 +17,7 @@ and wires the two ribosome <-> nascent-chain interactions, following the RNC des
    per-residue K-B (Option A) or per-AA ``OBRIEN_SC_RMIN_2_NM``, ribosome Rmin/2 from
    ``model_parameters`` via ``load_ribosome``), cutoff
    2.0 nm / switch 1.8 nm, interaction group ``{nascent}×{ribosome}``. (Earlier topo used a
-   pure ``ε(σ/r)¹²`` + average rule that was ~1000× too soft -- see
-   ``tutorials/15_claude_fix/TOPO_OBrien_NCribosome_nonbonded_compare.md``.)
+   pure ``ε(σ/r)¹²`` + average rule that was ~1000× too soft.)
 4. **Electrostatics:** extend the existing Yukawa force with the ribosome charges
    (rRNA phosphates −1e, charged residues ±1e) and restrict it to
    ``{nascent}×{nascent}`` + ``{nascent}×{ribosome}`` (the rigid ribosome's

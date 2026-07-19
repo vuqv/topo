@@ -459,7 +459,7 @@ def find_lengths(out_root: str,
 
     Scans ``<out_root>`` for ``L_<L>/`` length folders, sorted by ``L``; only
     lengths with both a ``.psf`` and a ``.dcd`` are kept. This is the **flat**
-    per-length layout (one trajectory per length, e.g. the Tutorial-9 cylinder
+    per-length layout (one trajectory per length, e.g. the ``topo-cylinder``
     runner), in contrast to the CSP per-stage layout (:func:`find_stage_segments`).
 
     Parameters
@@ -532,7 +532,7 @@ def stitch_length_movie(out_root: str, out_prefix: str = "movie",
     The flat-layout counterpart of :func:`stitch_movie`: enumerates
     ``<out_root>/L_<L>/`` per-length trajectories (:func:`find_lengths`), appends any
     ``ejection/`` phase (:func:`find_post`), and hands them to the
-    shared :func:`stitch_segments` core. Used by the Tutorial-9 cylinder runner.
+    shared :func:`stitch_segments` core. Used by the ``topo-cylinder`` runner.
 
     Parameters
     ----------

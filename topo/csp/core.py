@@ -8,13 +8,13 @@ Its consumers are:
 
 * :mod:`topo.csp.protocol` — the O'Brien Continuous Synthesis Protocol (CSP), which
   calls :func:`run_length` three times per residue (one per kinetic sub-stage), and
-* the Tutorial-9 cylinder runner (`tutorials/09_translation_cylinder/cylinder.py`),
-  which reuses these blocks with the ribosome modelled as an analytic cylinder.
+* the ``topo-cylinder`` runner (:mod:`topo.csp.cylinder`), which reuses these blocks
+  with the ribosome modelled as an analytic cylinder.
 
 (The standalone fixed-rate elongation runner — ``run_elongation`` / the
-``topo-elongate`` CLI — and its Tutorial 7 were removed: a fixed per-residue step
-count is not a physically meaningful synthesis model. Use CSP (``topo-csp``) for
-codon-resolved kinetics.)
+``topo-elongate`` CLI — was removed: a fixed per-residue step count is not a
+physically meaningful synthesis model. Use CSP (``topo-csp``) for codon-resolved
+kinetics.)
 
 The central primitive is :func:`run_length`, which builds, seeds, restrains, runs
 and finalizes **one length-``L`` segment** of nascent-chain MD:
@@ -92,9 +92,9 @@ RESTRAINT_K_KJ = 83680.0
 # The seeded structure is integrated at a 15 fs timestep with flexible (un-
 # constrained) bonds. For a few configurations -- when a newly formed native
 # contact introduces a stiff Go well -- 15 fs is too large and the dynamics diverge
-# (potential energy -> ~1e13 kJ/mol), corrupting that stage's trajectory frames
-# (see tutorials/12_auto/WHY_10_FAILS.md). O'Brien's reference v6 avoids
-# this with rigid AllBonds constraints; topo keeps flexible bonds (needed to seed
+# (potential energy -> ~1e13 kJ/mol), corrupting that stage's trajectory frames.
+# O'Brien's reference v6 avoids this with rigid AllBonds constraints; topo keeps
+# flexible bonds (needed to seed
 # the far-placed new residue at the A-site) and instead detects a diverging stage
 # and re-runs it with a halved timestep and proportionally more steps -- which
 # preserves the physical in-vivo dwell time (dwell = n_steps * dt) exactly while
@@ -138,7 +138,7 @@ def optimal_ptc_targets(ribo, *, aa_rmin_2_nm: float = 0.5,
     Seeding the new residue at ``a_target`` while the previous residue rests at
     ``p_target`` makes the always-present peptide bond start at its equilibrium
     length, so a rigid ``AllBonds`` constraint seeds/minimizes cleanly at 15 fs and
-    the dt-halving stability guard is not triggered (tutorials/14 step 2).
+    the dt-halving stability guard is not triggered.
 
     The points are found (all in OpenMM units: nm, kJ/mol, rad) by minimizing the soft
     O'Brien restraint energy -- the **A/P tRNA bonds** (``_PTC_D_A_NM`` / ``_PTC_D_P_NM``,
@@ -855,8 +855,8 @@ class RunParams:
     #               (Option A; O'Brien's actual nascent A_i radii). DEFAULT.
     #   "per_aa" -> per-amino-acid sidechain radii OBRIEN_SC_RMIN_2_NM (Option B; O'Brien's
     #               ribosomal-protein S<aa1> values). Optional fallback.
-    # See tutorials/15_claude_fix/OPTION_A_vs_B.md. The ribosome side always uses O'Brien's
-    # Rmin/2 from model_parameters (via load_ribosome), independent of this choice.
+    # The ribosome side always uses O'Brien's Rmin/2 from model_parameters (via
+    # load_ribosome), independent of this choice.
     nascent_ev_radii: str = "kb"
     minimize: bool = True
     # NOTE: whether to append the truncated ribosome as rigid (mass-0) scenery is no

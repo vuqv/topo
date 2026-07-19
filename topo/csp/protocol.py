@@ -134,7 +134,7 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
     ep = params
     # Two C-terminus restraint paths (selected by ep.trna_tether, set from the INI):
     #  - position restraint (default): a moving harmonic spring to the A/P target POINT,
-    #    switched a->a->p over the 3 stages (the validated Tutorials 12/13 path);
+    #    switched a->a->p over the 3 stages;
     #  - O'Brien tRNA tether (trna_tether = yes): a bond + orienting angles + improper to
     #    the A-site tRNA beads (stages 1-2) then the P-site tRNA beads (stage 3), which
     #    reproduces O'Brien's orientation control. The A<->P switch is by tether site
@@ -692,9 +692,9 @@ def read_csp_config(config_file: str, verbose: bool = True) -> CSPConfig:
             raise ValueError(f"{config_file}: nascent_ev_radii must be 'kb' or 'per_aa', "
                              f"got {mode!r}.")
         p.nascent_ev_radii = mode
-    # C-terminus restraint mode. Default OFF = the validated position-restraint path
-    # (Tutorials 12/13/14/15 baseline). `trna_tether = yes` switches to O'Brien's full
-    # tRNA tether (bond + 2 angles + improper, A-site stages 1-2 / P-site stage 3).
+    # C-terminus restraint mode. Default OFF = the validated position-restraint path.
+    # `trna_tether = yes` switches to O'Brien's full tRNA tether (bond + 2 angles +
+    # improper, A-site stages 1-2 / P-site stage 3).
     p.trna_tether = (bool(strtobool(opt("trna_tether")))
                       if opt("trna_tether") is not None else False)
     if opt("minimize") is not None:
