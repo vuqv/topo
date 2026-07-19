@@ -163,6 +163,57 @@ def test_eps_construction(tmp_path, monkeypatch):
     assert np.allclose(df.values, KCAL_TO_KJ * np.abs(raw.values - BT_SHIFT_KCAL))
 
 
+def test_eps_gen_additive(tmp_path, monkeypatch):
+    """Additive generic cohesion: IDR-IDR eps == max(NON_NATIVE, eps_gen_kj + a*ss),
+    and eps_gen_kj: 0 is identical to omitting it (idr_scale-only build)."""
+    from topo.utils.nonbonded import (
+        build_nonbonded_interaction, get_ss_interaction_energy, NON_NATIVE_KJ,
+    )
+    import MDAnalysis as mda
+    import warnings
+
+    monkeypatch.chdir(tmp_path)
+    EPS_GEN = 2.5104   # 0.6 kcal/mol in kJ/mol
+    dm_gen = _write_yaml(tmp_path / "gen.yaml", f"""
+        n_residues: {N_RES}
+        disordered:
+          residues: [1-{MASK_END}]
+          idr_scale: 1.0
+          eps_gen_kj: {EPS_GEN}
+        """)
+    dm_zero = _write_yaml(tmp_path / "zero.yaml", f"""
+        n_residues: {N_RES}
+        disordered:
+          residues: [1-{MASK_END}]
+          idr_scale: 1.0
+          eps_gen_kj: 0.0
+        """)
+    dm_absent = _write_yaml(tmp_path / "absent.yaml", f"""
+        n_residues: {N_RES}
+        disordered:
+          residues: [1-{MASK_END}]
+          idr_scale: 1.0
+        """)
+    _, eps_gen, _ = build_nonbonded_interaction(str(PDB), dm_gen, return_rmin_2=True)
+    _, eps_zero, _ = build_nonbonded_interaction(str(PDB), dm_zero, return_rmin_2=True)
+    _, eps_absent, _ = build_nonbonded_interaction(str(PDB), dm_absent, return_rmin_2=True)
+
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore")
+        u = mda.Universe(str(PDB))
+    ss = get_ss_interaction_energy(u)
+
+    m = _mask()
+    dd = m[:, None] & m[None, :]
+    expected = np.maximum(NON_NATIVE_KJ, EPS_GEN + 1.0 * ss)
+    assert np.allclose(eps_gen[dd], expected[dd])
+    # eps_gen_kj: 0 == omitting it == the original idr_scale-only build.
+    assert np.allclose(eps_zero, eps_absent)
+    # a positive eps_gen deepens every IDR-IDR well relative to eps_gen_kj = 0.
+    assert np.all(eps_gen[dd] >= eps_zero[dd])
+    assert np.any(eps_gen[dd] > eps_zero[dd])
+
+
 def test_default_idr_scale(tmp_path, monkeypatch):
     """§3 test 9: omitting idr_scale is identical to an explicit idr_scale: 0.03."""
     from topo.utils.nonbonded import build_nonbonded_interaction

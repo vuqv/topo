@@ -681,10 +681,12 @@ def read_yaml_config(filepath: str) -> Tuple[Dict, Dict, Dict, Optional[Dict]]:
 
     The optional ``disordered:`` section marks intrinsically-disordered (IDR)
     residues; it carries ``residues:`` (required, same syntax as a domain's
-    residue list) and ``idr_scale:`` (optional, default
-    :data:`DEFAULT_IDR_SCALE` = 0.03 -- the IDR-IDR attraction knob). It is
-    returned as the fourth value (``None`` when absent) and consumed by
-    :func:`apply_disorder` inside :func:`build_nonbonded_interaction`.
+    residue list), ``idr_scale:`` (optional, default
+    :data:`DEFAULT_IDR_SCALE` = 0.03 -- the sequence-specific IDR-IDR attraction
+    knob) and ``eps_gen_kj:`` (optional, default 0.0 -- an additive,
+    sequence-independent generic-cohesion depth in kJ/mol). It is returned as the
+    fourth value (``None`` when absent) and consumed by :func:`apply_disorder`
+    inside :func:`build_nonbonded_interaction`.
 
     The per-domain scaling key is ``nscale``. The legacy key ``strength`` is still
     accepted as a deprecated alias (a one-time deprecation notice is printed).
@@ -705,7 +707,8 @@ def read_yaml_config(filepath: str) -> Tuple[Dict, Dict, Dict, Optional[Dict]]:
         (d1, d2) and (d2, d1) are both set.
     disorder : dict or None
         ``None`` when there is no ``disordered:`` section; otherwise
-        ``{'residues': [int, ...], 'idr_scale': float}`` (1-based residue numbers).
+        ``{'residues': [int, ...], 'idr_scale': float, 'eps_gen_kj': float}``
+        (1-based residue numbers).
 
     Raises
     ------
@@ -726,7 +729,8 @@ def read_yaml_config(filepath: str) -> Tuple[Dict, Dict, Dict, Optional[Dict]]:
           A-B: 0.5
         disordered:            # optional; None when absent
           residues: [1-24]
-          idr_scale: 0.03
+          idr_scale: 0.03       # sequence-specific BT scale
+          eps_gen_kj: 0.0       # optional additive generic cohesion (kJ/mol)
 
     >>> dom, intra, inter, disorder = read_yaml_config("domain.yaml")
     >>> dom["A"][:3]
@@ -805,7 +809,12 @@ def read_yaml_config(filepath: str) -> Tuple[Dict, Dict, Dict, Optional[Dict]]:
     if dis_cfg is not None:
         dis_residues = parse_residue_list(dis_cfg['residues'])
         idr_scale = float(dis_cfg.get('idr_scale', DEFAULT_IDR_SCALE))
-        disorder = {'residues': dis_residues, 'idr_scale': idr_scale}
+        # Optional additive generic-cohesion term (kJ/mol, sequence-independent),
+        # given directly in kJ/mol so it adds to the kJ ss_interaction_energy without
+        # conversion. Default 0.0 -> byte-identical to the idr_scale-only build.
+        eps_gen_kj = float(dis_cfg.get('eps_gen_kj', 0.0))
+        disorder = {'residues': dis_residues, 'idr_scale': idr_scale,
+                    'eps_gen_kj': eps_gen_kj}
         # Overlap with an explicit domain is legal -- disorder wins (spec §2.2) -- but
         # a residue accidentally left in both sections is disordered silently, so log
         # it as info (not an error). `all_residues` holds only explicit-domain residues.
@@ -936,7 +945,8 @@ def calculate_rmin_2_values(binary_contact_matrix: np.ndarray, ca_distances: np.
 def apply_disorder(rmin_matrix: np.ndarray, eps_ij: np.ndarray, rmin_2_nm: np.ndarray,
                    dis_idx: np.ndarray, idr_scale: float,
                    index_to_resname: Dict[int, str],
-                   ss_interaction_energy: np.ndarray):
+                   ss_interaction_energy: np.ndarray,
+                   eps_gen_kj: float = 0.0):
     """Transform a folded non-bonded build into an IDR-aware one (spec §2.3).
 
     Runs at the very end of :func:`build_nonbonded_interaction`, after the folded
@@ -945,8 +955,10 @@ def apply_disorder(rmin_matrix: np.ndarray, eps_ij: np.ndarray, rmin_2_nm: np.nd
     folded residue's Karanicolas-Brooks radius byte-identical to a folded-only run.
 
     Three pair classes result (spec §2.1): folded-folded (untouched, Go),
-    IDR-IDR (``max(NON_NATIVE_KJ, idr_scale * eps_BT)``), and IDR-folded
-    (excluded-volume only). The well position for every IDR-involving pair is the
+    IDR-IDR (``max(NON_NATIVE_KJ, eps_gen_kj + idr_scale * eps_BT)``), and IDR-folded
+    (excluded-volume only). ``eps_gen_kj`` is an optional additive, sequence-independent
+    generic-cohesion term (0 by default -> the original idr_scale-only well). The well
+    position for every IDR-involving pair is the
     sum rule of the per-residue radii, with IDR residues switched to the
     transferable per-AA :data:`IDR_RMIN_2_NM` and folded residues kept on K-B.
 
@@ -972,6 +984,9 @@ def apply_disorder(rmin_matrix: np.ndarray, eps_ij: np.ndarray, rmin_2_nm: np.nd
         The RAW per-pair BT energy matrix (kJ/mol) from
         :func:`get_ss_interaction_energy` (abs + shift + kcal->kJ already applied);
         NOT the domain-scaled version -- the IDR well must not inherit ``nscale``.
+    eps_gen_kj : float, optional
+        Additive, sequence-independent generic-cohesion depth (kJ/mol) added to every
+        IDR-IDR well before the excluded-volume floor. Default 0.0 (idr_scale-only).
 
     Returns
     -------
@@ -993,9 +1008,11 @@ def apply_disorder(rmin_matrix: np.ndarray, eps_ij: np.ndarray, rmin_2_nm: np.nd
     rmin_matrix[involves_dis] = (rmin_2_nm[:, None] + rmin_2_nm[None, :])[involves_dis]
     eps_ij[involves_dis] = NON_NATIVE_KJ
 
-    # 3. IDR-IDR only: the weak generic attraction, never below the floor (so the
-    #    chain cannot pass through itself even at idr_scale = 0).
-    eps_ij[dd] = np.maximum(NON_NATIVE_KJ, idr_scale * ss_interaction_energy[dd])
+    # 3. IDR-IDR only: additive generic cohesion (eps_gen_kj, sequence-independent)
+    #    plus the sequence-specific BT attraction, never below the excluded-volume
+    #    floor (so the chain cannot pass through itself even at idr_scale = 0).
+    eps_ij[dd] = np.maximum(NON_NATIVE_KJ,
+                            eps_gen_kj + idr_scale * ss_interaction_energy[dd])
     return rmin_matrix, eps_ij, rmin_2_nm
 
 
@@ -1161,7 +1178,8 @@ def build_nonbonded_interaction(
               f"residue -> excluded; {n_native - n_idr_native} native contact(s) kept")
         rmin_matrix, eps_ij, rmin_2_nm = apply_disorder(
             rmin_matrix, eps_ij, rmin_2_nm, dis_idx, disorder['idr_scale'],
-            index_to_resname, ss_interaction_energy)
+            index_to_resname, ss_interaction_energy,
+            eps_gen_kj=disorder.get('eps_gen_kj', 0.0))
 
     if return_rmin_2:
         return rmin_matrix, eps_ij, rmin_2_nm
