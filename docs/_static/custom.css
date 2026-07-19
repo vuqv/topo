@@ -130,3 +130,31 @@ article p:has(> img:only-child) + p em {
 .polyversion-switcher select:hover {
     border-color: var(--color-foreground-border);
 }
+
+/* 5. Changelog page — collapsible release entries.
+   changelog-collapse.js wraps each release into a <details class="changelog-entry">
+   with its heading as the <summary>. Style the summary to read like the original
+   h2 and give the disclosure a clear affordance. Entries are collapsed by default
+   so a long release history stays scannable. */
+details.changelog-entry {
+    margin: 0.6rem 0;
+    border-top: 1px solid var(--color-background-border, #e1e4e5);
+    padding-top: 0.4rem;
+}
+details.changelog-entry > summary {
+    cursor: pointer;
+    font-size: 1.4rem;
+    font-weight: 600;
+    line-height: 1.3;
+    padding: 0.25rem 0;
+}
+details.changelog-entry > summary:hover {
+    color: var(--color-link, #2980b9);
+}
+details.changelog-entry[open] > summary {
+    margin-bottom: 0.6rem;
+}
+/* The ¶ headerlink lives inside the summary; don't let it toggle-flicker on hover. */
+details.changelog-entry > summary .headerlink {
+    font-size: 1rem;
+}
