@@ -57,7 +57,7 @@ added.
    * - **IDR–IDR**
        (both residues in the mask)
      - removed
-     - :math:`\max\!\bigl(\varepsilon_\mathrm{NN},\ \texttt{idr\_scale}\cdot
+     - :math:`\max\!\bigl(\varepsilon_\mathrm{NN},\ s_\mathrm{IDR}\,
        \varepsilon_\mathrm{BT}\bigr)` (defined below)
      - per-AA + per-AA (sum rule)
    * - **IDR–folded**
@@ -66,8 +66,9 @@ added.
      - :math:`\varepsilon_\mathrm{NN}` — **excluded-volume only**
      - per-AA + K–B (sum rule)
 
-where :math:`\varepsilon_\mathrm{NN}` is the non-native floor
-(:math:`1.32\times10^{-4}` kcal/mol) and :math:`\varepsilon_\mathrm{BT}(i,j)` is
+where :math:`s_\mathrm{IDR}` is the ``idr_scale`` knob,
+:math:`\varepsilon_\mathrm{NN}` is the non-native floor
+(:math:`1.32\times10^{-4}` kcal/mol), and :math:`\varepsilon_\mathrm{BT}(i,j)` is
 the **sidechain–sidechain BT interaction energy** for the two residue types — the
 *same* per-pair energy the model uses for native SS contacts, namely
 
@@ -79,12 +80,12 @@ the **sidechain–sidechain BT interaction energy** for the two residue types �
 i.e. the raw ``bt_potential.csv`` value shifted by the 0.6 kcal/mol reference,
 made positive with :math:`|\cdot|`, and converted kcal→kJ (this is exactly
 :func:`topo.utils.nonbonded.get_ss_interaction_energy`). So the IDR–IDR depth is
-:math:`\texttt{idr\_scale}\cdot 4.184\,|\mathrm{raw}-0.6|`, **not**
+:math:`s_\mathrm{IDR}\cdot 4.184\,|\mathrm{raw}-0.6|`, **not**
 ``idr_scale`` times the bare CSV number.
 
 **Depth — the weak IDR–IDR attraction.** Within a disordered region every
 non-local pair gets a weak, sequence-modulated attraction
-:math:`\texttt{idr\_scale}\cdot\varepsilon_\mathrm{BT}(i,j)`. It is *non-specific
+:math:`s_\mathrm{IDR}\cdot\varepsilon_\mathrm{BT}(i,j)`. It is *non-specific
 in coverage* (it acts on every non-local IDR–IDR pair, not just would-be native
 contacts) but *chemically heterogeneous in depth* (the BT energy varies by
 residue-pair type). Physically this is a weak, non-fold-encoding attraction — a
