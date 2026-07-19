@@ -138,13 +138,12 @@ also accepted.
 The combined per-frame classifier
 ----------------------------------
 
-The two signals are complementary, so a frame is flagged a **mirror image** only
+The two signals are complementary, so the per-frame ``is_mirror`` flag is true only
 when all three conditions agree — folded, chirally inverted, and a clearly better
 fit to the reflected reference:
 
 .. math::
 
-   \texttt{is\_mirror} \;=\;
    \underbrace{(Q > 0.5)}_{\text{folded}} \;\wedge\;
    \underbrace{(K < 0.3)}_{\text{inverted handedness}} \;\wedge\;
    \underbrace{\left(\tfrac{\mathrm{RMSD}_\mathrm{reflected}}
@@ -214,15 +213,14 @@ Per-trajectory verdict
 ----------------------
 
 ``is_mirror`` is emitted **per frame**. The tool also prints a single
-per-trajectory verdict taken over the **last** ``--summary-last-frames`` frames
-(default **133**):
+per-trajectory verdict, ``TRAJECTORY_MIRROR``, taken over the **last**
+``--summary-last-frames`` frames (default **133**):
 
 .. math::
 
-   \texttt{TRAJECTORY\_MIRROR} =
-   (\overline{Q}_\text{tail} > 0.5) \wedge
-   (\overline{K}_\text{tail} < 0.3) \wedge
-   (\overline{\mathrm{RMSD\_ratio}}_\text{tail} < 0.9),
+   (\overline{Q}_\text{tail} > 0.5) \;\wedge\;
+   (\overline{K}_\text{tail} < 0.3) \;\wedge\;
+   (\overline{\text{RMSD ratio}}_\text{tail} < 0.9),
 
 i.e. the **tail means** of each signal thresholded by the same cutoffs.
 
