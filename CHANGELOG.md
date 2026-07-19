@@ -3,6 +3,50 @@
 All notable changes to TOPO are documented here. The format is loosely based on
 [Keep a Changelog](https://keepachangelog.com/); releases correspond to git tags.
 
+## [2026.2] — 2026-07-18
+
+Headline: **intrinsically disordered regions (IDRs)** in the Cα model, together with
+a per-part tutorial reorganization and a round of optimizer / config refinements.
+
+### Added
+- **Disordered / IDR regions.** An optional `disordered:` section in the
+  `domain_def` YAML marks residues whose native contacts are removed and replaced by
+  a weak, non-specific attraction. One knob — `idr_scale` (default `0.03`; `0` = a
+  pure self-avoiding chain). The mask reaches the energy path (`apply_disorder`), the
+  native-contact (Q) analysis, and the nscale optimizer (IDR-involving contacts are
+  excluded from Q), and continuous synthesis gets it for free — all from the single
+  section. Folded-only runs (no `disordered:` section) are byte-for-byte identical.
+  `intra_domains` is now optional, so a fully-disordered chain needs only
+  `disordered:` + `n_residues`.
+- **Tutorial A.7 — a protein with IDRs** (mixed folded + disordered, P28566) and a
+  **Disordered / IDR regions** user guide (how the model treats each pair class, how
+  to write the `disordered:` section, and sourcing IDR ranges via MobiDB or the
+  AlphaFold pLDDT < 70 proxy).
+- IDR build-log reporting: a compact, range-collapsed domain/IDR overlap notice, and
+  an "IDR masking" line reporting how many input-structure native contacts are
+  excluded vs kept.
+
+### Changed
+- **Tutorials renumbered to a per-part scheme:** Part A `A.1–A.7`, Part B `B.1–B.2`
+  (folders and doc stubs renamed accordingly, cross-references updated).
+- **Optimizer / config:** control files no longer need an `[OPTIONS]` header; each
+  round's `md.ini` is headerless; `outdir` is a control key; STRIDE is computed once
+  into the optimization root and reused every round; the `--python` flag was dropped.
+- **Default protocol:** `md_steps` 10 000, output frequency 5000, optimizer
+  `ref_t` 300 K.
+- Internal refactors: a single `run_stride` in `topo.utils.external`; the non-bonded
+  energy constants flattened into named UPPER_CASE module constants.
+
+### Fixed
+- The build-time large-force check prints a concise notice instead of a multi-line
+  `RuntimeWarning` for a benign, unminimized input.
+
+### Docs
+- README Citation section with Zenodo DOI badges; the enhanced-sampling and
+  custom-MD examples split into self-contained folders; an optimizer control-options
+  page plus option-table cleanup; stale references to an earlier tutorial layout
+  removed; meta-commentary trimmed across the doc set.
+
 ## [2026.1] — 2026-07-12
 
 **Initial tagged release.** Releases use CalVer `YEAR.N`; this first 2026 release
