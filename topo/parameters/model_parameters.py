@@ -45,102 +45,102 @@ parameters = {
         # moot under AllBonds constraints (bonds are rigid) but corrects flexible-bond runs.
         "bonded_exclusions_index": 2,
         "ALA": {
-            "mass": 71.00,
+            "mass": 71.08,
             "Rmin_2": 0.2862278,
             "charge": 0.0,
         },
         "ARG": {
-            "mass": 114.00, # should be around 156.19
+            "mass": 156.19,
             "Rmin_2": 0.3704125,
             "charge": 1.0,
         },
         "ASN": {
-            "mass": 114.00,
+            "mass": 114.10,
             "Rmin_2": 0.3199017,
             "charge": 0.0,
         },
         "ASP": {
-            "mass": 114.00,
+            "mass": 115.09,
             "Rmin_2": 0.3142894,
             "charge": -1.0,
         },
         "CYS": {
-            "mass": 114.00,  # concern, this should be around 103.10
+            "mass": 103.14,
             "Rmin_2": 0.3030648,
             "charge": 0.0,
         },
         "GLU": {
-            "mass": 128.00,
+            "mass": 129.12,
             "Rmin_2": 0.3367386,
             "charge": -1.0,
         },
         "GLN": {
-            "mass": 128.00,
+            "mass": 128.13,
             "Rmin_2": 0.3423509,
             "charge": 0.0,
         },
         "GLY": {
-            "mass": 57.00,
+            "mass": 57.05,
             "Rmin_2": 0.252554,
             "charge": 0.0,
         },
         "HIS": {
-            "mass": 114.00,  # should be around 137
+            "mass": 137.14,
             "Rmin_2": 0.3423509,
             "charge": 0.0,
         },
         "ILE": {
-            "mass": 113.00,
+            "mass": 113.16,
             "Rmin_2": 0.3423509,
             "charge": 0.0,
         },
         "LEU": {
-            "mass": 113.00,
+            "mass": 113.16,
             "Rmin_2": 0.3423509,
             "charge": 0.0,
         },
         "LYS": {
-            "mass": 128.00,
+            "mass": 128.17,
             "Rmin_2": 0.3535755,
             "charge": 1.0,
         },
         "MET": {
-            "mass": 131.00,
+            "mass": 131.19,
             "Rmin_2": 0.3423509,
             "charge": 0.0,
         },
         "PHE": {
-            "mass": 147.00,
+            "mass": 147.18,
             "Rmin_2": 0.3535755,
             "charge": 0.0,
         },
         "PRO": {
-            "mass": 114.00,  # should be about 97.12
+            "mass": 97.12,
             "Rmin_2": 0.3086771,
             "charge": 0.0,
         },
         "SER": {
-            "mass": 87.00,
+            "mass": 87.08,
             "Rmin_2": 0.2918401,
             "charge": 0.0,
         },
         "THR": {
-            "mass": 101.00,
+            "mass": 101.10,
             "Rmin_2": 0.3142894,
             "charge": 0.0,
         },
         "TRP": {
-            "mass": 186.00,
+            "mass": 186.21,
             "Rmin_2": 0.3816371,
             "charge": 0.0,
         },
         "TYR": {
-            "mass": 163.00,
+            "mass": 163.18,
             "Rmin_2": 0.3591879,
             "charge": 0.0,
         },
         "VAL": {
-            "mass": 99.00,
+            "mass": 99.13,
             "Rmin_2": 0.3311263,
             "charge": 0.0,
         },
