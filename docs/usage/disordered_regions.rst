@@ -23,7 +23,7 @@ The idea in one paragraph
 In TOPO the local backbone (3.81 Å bonds, the double-well transferable angle, and
 the Karanicolas transferable dihedral) is **already** the disorder-appropriate,
 non-Gō backbone for *every* residue — see :doc:`model_theory`. What makes a
-folded residue *folded* is therefore **only** its native (Gō) contacts. Marking a
+residue in a folded domain *folded* is therefore **only** its native (Gō) contacts. Marking a
 region disordered means: **remove its native contacts** and replace them with a
 weak, non-specific attraction, while keeping self-avoidance. Nothing about the
 bonds, angles, dihedrals, electrostatics, or the OpenMM force objects changes —
@@ -60,11 +60,11 @@ added.
      - :math:`\max\!\bigl(\varepsilon_\mathrm{NN},\ \varepsilon_\mathrm{gen} +
        s_\mathrm{IDR}\,\varepsilon_\mathrm{BT}\bigr)` (defined below)
      - :math:`r_\mathrm{vdw}` + :math:`r_\mathrm{vdw}` (sum rule)
-   * - **IDR–folded**
+   * - **folded–IDR**
        (exactly one residue in the mask)
      - removed
      - :math:`\varepsilon_\mathrm{NN}` — **excluded-volume only**
-     - :math:`r_\mathrm{vdw}` + K–B (sum rule)
+     - K–B + :math:`r_\mathrm{vdw}` (sum rule)
 
 where :math:`\varepsilon_\mathrm{gen}` is the ``eps_gen_kj`` generic-cohesion depth,
 :math:`s_\mathrm{IDR}` is the ``idr_scale`` knob,
@@ -131,24 +131,22 @@ never pass through itself.
    (typically > 1), so relative to *that* the IDR attraction is weaker still.
 
 **Position — the excluded-volume radius.** The collision radius is a property of
-the **residue**. For a disordered residue the structure-derived K–B radius is
-meaningless (its input coordinates do not define a fold), so IDR residues switch
-to the **transferable per-AA** ``Rmin_2`` from
-:mod:`topo.parameters.model_parameters`, converted to the *sigma-radius*
-:math:`r_\mathrm{vdw} = R_\mathrm{min}/2 \,/\, 2^{1/6}` — the O'Brien generic-bt
-convention, which places the well at the sum of collision radii rather than the sum
-of LJ-minimum radii (~11% tighter). Folded residues keep their K–B
+the **residue**. For a residue in an IDR region the structure-derived K–B radius is
+meaningless (its input coordinates do not define a fold), so those residues switch
+to the **transferable per-AA** van der Waals radius :math:`r_\mathrm{vdw}`.
+Residues in folded domains keep their K–B
 :math:`R_\mathrm{min}/2` unchanged. Pairs then combine by the plain sum rule, so
 
 .. math::
 
    R_{ij} = \begin{cases}
-     r_\mathrm{vdw}(i) + r_\mathrm{vdw}(j) & \text{IDR–IDR}\\
-     R_\mathrm{min}/2_i + r_\mathrm{vdw}(j) & \text{IDR–folded}\\
-     R_\mathrm{min}/2_i + R_\mathrm{min}/2_j & \text{folded–folded}
+     R_\mathrm{min}/2_i + R_\mathrm{min}/2_j & \text{folded–folded}\\
+     R_\mathrm{min}/2_i + r_\mathrm{vdw}(j) & \text{folded–IDR}\\
+     r_\mathrm{vdw}(i) + r_\mathrm{vdw}(j) & \text{IDR–IDR}
    \end{cases}
 
-Note that a folded bead keeps its *native* radius even when it meets an IDR bead —
+Note that a residue in a folded domain keeps its *native* radius even when it meets
+a residue in an IDR region —
 it is not shrunk in cross pairs. Because the conversion is applied to the
 **per-residue radius array**, the same radius reaches both the intra-chain and (for
 synthesis) the nascent↔ribosome excluded-volume channels — they cannot disagree. No
@@ -159,7 +157,7 @@ untouched (the global transferable backbone is already the disordered-appropriat
 choice). The ``CustomNonbondedForce`` construction is unchanged — it consumes the
 same two matrices. A run with **no** ``disordered:`` section is byte-for-byte
 identical to before the feature existed; even *with* a section, folded–folded
-pairs and every folded residue's K–B radius are untouched.
+pairs and the K–B radius of every residue in a folded domain are untouched.
 
 
 Defining a disordered region in ``domain.yaml``
@@ -219,34 +217,34 @@ Field reference
 
 .. list-table::
    :header-rows: 1
-   :widths: 26 12 12 50
+   :widths: 24 12 16 48
 
    * - Key
      - Required?
-     - Type
+     - Type (default)
      - Meaning / allowed values
    * - ``disordered``
      - no
-     - mapping
+     - mapping (absent)
      - Presence of this block turns on the IDR treatment. Omit it entirely for a
        fully-folded protein (then the run is byte-identical to before).
    * - ``disordered.residues``
      - **yes** (if the block is present)
-     - list
+     - list (—)
      - Residues to mark disordered. Same syntax as a domain's ``residues``:
        ranges (``"1-24"``, inclusive), bare integers, or a mix. Their native
        contacts are removed.
    * - ``disordered.eps_gen_kj``
      - no
-     - float
+     - float (``2.25``)
      - The generic-cohesion depth :math:`\varepsilon_\mathrm{gen}` (kJ/mol), added to
        every IDR–IDR well. **Defaults to 2.25** when omitted — the calibrated value
        (:ref:`idr-validation`). This is the knob for tuning how compact the
-       disordered chain is: raise it to compact, lower it to expand. IDR–folded pairs
+       disordered chain is: raise it to compact, lower it to expand. folded–IDR pairs
        are always excluded-volume only regardless of this value.
    * - ``disordered.idr_scale``
      - no
-     - float
+     - float (``1.0``)
      - The scale :math:`s_\mathrm{IDR}` on the sequence-dependent BT channel.
        **Defaults to 1.0** when omitted (the calibrated value). Set **both** this and
        ``eps_gen_kj`` to ``0`` for a pure self-avoiding chain.
@@ -283,7 +281,7 @@ an accidental double-listing is visible (it is not an error — overlap is legal
 Tuning the compaction
 ---------------------
 
-* **The defaults (``eps_gen_kj = 2.25``, ``idr_scale = 1.0``) are calibrated** — use
+* **The defaults are calibrated** (``eps_gen_kj = 2.25``, ``idr_scale = 1.0``) — use
   them unless you have a specific reason not to. They were fit against SAXS
   :math:`R_g` for 24 fully-disordered proteins (:ref:`idr-validation`). A chain with
   no attraction at all systematically **over-expands** most IDPs: SAXS/smFRET place
@@ -293,8 +291,8 @@ Tuning the compaction
   **without** locking in a fold. Because TOPO's Debye–Hückel electrostatics are
   always on (a repulsive term for charged chains), the balanced physical picture is
   *repulsion balanced by weak attraction*.
-* **To tune compaction, move ``eps_gen_kj`` first.** Raising it compacts every chain,
-  lowering it expands them.
+* **To tune compaction, move** ``eps_gen_kj`` **first.** Raising it compacts every
+  chain, lowering it expands them.
 * **Self-avoiding is the better call** for: a disordered **linker** whose role is
   reach / entropic tethering (compaction is not the observable); a **strongly
   charged, highly expanded** IDP that genuinely approaches self-avoiding-walk
@@ -356,8 +354,9 @@ the range between compact and expanded chains).
 
 .. note::
 
-   **IDR ↔ folded is always steric-only.** There is deliberately no knob for
-   attraction between a disordered residue and a folded one — those pairs feel
+   **folded ↔ IDR is always steric-only.** There is deliberately no knob for
+   attraction between a residue in a folded domain and a residue in an IDR region —
+   those pairs feel
    only excluded volume. (Transient/"fuzzy" IDR–domain binding is a documented
    future extension, not an active option.)
 

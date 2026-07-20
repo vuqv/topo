@@ -255,67 +255,52 @@ Arguments:
 
 .. list-table::
    :header-rows: 1
-   :widths: 24 12 12 52
+   :widths: 24 24 52
 
    * - Flag
-     - Type
-     - Default
+     - Type (default)
      - Meaning
    * - ``-r``, ``--reference``
-     - str
-     - *required*
+     - str (*required*)
      - **All-atom** reference: native Cα geometry, native contacts (*Q*), and the STRIDE source.
    * - ``-f``, ``--dcd``
-     - str
-     - *required*
+     - str (*required*)
      - CG trajectory to score.
    * - ``-o``, ``--output``
-     - str
-     - *required*
+     - str (*required*)
      - Output CSV path (parent dirs created if needed).
    * - ``-p``, ``--psf``
-     - str
-     - *optional*
+     - str (*optional*)
      - CG topology. If omitted, a Cα-only topology is **derived from the reference PDB** and the DCD attached to it — handy when the PSF flavor differs from the reference.
    * - ``-s``, ``--stride``
-     - str
-     - *optional*
+     - str (*optional*)
      - Precomputed STRIDE output (``LOC`` records). If neither this nor ``--segments`` is given, STRIDE is **run on the reference**.
    * - ``--segments``
-     - str
-     - *optional*
+     - str (*optional*)
      - Explicit ``<label> <start> <end>`` segment file (1-based). Takes precedence over STRIDE.
    * - ``--reflect-axis``
-     - x/y/z
-     - ``x``
+     - x/y/z (``x``)
      - Axis negated to build the reflected reference (any axis works).
    * - ``--min-seg-len``
-     - int
-     - ``4``
+     - int (``4``)
      - Minimum SS element length (residues) kept for chirality.
    * - ``-b``, ``--start-frame``
-     - int
-     - ``0``
+     - int (``0``)
      - First frame (inclusive; negative indexing supported).
    * - ``-e``, ``--end-frame``
-     - int
-     - ``-1``
+     - int (``-1``)
      - Last frame (exclusive; ``-1`` = last frame).
    * - ``--cutoff`` / ``--local-separation`` / ``--tolerance``
-     - —
-     - ``4.5`` / ``3`` / ``1.2``
+     - — (``4.5`` / ``3`` / ``1.2``)
      - Native-contact definition for *Q* (identical to :doc:`native_contacts`).
    * - ``--q-ss-only``
-     - bool
-     - ``True``
+     - bool (``True``)
      - Restrict *Q* to native contacts whose **both** residues lie in a secondary-structure element (the same helices/strands used for *K*). This is the **default**; pass ``--q-ss-only False`` (or ``0``) to score *Q* over the whole molecule instead.
    * - ``--q-fold`` / ``--k-thresh`` / ``--rmsd-ratio``
-     - float
-     - ``0.5`` / ``0.3`` / ``0.9``
+     - float (``0.5`` / ``0.3`` / ``0.9``)
      - Classifier thresholds for ``is_mirror`` and the trajectory verdict.
    * - ``--summary-last-frames``
-     - int
-     - ``133``
+     - int (``133``)
      - Trailing frames over which the per-trajectory verdict is taken.
 
 .. important::

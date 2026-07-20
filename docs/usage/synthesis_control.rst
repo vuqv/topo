@@ -112,84 +112,70 @@ per length — STRIDE / contact analysis are never re-run).
 
 .. list-table::
    :header-rows: 1
-   :widths: 20 14 12 16 38
+   :widths: 20 30 12 38
 
    * - Option
-     - Type
+     - Type (default)
      - Required
-     - Default
      - Description
    * - ``pdb_file``
-     - str
+     - str (``—``)
      - **yes**
-     - ``—``
      - Full native **all-atom** PDB of the target protein — TOPO's Gō model derives secondary structure (STRIDE) and the native-contact map from the heavy atoms, so a Cα-only CG PDB is *not* sufficient (the sibling cosmo IDP model does accept one). The nascent chain at length ``L`` uses residues ``1..L``.
    * - ``domain_def``
-     - str
+     - str (``—``)
      - **yes**
-     - ``—``
      - Domain YAML defining the per-domain / per-interface contact-nscale (Gō well-depth scaling) — the structure-based analogue of O'Brien's ``nscal``. See :doc:`domain_definition`.
    * - ``stride_output_file``
-     - str
+     - str (``—``)
      - no
-     - ``—``
      - Precomputed STRIDE output for the contact build. If omitted, STRIDE is run automatically (must be on ``PATH``).
    * - ``L0``
-     - int
-     - csp: no / cyl: **yes**
-     - ``1``
-     - First nascent length. Optional for ``topo-csp`` (default 1); **required** for ``topo-cylinder``.
-   * - ``L_max``
-     - int
+     - int (``1``)
      - no
-     - full length
+     - First nascent length. Omit or leave blank to start from a single residue (both runners).
+   * - ``L_max``
+     - int (full length)
+     - no
      - Final nascent length. Omit/blank to synthesize the whole chain. Must satisfy ``1 ≤ L0 ≤ L_max ≤ N_full``.
    * - ``outdir``
-     - str
+     - str (``synth_out``)
      - no
-     - ``synth_out``
      - Output root; each residue writes one ``L_<L>/`` folder (CSP: shared ``traj.psf`` + per-stage ``traj_s<1,2,3>.dcd``; cylinder: a single ``traj.dcd``).
 
 *Codon kinetics & schedule length.*
 
 .. list-table::
    :header-rows: 1
-   :widths: 20 12 12 14 42
+   :widths: 20 26 12 42
 
    * - Option
-     - Type
+     - Type (default)
      - Required
-     - Default
      - Description
    * - ``mrna``
-     - str
+     - str (``—``)
      - for per-codon timing
-     - ``—``
      - mRNA sequence file (one codon per residue + one stop), **or** ``fastest``/``slowest``/``median`` to auto-build a synonymous-codon mRNA (written next to the PDB). Required unless ``codon_times`` is a number. A real filename must not be ``fastest``/``slowest``/``median``. See the notes below.
    * - ``codon_times``
-     - str or float
+     - str or float (``—``)
      - for per-codon timing
-     - ``—``
      - A **path** to a ``CODON  seconds`` table selects **per-codon** timing (no bundled default — pick one under ``assets/csp/codon_dwell_times/``); a **positive number of seconds** selects **uniform** timing (no ``mrna`` needed). A table filename must not be a bare number.
    * - ``scale_factor``
-     - float
+     - float (``4331293``)
      - no
-     - ``4331293``
      - In-vivo-seconds → in-silico-ns compression (``t_sim_ns = t_s · 1e9 / scale_factor``). Larger ⇒ fewer MD steps per residue ⇒ faster, preserving the *relative* fast/slow-codon timing.
    * - ``random_seed``
-     - int
+     - int (``—``, nondet.)
      - no
-     - ``—`` (nondet.)
      - Seed for the first-passage-time sampler — makes the whole dwell schedule reproducible.
    * - ``max_steps_per_stage``
-     - int
+     - int (``—``, uncapped)
      - no
-     - ``—`` (uncapped)
      - **Testing only.** Upper clamp on each stage's MD step count. See the warning below.
    * - ``min_steps_per_stage``
-     - int
+     - int (``1``)
      - no
-     - ``1``
      - **Testing only.** Lower clamp on each stage's MD step count.
 
 .. warning::
@@ -206,74 +192,59 @@ per length — STRIDE / contact analysis are never re-run).
 
 .. list-table::
    :header-rows: 1
-   :widths: 22 14 16 48
+   :widths: 22 30 48
 
    * - Option
-     - Type
-     - Default
+     - Type (default)
      - Description
    * - ``dt``
-     - float [ps]
-     - ``0.015``
+     - float [ps] (``0.015``)
      - Integration timestep. A diverging stage is transparently re-run with ``dt`` halved and the step count doubled (dwell unchanged) — the stability guard in :doc:`continuous_synthesis`.
    * - ``ref_t``
-     - float [K]
-     - ``310``
+     - float [K] (``310``)
      - Langevin temperature. Defaults to 310 K (the E. coli codon-time table temperature) so kinetics and thermostat are consistent; set it to match your ``codon_times`` table.
    * - ``tau_t``
-     - float [ps⁻¹]
-     - ``0.05``
+     - float [ps⁻¹] (``0.05``)
      - Langevin friction coefficient.
    * - ``nstout``
-     - int
-     - ``5000``
+     - int (``5000``)
      - Trajectory (DCD) and log output interval, in steps.
    * - ``constraints``
-     - str
-     - ``AllBonds``
+     - str (``AllBonds``)
      - Bond treatment. Rigid ``AllBonds`` is the default and is stable because each new residue is seeded at the equilibrium peptide-bond length. Set ``None`` for flexible harmonic bonds.
    * - ``restraint_k``
-     - float [kJ/mol/nm²]
-     - ``83680``
+     - float [kJ/mol/nm²] (``83680``)
      - Stiffness of the C-terminus harmonic restraint to the PTC target (= 200 kcal/mol/Å²).
    * - ``minimize``
-     - bool
-     - ``yes``
+     - bool (``yes``)
      - Energy-minimize each seeded structure before running that stage's MD.
    * - ``device``
-     - str
-     - ``CPU``
+     - str (``CPU``)
      - Compute platform: ``CPU`` or ``GPU`` (CUDA). GPU recommended for ``topo-csp``.
    * - ``ppn``
-     - int
-     - ``1``
+     - int (``1``)
      - Number of CPU threads (``device = CPU``).
 
 *Post-synthesis phases & resume.*
 
 .. list-table::
    :header-rows: 1
-   :widths: 22 10 12 56
+   :widths: 22 22 56
 
    * - Option
-     - Type
-     - Default
+     - Type (default)
      - Description
    * - ``stall_steps``
-     - int
-     - ``0``
+     - int (``0``)
      - Post-synthesis stall phase length (steps); ``0`` = skip. Holds the finished chain at the PTC with the C-terminus restraint / tRNA tether still **ON** (mimics ribosome stalling). Runs **before** ``ejection``.
    * - ``ejection_steps``
-     - int
-     - ``0``
+     - int (``0``)
      - Post-synthesis ejection phase length (steps); ``0`` = skip. Releases the C-terminus restraint so the finished chain diffuses out of the tunnel (+x). **Cumulative target.** Extending it (continuing from the checkpoint instead of re-running) is opt-in via ``restart`` -- see below.
    * - ``resume``
-     - str
-     - ``auto``
+     - str (``auto``)
      - Resume policy for interrupted runs: ``auto`` (resume iff a ``progress.log`` is present under ``outdir``, else fresh), ``yes`` (require a resumable run, else error), ``no`` (always fresh). CLI ``--fresh`` / ``--no-resume`` forces ``no``. See :doc:`synthesis_resume`.
    * - ``restart``
-     - str
-     - ``no``
+     - str (``no``)
      - Ejection restart policy. ``no`` (default): a **completed** ejection is **skipped** on resume (like the ``stall`` phase); otherwise (fresh run, or a never-completed ejection) it runs **fresh** from step 0 to ``ejection_steps``. Raising ``ejection_steps`` alone does **not** re-run or extend a completed ejection. ``yes``: **continue** the ejection from its checkpoint (``ejection/traj.chk``: positions + velocities + step count) on a resumed run, appending only the steps needed to reach ``ejection_steps`` -- if the checkpoint already reached it, the run reports "already met" and does nothing. Use ``restart = yes`` to extend a finished ejection.
 
 Coarse-grained ribosome runner only (``topo-csp``)
@@ -285,43 +256,34 @@ per residue the whole codon dwell is one segment, not a three-way split.)
 
 .. list-table::
    :header-rows: 1
-   :widths: 22 12 14 52
+   :widths: 22 26 52
 
    * - Option
-     - Type
-     - Default
+     - Type (default)
      - Description
    * - ``ribosome``
-     - str
-     - **required**
+     - str (**required**)
      - Truncated CG ribosome PDB — the P-/A-anchors and the rigid (mass-0) scenery. Supplying it *is* the signal to load it as rigid (no ``rigid_ribosome`` key). Must carry tRNA beads under the fixed names (segids ``PtR``/``AtR``, resid 76, beads ``R``/``P``/``BR2``).
    * - ``time_stage_1``
-     - float [s]
-     - ``0.00034``
+     - float [s] (``0.00034``)
      - Mean peptidyl-transfer (stage 1) dwell; the actual dwell is an exponential draw with this mean.
    * - ``time_stage_2``
-     - float [s]
-     - ``0.004201``
+     - float [s] (``0.004201``)
      - Mean translocation (stage 2) dwell. Stage 3's mean is the remainder ``τ(next codon) − time_stage_1 − time_stage_2``.
    * - ``tunnel_wall``
-     - bool
-     - ``yes``
+     - bool (``yes``)
      - Apply the one-sided half-harmonic tunnel wall (a floor below the synthesis point). The plane ``x₀`` is **auto-derived** from the ribosome structure and the stiffness is a fixed constant — neither is a key; only this on/off toggle is exposed.
    * - ``nascent_ev_radii``
-     - str
-     - ``kb``
+     - str (``kb``)
      - Nascent per-residue excluded-volume radius (Rmin/2) for the nascent ↔ ribosome force: ``kb`` = per-residue Karanicolas–Brooks radii from the native structure; ``per_aa`` = per-amino-acid sidechain radii (fallback).
    * - ``trna_tether``
-     - bool
-     - ``no``
+     - bool (``no``)
      - How the growing C-terminus is held at the PTC. ``no`` (default) pins the C-terminal bead to a **fixed point in space** (the A-/P-site target, harmonic, stiffness ``restraint_k``) — position only, no orientation. ``yes`` instead couples it to the actual tRNA beads with O'Brien's full peptidyl-tRNA linkage (bond + 2 orienting angles + improper + a backbone angle), which controls **position *and* orientation** so the chain threads out N-first instead of balling up at the PTC. See the note below.
    * - ``ribo_free_mask``
-     - str
-     - *(none)*
+     - str (*none*)
      - Free a portion of one ribosomal protein as a mobile Gō loop, ``SEG : lo - hi`` (E. coli ``L24``, eukaryotes ``L26``). Requires ``ribo_free_pdb``. Absent → whole ribosome frozen. See :ref:`the flexible-loop notes <flexible-loop>`.
    * - ``ribo_free_pdb``
-     - path
-     - *(none)*
+     - path (*none*)
      - All-atom PDB of the ``ribo_free_mask`` chain — the native-contact source the Cα-only ribosome cannot supply. Required whenever ``ribo_free_mask`` is set.
 
 Cylinder runner only (``topo-cylinder``)

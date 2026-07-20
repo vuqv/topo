@@ -120,102 +120,83 @@ The keys fall into four categories:
 
 .. list-table::
    :header-rows: 1
-   :widths: 18 8 10 12 52
+   :widths: 18 20 10 52
 
    * - Option
-     - Type
+     - Type (default)
      - Required
-     - Default
      - Description
    * - **System input & force field**
      -
      -
      -
-     -
    * - ``pdb_file``
-     - str
+     - str (``—``)
      - **yes**
-     - ``—``
      - All-atom reference structure. Defines both the native contacts used for Q scoring and the geometry the model is built from. Resolved relative to the ``.ini`` file.
    * - ``domain_def``
-     - str
+     - str (``—``)
      - **yes**
-     - ``—``
      - Seed domain YAML. Its ``residues`` and ``class`` fields are read and kept; its ``nscale`` values are **ignored and overwritten** each round (they are what is being optimized). Resolved relative to the ``.ini`` file. See :doc:`domain_definition`.
    * - ``stride_output_file``
-     - str
+     - str (``—``)
      - no
-     - ``—``
      - Precomputed STRIDE output. If omitted, STRIDE runs once up front, is written to the optimization root, and every round reuses that file (STRIDE depends only on the fixed structure, so it never changes). Resolved to an absolute path, since each round's ``md.ini`` lives in a different directory.
    * - **Per-trajectory production** — passed through to each round's ``md.ini``
      -
      -
      -
-     -
    * - ``md_steps``
-     - int
+     - int (``10_000``)
      - no
-     - ``10_000``
      - **Set this explicitly** (see the note above). Steps per trajectory, passed through to ``md.ini``. **Recommended: ~1 µs per trajectory** (≈ ``6.7e7`` steps at ``dt = 0.015``), the published protocol length. The ``10_000`` default is a smoke-test length — far too short to tell a folded domain from an unfolded one. ``--md-steps`` on the command line overrides it for every round, handy for a smoke test before committing to a production run.
    * - ``nstxout``
-     - int
+     - int (``5000``)
      - no
-     - ``5000``
      - Steps between trajectory (DCD) writes, passed through to ``md.ini``. These frames are what Q is computed from, so this sets the sampling resolution of the stability decision — lower it alongside ``md_steps``. ``nstlog`` and ``nstchk`` default to ``5000`` the same way.
    * - **Optimizer controls** — consumed here; never reach ``md.ini``
      -
      -
      -
-     -
    * - ``ntraj``
-     - int
+     - int (``10``)
      - no
-     - ``10``
      - Independent trajectories per round. **Recommended: 10 trajectories**, which is the default. Produced as a single **multi-copy** MD run (``n_copies = ntraj``) that is then split into per-copy DCDs, so this scales the cost of every round roughly linearly.
    * - ``q_threshold``
-     - float
+     - float (``0.6688``)
      - no
-     - ``0.6688``
      - A frame counts as *folded* for a unit if its fraction of native contacts Q > this value. See :doc:`native_contacts`.
    * - ``frame_fraction``
-     - float
+     - float (``0.98``)
      - no
-     - ``0.98``
      - A trajectory is *stable* for a unit if at least this fraction of its frames are folded. A unit is stable only when **all** ``ntraj`` trajectories pass — one unstable trajectory is enough to promote the unit.
    * - ``max_rounds``
-     - int
+     - int (``6``)
      - no
-     - ``6``
      - Hard cap on rounds. The default covers the normal case exactly: 5 ladder levels + the median fallback, climbing one level per round. More rounds are needed only if raising one unit's nscale destabilizes an already-stable unit (rare).
    * - ``min_contacts``
-     - int
+     - int (``0``)
      - no
-     - ``0``
      - A domain or interface with fewer than this many native contacts is considered too weakly structured to fold: it is **pinned at the first ladder level, frozen, and never optimized** (it cannot otherwise stabilize, so it would drag every round to the fallback). ``0`` disables the check.
    * - ``outdir``
-     - str
+     - str (``opt_out``)
      - no
-     - ``opt_out``
      - Optimization root directory — the ``round_N/`` subdirectories and the final model are written here. A relative path is resolved **against this** ``.ini`` **file** (like ``pdb_file`` and ``domain_def``), so the file gives the same layout from any working directory. ``-o``/``--outdir`` on the command line overrides it; when neither is set, ``opt_out`` is created in the *current* directory. Not to be confused with ``output_dir``, a per-round ``md.ini`` key the optimizer :ref:`overrides every round <opt-overridden>`.
    * - **Protocol & hardware**
      -
      -
      -
-     -
    * - ``device``
-     - str
+     - str (``GPU``)
      - no
-     - ``GPU``
      - Passed through to ``md.ini``, where the default would be ``CPU``. Optimization is a production-scale task (``ntraj`` × ``max_rounds`` trajectories). ``--device`` on the command line overrides it for every round, without editing the ``.ini``.
    * - ``ref_t``
-     - float
+     - float (``300`` K)
      - no
-     - ``300`` K
      - Passed through to ``md.ini``. The stability protocol temperature; pinned here so each round's generated file records it explicitly.
    * - ``minimize``
-     - bool
+     - bool (``no``)
      - no
-     - ``no``
      - Passed through to ``md.ini``, where the default would be ``yes``. The native structure is already the model's energy minimum.
 
 The table covers the keys you are likely to set. The remaining implicit defaults

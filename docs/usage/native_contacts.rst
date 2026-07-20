@@ -96,51 +96,40 @@ Arguments:
 
 .. list-table::
    :header-rows: 1
-   :widths: 22 12 12 54
+   :widths: 22 24 54
 
    * - Flag
-     - Type
-     - Default
+     - Type (default)
      - Meaning
    * - ``-d``, ``--domain``
-     - str
-     - *required*
+     - str (*required*)
      - ``domain.yaml`` whose domains/interfaces define the *Q* groups.
    * - ``-r``, ``--reference``
-     - str
-     - *required*
+     - str (*required*)
      - **All-atom** reference structure that defines the native contacts (typically the same PDB you simulated).
    * - ``-p``, ``--psf``
-     - str
-     - *required*
+     - str (*required*)
      - CG (Cα) topology, e.g. ``traj/traj.psf``.
    * - ``-f``, ``--dcd``
-     - str
-     - *required*
+     - str (*required*)
      - CG trajectory to score, e.g. ``traj/traj.dcd``.
    * - ``-o``, ``--output``
-     - str
-     - *required*
+     - str (*required*)
      - Output CSV path (parent dirs created if needed).
    * - ``--cutoff``
-     - float [Å]
-     - ``4.5``
+     - float [Å] (``4.5``)
      - Heavy-atom distance defining a native contact.
    * - ``--local-separation``
-     - int
-     - ``3``
+     - int (``3``)
      - Minimum sequence separation (``|i-j| >`` this).
    * - ``--tolerance``
-     - float
-     - ``1.2``
+     - float (``1.2``)
      - Stretch factor :math:`\tau`; a contact is formed when ``d <= tolerance * d_native``.
    * - ``--start-frame``
-     - int
-     - ``0``
+     - int (``0``)
      - First frame to score (inclusive).
    * - ``--end-frame``
-     - int
-     - all
+     - int (all)
      - Last frame to score (exclusive).
 
 .. important::

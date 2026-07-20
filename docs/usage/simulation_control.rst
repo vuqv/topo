@@ -95,247 +95,199 @@ description).
 
 .. list-table::
    :header-rows: 1
-   :widths: 20 14 10 14 42
+   :widths: 20 28 10 42
 
    * - Option
-     - Type
+     - Type (default)
      - Required
-     - Default
      - Description
    * - **System input & force field**
      -
      -
      -
-     -
    * - ``pdb_file``
-     - str
+     - str (``—``)
      - **yes**
-     - ``—``
      - Input structure (``.pdb`` / ``.cif``) used to build the model (topology, force field) and, by default, the initial coordinates.
    * - ``model``
-     - str
+     - str (``topo``)
      - no
-     - ``topo``
      - Force-field model. Only ``topo`` is currently supported.
    * - ``domain_def``
-     - str
+     - str (``—``)
      - no
-     - ``—``
      - Path to a domain YAML for per-domain sidechain-contact scaling. If omitted, all SS contacts use scale 1.0. See :doc:`domain_definition`.
    * - ``stride_output_file``
-     - str
+     - str (``—``)
      - no
-     - ``—``
      - Path to a precomputed STRIDE output. If omitted, STRIDE is run automatically on the structure (and cached to ``{prefix}_stride.dat``).
    * - **Integration & bonds**
      -
      -
      -
-     -
    * - ``md_steps``
-     - int
+     - int (``10_000``)
      - no
-     - ``10_000``
      - Total number of integration steps. Underscores are allowed (``500_000``). The default is a smoke-test length (150 ps at ``dt = 0.015``); production runs set this explicitly.
    * - ``dt``
-     - float [ps]
+     - float [ps] (``0.015``)
      - no
-     - ``0.015``
      - Integration time step.
    * - ``constraints``
-     - str
+     - str (``AllBonds``)
      - no
-     - ``AllBonds``
      - Bond treatment: ``AllBonds`` (rigid bonds via constraints) or ``None`` (flexible harmonic bonds). Mutually exclusive.
    * - ``constraint_tolerance``
-     - float
+     - float (``1e-5``)
      - no
-     - ``1e-5``
      - Integrator relative constraint tolerance. Only meaningful with ``constraints = AllBonds``.
    * - **Thermostat (temperature coupling)**
      -
      -
      -
-     -
    * - ``tcoupl``
-     - bool
+     - bool (``yes``)
      - no
-     - ``yes``
      - Langevin thermostat on/off. (NVE is not used.)
    * - ``ref_t``
-     - float [K]
+     - float [K] (``300``)
      - no
-     - ``300``
      - Reference temperature. Used when ``tcoupl = yes``.
    * - ``tau_t``
-     - float [ps⁻¹]
+     - float [ps⁻¹] (``0.05``)
      - no
-     - ``0.05``
      - Friction coefficient coupling the system to the heat bath. Used when ``tcoupl = yes``.
    * - **Temperature protocol (anneal / quench)** — optional, off by default
      -
      -
      -
-     -
    * - ``anneal``
-     - bool
+     - bool (``no``)
      - no
-     - ``no``
      - Temperature protocol. ``no`` → constant-temperature equilibrium at ``ref_t`` (one phase). ``yes`` → a **quench** phase (hold at ``t_high``, then quench/cool to ``ref_t``; written to ``<outname>_quench.dcd``/``.log``) followed by a **production** phase (``md_steps`` at ``ref_t``; written to ``<outname>.dcd``/``.log``). Requires ``tcoupl = yes``. See :doc:`../tutorials/A6_anneal`.
    * - ``t_high``
-     - float [K]
+     - float [K] (``—``)
      - if ``anneal = yes``
-     - ``—``
      - High (unfolding) temperature held during the quench phase. ``ref_t`` is reused as the low/refold temperature (there is no ``t_low``).
    * - ``anneal_steps``
-     - int (``> 0``)
+     - int > 0 (``0``)
      - no
-     - ``0``
      - Quench-phase steps held at ``t_high``. **Separate from** ``md_steps`` (grand total = ``anneal_steps`` (+ ``anneal_ramp_steps``) + ``md_steps``). Must be many thermal relaxation times (``~1/tau_t``) and long enough to unfold. Used when ``anneal = yes``.
    * - ``anneal_ramp``
-     - str
+     - str (``jump``)
      - no
-     - ``jump``
      - ``jump`` = instantaneous drop ``t_high → ref_t`` at the phase boundary (delta T-jump; best for folding kinetics). ``linear`` = gradual cool-down inside the quench phase (best for refolding yield). Used when ``anneal = yes``.
    * - ``anneal_ramp_steps``
-     - int
+     - int (``0``)
      - no
-     - ``0``
      - Additional quench-phase steps spent ramping ``t_high → ref_t`` (on top of ``anneal_steps``). Used only when ``anneal_ramp = linear``.
    * - ``anneal_ramp_increments``
-     - int
+     - int (``20``)
      - no
-     - ``20``
      - Number of discrete temperature steps in the ramp; the last lands exactly on ``ref_t``. Used only when ``anneal_ramp = linear``.
    * - **Periodic boundaries & pressure** — optional
      -
      -
      -
-     -
    * - ``pbc``
-     - bool
+     - bool (``no``)
      - no
-     - ``no``
      - Periodic boundary conditions on/off.
    * - ``box_dimension``
-     - float or [x,y,z] [nm]
+     - float or [x,y,z] [nm] (``—``)
      - if ``pbc = yes``
-     - ``—``
      - Box size: a scalar ``L`` gives a cubic ``L×L×L`` box; a list ``[x, y, z]`` a rectangular box.
    * - ``pcoupl``
-     - bool
+     - bool (``no``)
      - no
-     - ``no``
      - Monte Carlo barostat on/off. Requires ``pbc = yes``.
    * - ``ref_p``
-     - float [bar]
+     - float [bar] (``1``)
      - no
-     - ``1``
      - Reference pressure. Used when ``pcoupl = yes``.
    * - ``frequency_p``
-     - int [steps]
+     - int [steps] (``25``)
      - no
-     - ``25``
      - Barostat move attempt frequency. Used when ``pcoupl = yes``.
    * - **Multi-copy replication** — optional, off by default
      -
      -
      -
-     -
    * - ``n_copies``
-     - int
+     - int (``1``)
      - no
-     - ``1``
      - Number of independent, **non-interacting** copies of the input chain to pack into one simulation (better GPU utilization; ``n_copies`` trajectories per run). ``1`` disables replication. See :doc:`../tutorials/A4_multicopy`.
    * - ``copy_shift``
-     - float [nm]
+     - float [nm] (``5.0``)
      - no
-     - ``5.0``
      - Initial x-translation between successive copies. Only used when ``n_copies > 1``; since copies never interact, the exact value affects only the starting layout, not the physics.
    * - **Output & reporting**
      -
      -
      -
-     -
    * - ``output_dir``
-     - str
+     - str (``traj``)
      - no
-     - ``traj``
      - Folder for all generated files; created if missing. One run = one self-contained folder.
    * - ``outname``
-     - str
+     - str (``traj``)
      - no
-     - ``traj``
      - Basename for generated files: ``<output_dir>/<outname>.dcd``, ``.log``, ``.psf``, ``.chk``, ``_runinfo.log`` (and ``_multi.psf`` for multi-copy).
    * - ``checkpoint``
-     - str
+     - str (``<output_dir>/<outname>.chk``)
      - no
-     - ``<output_dir>/<outname>.chk``
      - Explicit checkpoint path override. Normally leave unset so it lands in the run folder.
    * - ``nstxout``
-     - int
+     - int (``5000``)
      - no
-     - ``5000``
      - Steps between writing the trajectory (DCD).
    * - ``nstchk``
-     - int
+     - int (``nstxout``)
      - no
-     - ``nstxout``
      - Steps between writing the checkpoint. Defaults to ``nstxout`` when unset, so checkpoint and trajectory frequency can be decoupled (e.g. frequent checkpoints, sparser frames).
    * - ``nstlog``
-     - int
+     - int (``5000``)
      - no
-     - ``5000``
      - Steps between writing the energy/temperature log.
    * - ``nstcomm``
-     - int
+     - int (``—``, off)
      - no
-     - ``—`` (off)
      - Steps between center-of-mass motion removals. **Unset by default → no COM removal.** COM removal suits a single chain but couples the drift of independent chains, so leave it off for multi-copy runs (``n_copies > 1``).
    * - ``log_precision``
-     - int
+     - int (``4``)
      - no
-     - ``4``
      - Decimal places for floating-point columns (energies, time, temperature, ...) in the ``.log``. Set to ``None`` for OpenMM's full ``repr`` precision.
    * - ``log_width``
-     - int
+     - int (``14``)
      - no
-     - ``14``
      - Minimum width (characters) of each ``.log`` column, right-justified, so columns line up. Each column uses ``max(header_length, log_width)``. Set to ``None`` to disable fixed-width formatting.
    * - **Initial state, restart & minimization**
      -
      -
      -
-     -
    * - ``init_position``
-     - str
+     - str (``—``)
      - no
-     - ``—``
      - Optional PDB of starting coordinates for a fresh run (atom count must match the system). If unset, the coordinates from ``pdb_file`` are used. Ignored on a successful restart (coordinates come from the checkpoint).
    * - ``restart``
-     - bool
+     - bool (``no``)
      - no
-     - ``no``
      - Restart from ``checkpoint`` instead of the PDB coordinates. Forces ``minimize = no``.
    * - ``minimize``
-     - bool
+     - bool (``yes``)
      - no
-     - ``yes``
      - Energy-minimize the input structure before dynamics. Forced ``no`` when ``restart = yes``.
    * - **Hardware**
      -
      -
      -
-     -
    * - ``device``
-     - str
+     - str (``CPU``)
      - no
-     - ``CPU``
      - Compute platform: ``CPU`` or ``GPU`` (CUDA).
    * - ``ppn``
-     - int
+     - int (``1``)
      - no
-     - ``1``
      - Number of CPU threads. Used when ``device = CPU``.
 
 .. note::

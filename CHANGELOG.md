@@ -29,12 +29,13 @@ All notable changes to TOPO are documented here. The format is loosely based on
 - **`idr_scale: 0` alone is no longer a self-avoiding chain.** Because `eps_gen_kj`
   now defaults to 2.25, a pure self-avoiding chain requires **both** `idr_scale: 0`
   and `eps_gen_kj: 0`.
-- **IDR well positions use the O'Brien rvdw convention.** Disordered residues now
-  carry the sigma-radius `rvdw = Rmin/2 / 2^(1/6)` (~11% tighter) instead of the bare
-  `Rmin/2`, and pair wells are the plain sum of per-bead radii. A folded bead keeps
-  its native Karanicolas–Brooks radius in IDR–folded cross pairs (previously it was
-  also shrunk). Folded–folded pairs are unchanged. The same radius now reaches both
-  the intra-chain and nascent↔ribosome excluded-volume channels consistently.
+- **IDR well positions use a transferable per-AA van der Waals radius.** Disordered
+  residues now carry `rvdw` (~11% tighter than the bare `Rmin/2` they used before),
+  and pair wells are the plain sum of per-bead radii. A folded bead keeps its native
+  Karanicolas–Brooks radius in folded–IDR cross pairs (previously it was also
+  shrunk). Folded–folded pairs are unchanged. The same radius now reaches both the
+  intra-chain and nascent↔ribosome excluded-volume channels consistently. See
+  `usage/disordered_regions` for how `rvdw` is derived.
 
 ### Fixed
 - Minimizer no longer spins forever when the max force cannot reach the 10 kJ/mol/nm
