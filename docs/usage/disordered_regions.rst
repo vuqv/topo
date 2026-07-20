@@ -57,16 +57,17 @@ added.
    * - **IDR–IDR**
        (both residues in the mask)
      - removed
-     - :math:`\max\!\bigl(\varepsilon_\mathrm{NN},\ s_\mathrm{IDR}\,
-       \varepsilon_\mathrm{BT}\bigr)` (defined below)
-     - per-AA + per-AA (sum rule)
+     - :math:`\max\!\bigl(\varepsilon_\mathrm{NN},\ \varepsilon_\mathrm{gen} +
+       s_\mathrm{IDR}\,\varepsilon_\mathrm{BT}\bigr)` (defined below)
+     - :math:`r_\mathrm{vdw}` + :math:`r_\mathrm{vdw}` (sum rule)
    * - **IDR–folded**
        (exactly one residue in the mask)
      - removed
      - :math:`\varepsilon_\mathrm{NN}` — **excluded-volume only**
-     - per-AA + K–B (sum rule)
+     - :math:`r_\mathrm{vdw}` + K–B (sum rule)
 
-where :math:`s_\mathrm{IDR}` is the ``idr_scale`` knob,
+where :math:`\varepsilon_\mathrm{gen}` is the ``eps_gen_kj`` generic-cohesion depth,
+:math:`s_\mathrm{IDR}` is the ``idr_scale`` knob,
 :math:`\varepsilon_\mathrm{NN}` is the non-native floor
 (:math:`1.32\times10^{-4}` kcal/mol), and :math:`\varepsilon_\mathrm{BT}(i,j)` is
 the **sidechain–sidechain BT interaction energy** for the two residue types — the
@@ -79,52 +80,79 @@ the **sidechain–sidechain BT interaction energy** for the two residue types �
 
 i.e. the raw ``bt_potential.csv`` value shifted by the 0.6 kcal/mol reference,
 made positive with :math:`|\cdot|`, and converted kcal→kJ (this is exactly
-:func:`topo.utils.nonbonded.get_ss_interaction_energy`). So the IDR–IDR depth is
-:math:`s_\mathrm{IDR}\cdot 4.184\,|\mathrm{raw}-0.6|`, **not**
-``idr_scale`` times the bare CSV number.
+:func:`topo.utils.nonbonded.get_ss_interaction_energy`) — **not** the bare CSV
+number.
 
-**Depth — the weak IDR–IDR attraction.** Within a disordered region every
-non-local pair gets a weak, sequence-modulated attraction
-:math:`s_\mathrm{IDR}\cdot\varepsilon_\mathrm{BT}(i,j)`. It is *non-specific
-in coverage* (it acts on every non-local IDR–IDR pair, not just would-be native
-contacts) but *chemically heterogeneous in depth* (the BT energy varies by
-residue-pair type). Physically this is a weak, non-fold-encoding attraction — a
-weakly collapsing self-avoiding chain, **not** a Gō fold. The
-:math:`\max(\varepsilon_\mathrm{NN}, \cdot)` floor guarantees excluded volume
-even at ``idr_scale = 0`` (and for the handful of pairs whose
-:math:`\varepsilon_\mathrm{BT}\approx 0`), so the chain can never pass through
-itself.
+**Depth — two additive channels.** Within a disordered region every non-local
+pair gets
+
+.. math::
+
+   \varepsilon_{ij}^\mathrm{IDR} \;=\; \max\!\bigl(\varepsilon_\mathrm{NN},\;
+   \underbrace{\varepsilon_\mathrm{gen}}_{\text{generic}} \;+\;
+   \underbrace{s_\mathrm{IDR}\,\varepsilon_\mathrm{BT}(i,j)}_{\text{sequence-dependent}}\bigr)
+
+* :math:`\varepsilon_\mathrm{BT}(i,j)` carries the **sequence dependence**. It is
+  *non-specific in coverage* (it acts on every non-local IDR–IDR pair, not just
+  would-be native contacts) but *chemically heterogeneous in depth* — the BT energy
+  varies by residue-pair type, so a hydrophobic pair attracts more strongly than a
+  polar one. ``idr_scale`` (:math:`s_\mathrm{IDR}`) scales this channel.
+* :math:`\varepsilon_\mathrm{gen}` (``eps_gen_kj``) is a **sequence-independent**
+  cohesion depth applied equally to every IDR–IDR pair. It stands in for the
+  backbone–backbone and backbone–sidechain attraction that a Cα-only model has no
+  explicit channel for.
+
+Together the two set **how compact the disordered chain is**: :math:`\varepsilon_
+\mathrm{gen}` fixes the overall level of collapse and :math:`s_\mathrm{IDR}\,
+\varepsilon_\mathrm{BT}` modulates it residue-pair by residue-pair. ``eps_gen_kj`` is
+the knob to turn first when you want to tune compaction.
+
+Physically this is a weak, non-fold-encoding attraction — a collapsing
+self-avoiding chain, **not** a Gō fold. The :math:`\max(\varepsilon_\mathrm{NN},
+\cdot)` floor guarantees excluded volume even when both channels vanish (and for the
+handful of pairs whose :math:`\varepsilon_\mathrm{BT}\approx 0`), so the chain can
+never pass through itself.
 
 .. note::
 
-   **The depth carries no nscale factor.** The IDR depth multiplies the
+   **The depth carries no nscale factor.** The IDR depth uses the
    :math:`\varepsilon_\mathrm{BT}` matrix above (unscaled by any domain factor),
    **not** the domain-scaled sidechain energy. In TOPO ``nscale`` is the per-domain
    folding-**stability** ladder (:doc:`nscale_optimization`); an IDR has no fold and
    no stability target, so it does not inherit a ladder value (effectively
    ``nscale = 1`` for IDR pairs).
 
-   As an intuition, the default ``idr_scale = 0.03`` therefore gives an IDR–IDR
-   pair an attraction equal to **3% of the (unscaled, nscale = 1) sidechain–sidechain
-   interaction energy** that the *same pair of residue types* would carry as a
-   native contact — i.e. :math:`0.03\,\varepsilon_\mathrm{BT}(i,j)`. Read the "3%"
-   against the **raw** SS energy, not against a folded domain's contacts: a real
-   domain additionally scales its SS contacts by its own ``nscale`` (typically > 1),
-   so relative to *that* the effective fraction is smaller. Because the IDR itself
-   has no fold and no ``nscale``, it is cleanest to treat ``idr_scale`` as a
-   directly physical coupling and calibrate it to SAXS/smFRET :math:`R_g` or the
-   scaling exponent :math:`\nu` when you have such data.
+   So at the default ``idr_scale = 1.0`` an IDR–IDR pair gets a sequence-dependent
+   attraction equal to **the unscaled (nscale = 1) sidechain–sidechain interaction
+   energy** that the *same pair of residue types* would carry as a native contact —
+   typically ~1 kJ/mol on average.
+   Read that against the **raw** SS energy, not against a folded domain's contacts:
+   a real domain additionally scales its SS contacts by its own ``nscale``
+   (typically > 1), so relative to *that* the IDR attraction is weaker still.
 
 **Position — the excluded-volume radius.** The collision radius is a property of
 the **residue**. For a disordered residue the structure-derived K–B radius is
 meaningless (its input coordinates do not define a fold), so IDR residues switch
 to the **transferable per-AA** ``Rmin_2`` from
-:mod:`topo.parameters.model_parameters`; folded residues keep their K–B radius.
-Pairs then combine by the usual sum rule :math:`R_{ij} = R_\mathrm{min}/2_i +
-R_\mathrm{min}/2_j`. This is applied to the **per-residue radius array**, so the
-same radius reaches both the intra-chain and (for synthesis) the
-nascent↔ribosome excluded-volume channels — they cannot disagree. No new
-parameter file is shipped.
+:mod:`topo.parameters.model_parameters`, converted to the *sigma-radius*
+:math:`r_\mathrm{vdw} = R_\mathrm{min}/2 \,/\, 2^{1/6}` — the O'Brien generic-bt
+convention, which places the well at the sum of collision radii rather than the sum
+of LJ-minimum radii (~11% tighter). Folded residues keep their K–B
+:math:`R_\mathrm{min}/2` unchanged. Pairs then combine by the plain sum rule, so
+
+.. math::
+
+   R_{ij} = \begin{cases}
+     r_\mathrm{vdw}(i) + r_\mathrm{vdw}(j) & \text{IDR–IDR}\\
+     R_\mathrm{min}/2_i + r_\mathrm{vdw}(j) & \text{IDR–folded}\\
+     R_\mathrm{min}/2_i + R_\mathrm{min}/2_j & \text{folded–folded}
+   \end{cases}
+
+Note that a folded bead keeps its *native* radius even when it meets an IDR bead —
+it is not shrunk in cross pairs. Because the conversion is applied to the
+**per-residue radius array**, the same radius reaches both the intra-chain and (for
+synthesis) the nascent↔ribosome excluded-volume channels — they cannot disagree. No
+new parameter file is shipped.
 
 **What does not change.** Bonds, angles, dihedrals, and Yukawa electrostatics are
 untouched (the global transferable backbone is already the disordered-appropriate
@@ -178,7 +206,8 @@ Add a ``disordered:`` block to the domain_def file. All three top-level sections
     # --- disordered / IDR region (optional) ---
     disordered:
       residues: [1-24, 150-165]   # native contacts removed for these residues
-      idr_scale: 0.03             # OPTIONAL, defaults to 0.03 if omitted
+      eps_gen_kj: 2.25            # OPTIONAL, defaults to 2.25 kJ/mol if omitted
+      idr_scale: 1.0              # OPTIONAL, defaults to 1.0 if omitted
 
 The residue-list syntax is exactly the one used everywhere else in the file:
 inclusive ranges as strings (``"1-24"``), bare integers, or a mix
@@ -207,13 +236,20 @@ Field reference
      - Residues to mark disordered. Same syntax as a domain's ``residues``:
        ranges (``"1-24"``, inclusive), bare integers, or a mix. Their native
        contacts are removed.
+   * - ``disordered.eps_gen_kj``
+     - no
+     - float
+     - The generic-cohesion depth :math:`\varepsilon_\mathrm{gen}` (kJ/mol), added to
+       every IDR–IDR well. **Defaults to 2.25** when omitted — the calibrated value
+       (:ref:`idr-validation`). This is the knob for tuning how compact the
+       disordered chain is: raise it to compact, lower it to expand. IDR–folded pairs
+       are always excluded-volume only regardless of this value.
    * - ``disordered.idr_scale``
      - no
      - float
-     - The **only** knob: the IDR–IDR attraction scale. **Defaults to 0.03** when
-       omitted. ``0`` selects the pure self-avoiding chain (excluded volume only);
-       larger values deepen the weak collapse. IDR–folded pairs are always
-       excluded-volume only regardless of this value.
+     - The scale :math:`s_\mathrm{IDR}` on the sequence-dependent BT channel.
+       **Defaults to 1.0** when omitted (the calibrated value). Set **both** this and
+       ``eps_gen_kj`` to ``0`` for a pure self-avoiding chain.
 
 
 Overlap with a domain is allowed — disorder wins
@@ -244,29 +280,79 @@ contacts. The reader prints an **info** line listing any overlapping residues, s
 an accidental double-listing is visible (it is not an error — overlap is legal).
 
 
-Choosing ``idr_scale``
-----------------------
+Tuning the compaction
+---------------------
 
-* **``idr_scale = 0.03`` (default) — a weakly-collapsing IDR.** Each IDR–IDR pair
-  attracts at 3% of the unscaled (``nscale = 1``) sidechain–sidechain interaction
-  energy for those two residue types (see the note above for the exact meaning of
-  the "3%"). Recommended for a typical intrinsically disordered protein. A pure
-  self-avoiding chain
-  (``idr_scale = 0``) systematically **over-expands** most IDPs: SAXS/smFRET place
+* **The defaults (``eps_gen_kj = 2.25``, ``idr_scale = 1.0``) are calibrated** — use
+  them unless you have a specific reason not to. They were fit against SAXS
+  :math:`R_g` for 24 fully-disordered proteins (:ref:`idr-validation`). A chain with
+  no attraction at all systematically **over-expands** most IDPs: SAXS/smFRET place
   them at scaling exponent :math:`\nu \approx 0.5\text{–}0.55`, versus
-  :math:`\nu \approx 0.588` for a self-avoiding walk. The sub-\ :math:`k_BT`,
-  non-specific attraction reweights the same broad, flexible ensemble toward the
-  observed compaction **without** locking in a fold. Because TOPO's Debye–Hückel
-  electrostatics are always on (a repulsive term for charged chains), the balanced
-  physical picture is *repulsion balanced by weak attraction* — i.e.
-  ``idr_scale > 0`` — and setting it to 0 keeps only the repulsive half.
-* **``idr_scale = 0`` (self-avoiding) is the better call** for: a disordered
-  **linker** whose role is reach / entropic tethering (compaction is not the
-  observable); a **strongly charged, highly expanded** IDP that genuinely
-  approaches self-avoiding-walk statistics; or a deliberately minimal,
-  assumption-free reference ensemble.
-* **Calibrate when you can.** If you have SAXS/smFRET :math:`R_g` or :math:`\nu`,
-  treat ``idr_scale`` as the fit parameter.
+  :math:`\nu \approx 0.588` for a self-avoiding walk. The non-specific attraction
+  reweights the same broad, flexible ensemble toward the observed compaction
+  **without** locking in a fold. Because TOPO's Debye–Hückel electrostatics are
+  always on (a repulsive term for charged chains), the balanced physical picture is
+  *repulsion balanced by weak attraction*.
+* **To tune compaction, move ``eps_gen_kj`` first.** Raising it compacts every chain,
+  lowering it expands them.
+* **Self-avoiding is the better call** for: a disordered **linker** whose role is
+  reach / entropic tethering (compaction is not the observable); a **strongly
+  charged, highly expanded** IDP that genuinely approaches self-avoiding-walk
+  statistics; or a deliberately minimal, assumption-free reference ensemble. Set
+  **both** ``eps_gen_kj: 0`` and ``idr_scale: 0`` — zeroing one alone leaves the other
+  channel on.
+* **Re-calibrate when you can.** If you have SAXS/smFRET :math:`R_g` or :math:`\nu`
+  for *your* system, treat ``eps_gen_kj`` as the fit parameter.
+
+.. _idr-validation:
+
+Validation against SAXS :math:`R_g`
+------------------------------------
+
+The default was calibrated and validated on a benchmark of **24
+fully-disordered proteins** (24–273 residues) with published SAXS radii of
+gyration. Each protein was simulated as a fully-IDP chain (``residues: [1-N]``) for
+90 ns of Langevin dynamics at 300 K from an expanded-coil start, discarding the
+first 15 ns; the reported :math:`R_g` is the mass-weighted ensemble average
+:math:`\sqrt{\langle R_g^2\rangle}` over the remaining 75 ns.
+
+.. figure:: img/idr_validation.png
+   :width: 100%
+   :alt: TOPO and HPS-Urry radii of gyration versus SAXS for 24 disordered proteins
+
+   **Left:** TOPO's Cα IDR model at the defaults ``eps_gen_kj = 2.25`` kJ/mol,
+   ``idr_scale = 1.0``.
+   **Right:** the HPS-Urry force field on the same 24 proteins, as an external
+   reference point. Dashed line is :math:`y = x`; green is the
+   ordinary-least-squares fit; point colour is the fractional deviation.
+
+Summary statistics, where RMS is the root-mean-square **fractional** deviation
+:math:`\sqrt{\tfrac{1}{N}\sum_i \bigl((R_g^\mathrm{sim} - R_g^\mathrm{exp})/
+R_g^\mathrm{exp}\bigr)^2}`:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 34 16 16 16 18
+
+   * - Model
+     - N
+     - RMS
+     - Pearson *r*
+     - OLS slope
+   * - **TOPO Cα IDR (default)**
+     - 24
+     - **33%**
+     - **0.79**
+     - **0.71**
+   * - HPS-Urry (reference)
+     - 24
+     - 29%
+     - 0.69
+     - 0.54
+
+TOPO reaches accuracy comparable to a dedicated IDP force field — slightly higher
+RMS, but better rank-correlation and a slope closer to 1 (i.e. less compression of
+the range between compact and expanded chains).
 
 .. note::
 
@@ -278,7 +364,8 @@ Choosing ``idr_scale``
 .. note::
 
    **Starting coordinates do not matter.** The equilibrium IDR ensemble is set by
-   the *potential* (no native contacts + flexible backbone + ``idr_scale``), not
+   the *potential* (no native contacts + flexible backbone + the IDR attraction
+   ``eps_gen_kj``/``idr_scale``), not
    by the input geometry. With its native contacts removed, a region initialized
    from a folded structure relaxes toward the disordered ensemble; discard the
    initial relaxation in analysis as you would for any MD run. You do **not** need
@@ -309,7 +396,7 @@ stay consistent with the energy function:
   makes no attempt to stabilize it. In this it behaves like the auto-created
   ``X`` domain (:doc:`domain_definition`): present in the run at a fixed
   treatment, but left out of the optimization. Disordered residues are governed by
-  ``idr_scale`` and are never assigned an ``nscale``. The masked Q simply keeps the
+  ``eps_gen_kj``/``idr_scale`` and are never assigned an ``nscale``. The masked Q keeps the
   IDR's (never-forming) contacts out of each folded domain's stability score so
   they cannot deflate it.
 
@@ -344,11 +431,13 @@ If **every** residue is disordered, list them all and omit ``intra_domains``:
     n_residues: 92
     disordered:
       residues: [1-92]
-      idr_scale: 0.03
+      # eps_gen_kj / idr_scale omitted -> the calibrated defaults (2.25 kJ/mol, 1.0)
 
-The energy build runs normally and is then fully overwritten to IDR–IDR
-everywhere (finite radii, no native contacts) — a valid weakly-collapsing (or, at
-``idr_scale = 0``, self-avoiding) homopolymer-like chain. The Q analysis returns
+This fully-IDP case is exactly the configuration the defaults were validated on
+(:ref:`idr-validation`). The energy build runs normally and is then fully
+overwritten to IDR–IDR everywhere (finite radii, no native contacts) — a valid
+collapsing (or, with **both** knobs at 0, self-avoiding) homopolymer-like chain.
+The Q analysis returns
 an empty contact list (Q = ``NaN``, not a crash), and the nscale optimizer detects
 that there are no foldable contacts and exits cleanly with a
 *"nothing to optimize"* message rather than reporting a vacuous convergence
@@ -358,7 +447,9 @@ that there are no foldable contacts and exits cleanly with a
 Common pitfalls
 ---------------
 
-* **``idr_scale: 0`` is not "no interaction".** It removes the *attraction* but
+* **Zeroing one knob is not enough for a self-avoiding chain.** ``eps_gen_kj`` and
+  ``idr_scale`` are independent channels; set **both** to ``0``.
+* **Zeroing both is still not "no interaction".** It removes the *attraction* but
   keeps the excluded-volume floor, so IDR pairs still cannot interpenetrate. It is
   the self-avoiding chain, not a ghost chain.
 * **Numbering must match the structure.** Disordered residues use the same 1-based

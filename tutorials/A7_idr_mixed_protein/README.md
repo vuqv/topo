@@ -50,15 +50,20 @@ intra_domains:
     nscale: 2.5044
 disordered:
   residues: [1-18, 218-281]     # N-terminal tail + long intracellular loop
-  idr_scale: 0.03               # weak IDR-IDR attraction (default; 0 = self-avoiding)
+  eps_gen_kj: 2.25              # generic cohesion, kJ/mol (default)
+  idr_scale: 1.0                # sequence-dependent BT scale (default)
 ```
 
 - **`residues`** — the residues to treat as disordered. Their native contacts
   (H-bond, backbone–sidechain, and sidechain–sidechain) are removed.
-- **`idr_scale`** — the *only* knob (optional, default `0.03`). It sets the weak
-  attraction between two disordered residues: `0.03` is a weakly-collapsing IDR;
-  `0` is a pure self-avoiding chain. Disordered↔folded pairs feel only excluded
-  volume (steric) regardless.
+- **`eps_gen_kj`** — the sequence-independent generic cohesion in kJ/mol (optional,
+  default `2.25`). This is the knob to turn first when tuning compaction.
+- **`idr_scale`** — the scale on the sequence-dependent BT energy, which varies by
+  residue-pair type (optional, default `1.0`).
+  Both defaults are calibrated against SAXS radii of gyration for 24 disordered
+  proteins. Set **both** to `0` for a pure self-avoiding chain — zeroing one alone
+  leaves the other channel on. Disordered↔folded pairs feel only excluded volume
+  (steric) regardless.
 
 > **You choose the disordered residues.** TOPO applies exactly the set you list —
 > it does not detect disorder. Sources to inform the choice include
@@ -100,7 +105,7 @@ frame on the folded core and measuring the per-residue fluctuation (RMSF) over t
 | Intracellular-loop IDR (218–281) | ~26 Å |
 
 i.e. the disordered regions are **~20–35× more mobile** than the core — flexible,
-but still attached and (with `idr_scale = 0.03`) weakly compact rather than fully
+but still attached and (at the default attraction) compact rather than fully
 extended. Watch it in VMD:
 
 ```bash
@@ -109,9 +114,9 @@ vmd traj/traj.psf traj/traj.dcd
 
 ## Try next
 
-- **Self-avoiding vs weakly-collapsing.** Set `idr_scale: 0` in `domain.yaml` and
-  rerun; the IDRs expand further (only excluded volume, no attraction). Compare the
-  radius of gyration of a disordered region between `0` and `0.03`.
+- **Self-avoiding vs collapsing.** Set **both** `eps_gen_kj: 0` and `idr_scale: 0`
+  in `domain.yaml` and rerun; the IDRs expand further. Compare the radius of gyration
+  of a disordered region against the default run.
 - **A fully disordered protein.** Drop `intra_domains` and list every residue under
   `disordered:` — a whole-IDP run (see the *fully-IDP* note in the
   [Disordered / IDR regions](../usage/disordered_regions.rst) page).

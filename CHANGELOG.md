@@ -3,6 +3,45 @@
 All notable changes to TOPO are documented here. The format is loosely based on
 [Keep a Changelog](https://keepachangelog.com/); releases correspond to git tags.
 
+## [Unreleased]
+
+### Added
+- **Generic cohesion for disordered regions.** The IDR–IDR well depth is now
+  `max(eps_NN, eps_gen + idr_scale * eps_BT)`: a sequence-independent generic term
+  `eps_gen_kj` (new optional `disordered:` key) added to the sequence-dependent BT
+  sidechain–sidechain energy. `eps_gen` sets the overall level of collapse and is the
+  knob to turn first when tuning how compact a disordered chain is; `eps_BT`
+  modulates it by residue-pair type.
+
+### Changed
+- **IDR defaults are now SAXS-calibrated (behavior change).** `eps_gen_kj` defaults
+  to **2.25 kJ/mol** and `idr_scale` to **1.0** (was `0.03`, i.e. the
+  sequence-dependent BT term now enters at full strength). The pair was calibrated
+  against SAXS radii of gyration for 24 fully-disordered proteins (90 ns each): RMS
+  fractional Rg error
+  **33%**, Pearson *r* **0.79**, OLS slope **0.71** — comparable to the HPS-Urry
+  force field (29% / 0.69 / 0.54) on the same benchmark. See the new *Validation
+  against SAXS* section of `usage/disordered_regions` for the plot and protocol.
+  **A run with a `disordered:` section that omits these keys will produce
+  substantially more compact ensembles than before**; pin `eps_gen_kj`/`idr_scale`
+  explicitly to reproduce older results, and do not mix old and new IDR trajectories
+  in one analysis.
+- **`idr_scale: 0` alone is no longer a self-avoiding chain.** Because `eps_gen_kj`
+  now defaults to 2.25, a pure self-avoiding chain requires **both** `idr_scale: 0`
+  and `eps_gen_kj: 0`.
+- **IDR well positions use the O'Brien rvdw convention.** Disordered residues now
+  carry the sigma-radius `rvdw = Rmin/2 / 2^(1/6)` (~11% tighter) instead of the bare
+  `Rmin/2`, and pair wells are the plain sum of per-bead radii. A folded bead keeps
+  its native Karanicolas–Brooks radius in IDR–folded cross pairs (previously it was
+  also shrunk). Folded–folded pairs are unchanged. The same radius now reaches both
+  the intra-chain and nascent↔ribosome excluded-volume channels consistently.
+
+### Fixed
+- Minimizer no longer spins forever when the max force cannot reach the 10 kJ/mol/nm
+  target: the tolerance loop now exits at the floor and reports progress per
+  iteration.
+- `model_parameters` uses standard average residue masses.
+
 ## [2026.2] — 2026-07-18
 
 Headline: **intrinsically disordered regions (IDRs)** in the Cα model, together with
