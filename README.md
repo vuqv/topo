@@ -150,6 +150,20 @@ topo-optimize -f optimize.ini -o opt_out
 
 See [tutorials/A5_opt_nscal/](tutorials/A5_opt_nscal/) for the optimizer.
 
+Part of a chain (or all of it) can be marked **intrinsically disordered** by adding
+an optional `disordered:` section to the same domain-definition YAML — those
+residues lose their native contacts and instead feel a weak, non-specific
+attraction whose default strength is calibrated against SAXS radii of gyration:
+
+```yaml
+disordered:
+  residues: [1-24, 150-165]   # 1-based, same syntax as a domain's residues
+```
+
+See [tutorials/A7_idr_mixed_protein/](tutorials/A7_idr_mixed_protein/) and the
+[Disordered / IDR regions](https://vuqv.github.io/topo/usage/disordered_regions.html)
+guide.
+
 ### B · Protein synthesis
 
 Grow the chain co-translationally, either through an explicit CG ribosome or an
@@ -175,8 +189,9 @@ Ready-to-run, ordered examples live in [`tutorials/`](tutorials/):
 | 4  | `A4_multicopy`                   | Many independent, non-interacting copies in one job.     |
 | 5  | `A5_opt_nscal`                   | Automatically calibrate the contact `nscale`.            |
 | 6  | `A6_anneal_quench`               | Temperature ramps to melt/quench and observe (un)folding.|
-| 7  | `B1_translation_cylinder`        | Co-translational synthesis through an analytic tunnel.    |
-| 8  | `B2_ribosome_synthesis`          | Co-translational synthesis on a CG ribosome.             |
+| 7  | `A7_idr_mixed_protein`           | Mark tails/loops intrinsically disordered (IDR regions).  |
+| 8  | `B1_translation_cylinder`        | Co-translational synthesis through an analytic tunnel.    |
+| 9  | `B2_ribosome_synthesis`          | Co-translational synthesis on a CG ribosome.             |
 
 ## Documentation
 
@@ -215,9 +230,8 @@ If TOPO contributed to your work, please cite it (and give the repo a ⭐):
 > proteins* (Version 2026.2) [Computer software]. Zenodo.
 > https://doi.org/10.5281/zenodo.21360706
 
-The DOI above is the **concept DOI** (always the latest release); use
-[10.5281/zenodo.21360707](https://doi.org/10.5281/zenodo.21360707) to pin
-version 2026.1. GitHub's "Cite this repository" button reads
+The DOI above is the **concept DOI** — it always resolves to the latest release.
+GitHub's "Cite this repository" button reads
 [`CITATION.cff`](CITATION.cff). Please also cite the underlying O'Brien-lab
 models and other methods — see the
 [citation guide](docs/citation.rst) for the full list.
