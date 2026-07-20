@@ -291,7 +291,8 @@ def append_ribosome(nascent_model, ribo: Ribosome,
     if nascent_rmin_2 is not None:
         if len(nascent_rmin_2) != L:
             raise ValueError(f"nascent_rmin_2 has {len(nascent_rmin_2)} entries but L={L}.")
-        for rm in nascent_rmin_2:                  # Option A: per-residue K-B Rmin/2 (nm)
+        for rm in nascent_rmin_2:                  # Option A: per-residue radius (nm): K-B
+                                                   # Rmin/2 for folded, rvdw for IDR beads
             nc.addParticle((float(rm),))
     else:
         for atom in nascent_atoms:                # Option B: per-AA sidechain Rmin/2 (nm)

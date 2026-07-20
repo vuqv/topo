@@ -73,10 +73,14 @@ BT_SHIFT_KCAL = 0.6
 # (= rvdw*2^(1/6) to ~1%), so no new parameter file is shipped.
 IDR_RMIN_2_NM = {aa: _MODEL_PARAMETERS["topo"][aa]["Rmin_2"] for aa in _PROTEIN_LIST}
 
-# Default IDR-IDR attraction scale when a `disordered:` section omits `idr_scale`
-# (spec §2.2). 0 selects the pure self-avoiding chain; 0.03 reproduces O'Brien's
-# default weak collapse.
-DEFAULT_IDR_SCALE = 0.03
+# Defaults for a `disordered:` section that omits the corresponding key (spec §2.2).
+# Both were calibrated together against SAXS Rg for 24 fully-disordered proteins
+# (see docs usage/disordered_regions "Validation"): idr_scale = 1.0 with
+# eps_gen_kj = 2.25 kJ/mol gives RMS fractional Rg error ~33% at slope 0.71 /
+# r 0.79 -- the best balance of aggregate accuracy against per-protein dynamic
+# range on that benchmark. idr_scale = 0 selects the pure self-avoiding chain.
+DEFAULT_IDR_SCALE = 1.0
+DEFAULT_EPS_GEN_KJ = 2.25
 
 
 # -----------------------------------------------------------------------------
@@ -682,9 +686,10 @@ def read_yaml_config(filepath: str) -> Tuple[Dict, Dict, Dict, Optional[Dict]]:
     The optional ``disordered:`` section marks intrinsically-disordered (IDR)
     residues; it carries ``residues:`` (required, same syntax as a domain's
     residue list), ``idr_scale:`` (optional, default
-    :data:`DEFAULT_IDR_SCALE` = 0.03 -- the sequence-specific IDR-IDR attraction
-    knob) and ``eps_gen_kj:`` (optional, default 0.0 -- an additive,
-    sequence-independent generic-cohesion depth in kJ/mol). It is returned as the
+    :data:`DEFAULT_IDR_SCALE` = 1.0 -- the sequence-specific IDR-IDR attraction
+    knob) and ``eps_gen_kj:`` (optional, default :data:`DEFAULT_EPS_GEN_KJ` =
+    2.25 kJ/mol -- an additive, sequence-independent generic-cohesion depth).
+    The two defaults are the jointly SAXS-calibrated pair. It is returned as the
     fourth value (``None`` when absent) and consumed by :func:`apply_disorder`
     inside :func:`build_nonbonded_interaction`.
 
@@ -729,8 +734,8 @@ def read_yaml_config(filepath: str) -> Tuple[Dict, Dict, Dict, Optional[Dict]]:
           A-B: 0.5
         disordered:            # optional; None when absent
           residues: [1-24]
-          idr_scale: 0.03       # sequence-specific BT scale
-          eps_gen_kj: 0.0       # optional additive generic cohesion (kJ/mol)
+          idr_scale: 1.0        # sequence-specific BT scale (default)
+          eps_gen_kj: 2.25      # additive generic cohesion, kJ/mol (default)
 
     >>> dom, intra, inter, disorder = read_yaml_config("domain.yaml")
     >>> dom["A"][:3]
@@ -812,7 +817,7 @@ def read_yaml_config(filepath: str) -> Tuple[Dict, Dict, Dict, Optional[Dict]]:
         # Optional additive generic-cohesion term (kJ/mol, sequence-independent),
         # given directly in kJ/mol so it adds to the kJ ss_interaction_energy without
         # conversion. Default 0.0 -> byte-identical to the idr_scale-only build.
-        eps_gen_kj = float(dis_cfg.get('eps_gen_kj', 0.0))
+        eps_gen_kj = float(dis_cfg.get('eps_gen_kj', DEFAULT_EPS_GEN_KJ))
         disorder = {'residues': dis_residues, 'idr_scale': idr_scale,
                     'eps_gen_kj': eps_gen_kj}
         # Overlap with an explicit domain is legal -- disorder wins (spec §2.2) -- but
@@ -957,14 +962,17 @@ def apply_disorder(rmin_matrix: np.ndarray, eps_ij: np.ndarray, rmin_2_nm: np.nd
     Three pair classes result (spec §2.1): folded-folded (untouched, Go),
     IDR-IDR (``max(NON_NATIVE_KJ, eps_gen_kj + idr_scale * eps_BT)``), and IDR-folded
     (excluded-volume only). ``eps_gen_kj`` is an optional additive, sequence-independent
-    generic-cohesion term (0 by default -> the original idr_scale-only well). The well
-    position for every IDR-involving pair is the
-    sum rule of the per-residue radii, with IDR residues switched to the
-    transferable per-AA :data:`IDR_RMIN_2_NM` and folded residues kept on K-B.
+    generic-cohesion term (0 by default -> the original idr_scale-only well). Each IDR
+    residue's radius is switched to the transferable per-AA sigma-radius
+    ``rvdw = IDR_RMIN_2_NM / 2^(1/6)`` (folded residues keep their K-B Rmin/2), and every
+    IDR-involving well is placed at the bare sum of those per-bead radii. So IDR-IDR comes
+    out ``rvdw[i] + rvdw[j]`` -- the O'Brien generic-bt convention, ~11% tighter than the
+    bare Rmin sum -- while IDR-folded is ``Rmin/2[folded] + rvdw[IDR]``, keeping the folded
+    bead on its native radius rather than shrinking it in cross pairs.
 
     Overriding the per-residue ``rmin_2_nm`` array (not merely the pair matrix) is a
     requirement: the same array feeds the NC<->ribosome excluded volume in CSP
-    (spec §2.6), so both excluded-volume channels stay consistent for IDR beads.
+    (spec §2.6), so both excluded-volume channels see the *same* rvdw for IDR beads.
 
     Parameters
     ----------
@@ -973,7 +981,9 @@ def apply_disorder(rmin_matrix: np.ndarray, eps_ij: np.ndarray, rmin_2_nm: np.nd
     eps_ij : np.ndarray, shape (n, n)
         Folded pairwise well depths (kJ/mol). Modified in place.
     rmin_2_nm : np.ndarray, shape (n,)
-        Per-residue Rmin/2 (nm). IDR entries are overridden in place.
+        Per-residue radius (nm). Modified in place: IDR entries are overridden with the
+        per-AA sigma-radius ``rvdw = IDR_RMIN_2_NM / 2^(1/6)``; folded entries keep K-B
+        Rmin/2. (So the array mixes conventions by bead class, both feeding a bare sum.)
     dis_idx : np.ndarray of int
         0-based indices of the disordered residues.
     idr_scale : float
@@ -986,7 +996,10 @@ def apply_disorder(rmin_matrix: np.ndarray, eps_ij: np.ndarray, rmin_2_nm: np.nd
         NOT the domain-scaled version -- the IDR well must not inherit ``nscale``.
     eps_gen_kj : float, optional
         Additive, sequence-independent generic-cohesion depth (kJ/mol) added to every
-        IDR-IDR well before the excluded-volume floor. Default 0.0 (idr_scale-only).
+        IDR-IDR well before the excluded-volume floor. Defaults to 0.0 *at this level*
+        (the neutral, idr_scale-only transform); a domain_def that omits ``eps_gen_kj:``
+        gets the calibrated :data:`DEFAULT_EPS_GEN_KJ` from :func:`read_yaml_config`
+        instead, so user-facing runs default to generic cohesion being ON.
 
     Returns
     -------
@@ -998,14 +1011,20 @@ def apply_disorder(rmin_matrix: np.ndarray, eps_ij: np.ndarray, rmin_2_nm: np.nd
     involves_dis = m[:, None] | m[None, :]     # pair touches a disordered residue
     dd = m[:, None] & m[None, :]               # both residues disordered
 
-    # 1. IDR residues' radius -> transferable per-AA (K-B is meaningless for
-    #    disordered coords). Folded residues keep their exact K-B value.
-    rmin_2_nm[dis_idx] = [IDR_RMIN_2_NM[index_to_resname[i]] for i in dis_idx]
+    # 1. IDR residues' radius -> transferable per-AA sigma-radius rvdw = Rmin_2 / 2^(1/6)
+    #    (K-B is meaningless for disordered coords). Baking the 2^(1/6) in here -- on the
+    #    IDR entries only -- makes rmin_2_nm a single-valued per-bead radius: IDR beads
+    #    carry rvdw, folded beads keep their exact K-B Rmin/2, untouched.
+    rmin_2_nm[dis_idx] = [IDR_RMIN_2_NM[index_to_resname[i]] / RMIN_SCALE_FACTOR
+                          for i in dis_idx]
 
-    # 2. Every IDR-involving pair: drop the native contact, reposition the well at
-    #    the sum rule of the (now-updated) per-residue radii, at the excluded-volume
-    #    floor. IDR-folded comes out per-AA + K-B automatically.
-    rmin_matrix[involves_dis] = (rmin_2_nm[:, None] + rmin_2_nm[None, :])[involves_dis]
+    # 2. Every IDR-involving pair: drop the native contact, reposition the well at the
+    #    bare sum rule of the (now-updated) per-residue radii, at the excluded-volume
+    #    floor. Because IDR entries are already sigma-radii, IDR-IDR comes out
+    #    rvdw_i + rvdw_j (the O'Brien generic-bt convention, ~11% tighter than the bare
+    #    Rmin sum) while IDR-folded keeps the folded bead on its native K-B Rmin/2.
+    rmin_matrix[involves_dis] = (
+        rmin_2_nm[:, None] + rmin_2_nm[None, :])[involves_dis]
     eps_ij[involves_dis] = NON_NATIVE_KJ
 
     # 3. IDR-IDR only: additive generic cohesion (eps_gen_kj, sequence-independent)
@@ -1179,7 +1198,7 @@ def build_nonbonded_interaction(
         rmin_matrix, eps_ij, rmin_2_nm = apply_disorder(
             rmin_matrix, eps_ij, rmin_2_nm, dis_idx, disorder['idr_scale'],
             index_to_resname, ss_interaction_energy,
-            eps_gen_kj=disorder.get('eps_gen_kj', 0.0))
+            eps_gen_kj=disorder.get('eps_gen_kj', DEFAULT_EPS_GEN_KJ))
 
     if return_rmin_2:
         return rmin_matrix, eps_ij, rmin_2_nm

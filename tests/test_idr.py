@@ -66,10 +66,13 @@ def test_format_residue_ranges():
 # Energy path — apply_disorder (§2.3)
 # --------------------------------------------------------------------------- #
 def test_contact_removal_self_avoiding(tmp_path, monkeypatch):
-    """§3 test 2 + 6: idr_scale=0 -> every IDR-involving pair is the excluded-volume
+    """§3 test 2 + 6: idr_scale=0 AND eps_gen_kj=0 -> every IDR-involving pair is the
+    excluded-volume
     floor; folded-folded pairs and folded residues' K-B radius are untouched; IDR
     residues take the per-AA radius."""
-    from topo.utils.nonbonded import build_nonbonded_interaction, NON_NATIVE_KJ, IDR_RMIN_2_NM
+    from topo.utils.nonbonded import (
+        build_nonbonded_interaction, NON_NATIVE_KJ, IDR_RMIN_2_NM, RMIN_SCALE_FACTOR,
+    )
 
     monkeypatch.chdir(tmp_path)
     rmin_f, eps_f, r2_f = build_nonbonded_interaction(str(PDB), return_rmin_2=True)
@@ -79,6 +82,7 @@ def test_contact_removal_self_avoiding(tmp_path, monkeypatch):
         disordered:
           residues: [1-{MASK_END}]
           idr_scale: 0.0
+          eps_gen_kj: 0.0       # BOTH knobs off -> the pure self-avoiding chain
         """)
     rmin_m, eps_m, r2_m = build_nonbonded_interaction(str(PDB), dm, return_rmin_2=True)
 
@@ -92,10 +96,11 @@ def test_contact_removal_self_avoiding(tmp_path, monkeypatch):
     assert np.allclose(eps_m[ff], eps_f[ff])
     assert np.allclose(rmin_m[ff], rmin_f[ff])
 
-    # IDR residues' Rmin/2 -> per-AA; folded residues' Rmin/2 unchanged.
+    # IDR residues' radius -> per-AA sigma-radius rvdw = IDR_RMIN_2_NM / 2^(1/6);
+    # folded residues' K-B Rmin/2 unchanged.
     resname = _resnames()
     for i in range(MASK_END):
-        assert r2_m[i] == pytest.approx(IDR_RMIN_2_NM[resname[i]])
+        assert r2_m[i] == pytest.approx(IDR_RMIN_2_NM[resname[i]] / RMIN_SCALE_FACTOR)
     assert np.allclose(r2_m[MASK_END:], r2_f[MASK_END:])
     # No native contact survives that touches a masked residue.
     assert not np.any(eps_m[involves] > 0.01)
@@ -104,7 +109,9 @@ def test_contact_removal_self_avoiding(tmp_path, monkeypatch):
 def test_idr_folded_excluded_only(tmp_path, monkeypatch):
     """§3 test 3: with idr_scale>0, IDR-folded pairs (exactly one masked) are still
     excluded-volume only (no attraction leaks across the boundary), at well position
-    r2[IDR](per-AA) + r2[folded](K-B)."""
+    r2[IDR] + r2[folded] -- the bare sum of the per-bead radii, where r2[IDR] is already
+    the sigma-radius rvdw and r2[folded] is the native K-B Rmin/2 (folded bead not
+    shrunk in cross pairs)."""
     from topo.utils.nonbonded import build_nonbonded_interaction, NON_NATIVE_KJ
 
     monkeypatch.chdir(tmp_path)
@@ -141,6 +148,7 @@ def test_eps_construction(tmp_path, monkeypatch):
         disordered:
           residues: [1-{MASK_END}]
           idr_scale: 0.03
+          eps_gen_kj: 0.0
         """)
     _, eps_m, _ = build_nonbonded_interaction(str(PDB), dm, return_rmin_2=True)
 
@@ -165,9 +173,10 @@ def test_eps_construction(tmp_path, monkeypatch):
 
 def test_eps_gen_additive(tmp_path, monkeypatch):
     """Additive generic cohesion: IDR-IDR eps == max(NON_NATIVE, eps_gen_kj + a*ss),
-    and eps_gen_kj: 0 is identical to omitting it (idr_scale-only build)."""
+    and omitting eps_gen_kj yields the calibrated DEFAULT_EPS_GEN_KJ (not 0)."""
     from topo.utils.nonbonded import (
         build_nonbonded_interaction, get_ss_interaction_energy, NON_NATIVE_KJ,
+        DEFAULT_EPS_GEN_KJ,
     )
     import MDAnalysis as mda
     import warnings
@@ -194,9 +203,17 @@ def test_eps_gen_additive(tmp_path, monkeypatch):
           residues: [1-{MASK_END}]
           idr_scale: 1.0
         """)
+    dm_dflt = _write_yaml(tmp_path / "dflt.yaml", f"""
+        n_residues: {N_RES}
+        disordered:
+          residues: [1-{MASK_END}]
+          idr_scale: 1.0
+          eps_gen_kj: {DEFAULT_EPS_GEN_KJ}
+        """)
     _, eps_gen, _ = build_nonbonded_interaction(str(PDB), dm_gen, return_rmin_2=True)
     _, eps_zero, _ = build_nonbonded_interaction(str(PDB), dm_zero, return_rmin_2=True)
     _, eps_absent, _ = build_nonbonded_interaction(str(PDB), dm_absent, return_rmin_2=True)
+    _, eps_dflt, _ = build_nonbonded_interaction(str(PDB), dm_dflt, return_rmin_2=True)
 
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore")
@@ -207,16 +224,23 @@ def test_eps_gen_additive(tmp_path, monkeypatch):
     dd = m[:, None] & m[None, :]
     expected = np.maximum(NON_NATIVE_KJ, EPS_GEN + 1.0 * ss)
     assert np.allclose(eps_gen[dd], expected[dd])
-    # eps_gen_kj: 0 == omitting it == the original idr_scale-only build.
-    assert np.allclose(eps_zero, eps_absent)
+    # Omitting eps_gen_kj now means the calibrated DEFAULT_EPS_GEN_KJ, NOT 0.
+    assert np.allclose(eps_absent, eps_dflt)
+    assert not np.allclose(eps_absent, eps_zero)
     # a positive eps_gen deepens every IDR-IDR well relative to eps_gen_kj = 0.
     assert np.all(eps_gen[dd] >= eps_zero[dd])
     assert np.any(eps_gen[dd] > eps_zero[dd])
 
 
 def test_default_idr_scale(tmp_path, monkeypatch):
-    """§3 test 9: omitting idr_scale is identical to an explicit idr_scale: 0.03."""
-    from topo.utils.nonbonded import build_nonbonded_interaction
+    """§3 test 9: omitting both knobs is identical to spelling out the calibrated
+    defaults (idr_scale = DEFAULT_IDR_SCALE, eps_gen_kj = DEFAULT_EPS_GEN_KJ)."""
+    from topo.utils.nonbonded import (
+        build_nonbonded_interaction, DEFAULT_IDR_SCALE, DEFAULT_EPS_GEN_KJ,
+    )
+
+    # the calibrated pair is what a bare `disordered:` block must produce
+    assert (DEFAULT_IDR_SCALE, DEFAULT_EPS_GEN_KJ) == (1.0, 2.25)
 
     monkeypatch.chdir(tmp_path)
     dm_default = _write_yaml(tmp_path / "default.yaml", f"""
@@ -228,7 +252,8 @@ def test_default_idr_scale(tmp_path, monkeypatch):
         n_residues: {N_RES}
         disordered:
           residues: [1-{MASK_END}]
-          idr_scale: 0.03
+          idr_scale: {DEFAULT_IDR_SCALE}
+          eps_gen_kj: {DEFAULT_EPS_GEN_KJ}
         """)
     r1, e1, x1 = build_nonbonded_interaction(str(PDB), dm_default, return_rmin_2=True)
     r2, e2, x2 = build_nonbonded_interaction(str(PDB), dm_explicit, return_rmin_2=True)
@@ -350,6 +375,7 @@ def test_fully_idp(tmp_path, monkeypatch):
         disordered:
           residues: [1-{N_RES}]
           idr_scale: 0.03
+          eps_gen_kj: 0.0
         """)
 
     # (a) energy build finishes: all pairs IDR-IDR, all radii finite (no divide-by-zero).
