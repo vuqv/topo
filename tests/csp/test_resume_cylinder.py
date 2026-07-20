@@ -150,3 +150,13 @@ def test_ini_resume_parsed(tmp_path):
                    "resume = bogus\n")
     with pytest.raises(ValueError, match="resume"):
         cylinder.read_cylinder_config(str(ini), verbose=False)
+
+
+def test_ini_l0_optional(tmp_path):
+    """`L0` is optional and defaults to 1, matching topo-csp (no cyl-only requirement)."""
+    ini = tmp_path / "cylinder.ini"
+    ini.write_text("[OPTIONS]\n"
+                   "pdb_file = p.pdb\n"
+                   "domain_def = d.yaml\n"
+                   "codon_times = 0.005\n")
+    assert cylinder.read_cylinder_config(str(ini), verbose=False).L0 == 1

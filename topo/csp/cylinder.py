@@ -557,13 +557,14 @@ class CylinderConfig:
 def read_cylinder_config(config_file: str, verbose: bool = True) -> CylinderConfig:
     """Parse a cylinder synthesis control file (INI) into a :class:`CylinderConfig`.
 
-    A flat ``key = value`` list. Required: ``pdb_file``, ``L0``, ``domain_def``, and --
+    A flat ``key = value`` list. Required: ``pdb_file``, ``domain_def``, and --
     unless ``codon_times`` is a positive number (uniform timing) -- ``mrna``. No ribosome
     PDB (the tunnel geometry comes from the params, not a structure). Recognised keys
     (optional ones fall back to defaults):
 
     - ``pdb_file`` -- full native PDB of the target protein (the nascent chain).
-    - ``L0`` / ``L_max`` -- start / final nascent length (blank ``L_max`` -> full).
+    - ``L0`` / ``L_max`` -- start / final nascent length (blank ``L0`` -> 1, blank
+      ``L_max`` -> full).
     - ``outdir`` -- root output directory (per-length subfolders ``L_<L>/``).
     - ``domain_def`` -- domain YAML for contact ``nscale`` (one-time precompute).
     - ``stride_output_file`` -- precomputed STRIDE (else STRIDE runs once if on PATH).
@@ -628,7 +629,7 @@ def read_cylinder_config(config_file: str, verbose: bool = True) -> CylinderConf
     log(f"Reading cylinder synthesis parameters from {config_file} ...")
 
     pdb_file = req("pdb_file")
-    L0 = int(req("L0"))
+    L0 = int(opt("L0") or 1)
     L_max = opt("L_max")
     L_max = int(L_max) if L_max is not None else None
     outdir = opt("outdir") or "synth_out"
