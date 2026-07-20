@@ -3,12 +3,14 @@
 Welcome to the TOPO documentation
 =================================
 
-**TOPO** (*TOPOlogy-based coarse-grained model for folded prOteins*) is a Python
-library and command-line toolkit for coarse-grained molecular dynamics of
-**globular (folded) proteins**, built on `OpenMM <https://openmm.org/>`_. From a
-single folded-protein structure it builds a one-bead-per-residue, structure-based
-(Gō-like) model and runs Langevin dynamics, for studying folding, unfolding,
-thermal/mechanical stability, and multidomain motions.
+**TOPO** is **a unified coarse-grained model for globular and disordered
+proteins**, built on `OpenMM <https://openmm.org/>`_ — a Python library and
+command-line toolkit. From a single structure it builds a one-bead-per-residue,
+structure-based (Gō-like) model and runs Langevin dynamics, for studying folding,
+unfolding, thermal/mechanical stability, and multidomain motions. *Unified* means
+one force field spans the whole spectrum: **globular (folded) proteins**,
+**multi-domain proteins with intrinsically disordered regions**, and **fully
+disordered proteins (IDPs)** — see :doc:`usage/disordered_regions`.
 
 **New here?** Read :doc:`overview` to see the two things TOPO does and jump to
 the right tutorials, :doc:`modules/installation` to get it running,

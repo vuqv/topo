@@ -1,11 +1,13 @@
 Introduction
 ============
 
-**TOPO** (*TOPOlogy-based coarse-grained model for folded prOteins*) is a Python
-library and command-line toolkit for **coarse-grained molecular dynamics of
-globular (folded) proteins**, built on the `OpenMM <https://openmm.org/>`_ engine.
+**TOPO** is **a unified coarse-grained model for globular and disordered
+proteins**, built on the `OpenMM <https://openmm.org/>`_ engine — a Python
+library and command-line toolkit covering globular (folded) proteins,
+multi-domain proteins with disordered regions, and fully disordered proteins in
+one force field.
 
-Given only a folded-protein structure (a PDB or CIF file), TOPO automatically
+Given only a protein structure (a PDB or CIF file), TOPO automatically
 builds a **one-bead-per-residue (alpha-carbon) structure-based model** — bonds,
 angles, sequence-dependent torsions, screened electrostatics, and a Gō-like
 native-contact potential — and runs Langevin dynamics. Because the native state
@@ -17,9 +19,13 @@ then work through the :doc:`../tutorials/index`.
 
 .. note::
 
-   TOPO simulates **folded** proteins. For intrinsically disordered proteins,
-   the model that TOPO's code base was originally adapted from (COSMO) is the
-   more appropriate tool.
+   **Disorder is supported.** Folded proteins are the core case, but residues
+   declared in a ``disordered:`` section drop their native contacts and switch to
+   a transferable, sequence-dependent potential — so TOPO also covers
+   **multi-domain proteins with IDRs** (ordered and disordered residues in one
+   chain) and, with every residue declared, **fully disordered proteins (IDPs)**.
+   See :doc:`../usage/disordered_regions` and
+   :doc:`../tutorials/A7_idr_mixed`.
 
 
 .. seealso::

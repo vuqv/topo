@@ -37,11 +37,43 @@ All notable changes to TOPO are documented here. The format is loosely based on
   intra-chain and nascent↔ribosome excluded-volume channels consistently. See
   `usage/disordered_regions` for how `rvdw` is derived.
 
+- **TOPO is now described as "a unified coarse-grained model for globular and
+  disordered proteins."** The old tagline ("TOPOlogy-based coarse-grained model for
+  folded prOteins") predated IDR support and undersold what the model covers; the
+  acronym expansion is dropped and TOPO is simply the name. Applied across the
+  README, docs, `pyproject.toml` description, module docstrings, and `CITATION.cff`
+  (title + abstract, so the next Zenodo release deposits under the new name).
+
 ### Fixed
 - Minimizer no longer spins forever when the max force cannot reach the 10 kJ/mol/nm
   target: the tolerance loop now exits at the floor and reports progress per
   iteration.
 - `model_parameters` uses standard average residue masses.
+
+### Docs
+- **`usage/model_theory` per-residue table corrected.** The masses were stale and
+  several were plain wrong (ARG 114 → 156.19, HIS 114 → 137.14, PRO 114 → 97.12,
+  CYS 114 → 103.14, ASP, GLU, GLN); the `Radii (nm)` column was neither the right
+  header nor the right numbers — it is `Rmin_2` and the values were ~1.8× too large
+  (ALA 0.504 → 0.2862). All 20 rows now match `model_parameters` exactly.
+- **`Rmin_2` is documented as a transferable parameter.** New section explaining
+  that the table is per residue *type* and is used only where a bead has no native
+  structure to measure (ribosome scenery, IDR beads, the nascent-chain fallback) —
+  a folded domain never uses it, taking per-residue Karanicolas–Brooks radii from
+  the input structure instead.
+- **The contact-potential pair-class table covers disorder.** It previously listed
+  only native and non-native pairs; IDR–ordered (excluded volume, folded bead keeps
+  its K–B radius) and IDR–IDR (`rvdw` sum, `max(eps_NN, eps_gen + s_IDR * eps_BT)`)
+  are now spelled out alongside them.
+- **IDP/IDR support is stated up front** in the README, `index`, `overview`,
+  `modules/introduction`, and `usage/model_theory`, which all described TOPO as
+  folded-proteins-only. Removed the note in `modules/introduction` claiming COSMO
+  was the more appropriate tool for disordered proteins — TOPO handles them.
+- Removed the stale "Heads-up for readers of older docs" note about a
+  Gaussian-quartic dihedral, and rendered the 12-10-6 equations with proper
+  fractions.
+- Recorded the 2026.2 version DOI (`10.5281/zenodo.21436269`) in `CITATION.cff` and
+  the citation page; only 2026.1's was listed.
 
 ## [2026.2] — 2026-07-18
 

@@ -1,7 +1,8 @@
 """
-TOPO: TOPOlogy-based coarse-grained model for folded prOteins
+TOPO: a unified coarse-grained model for globular and disordered proteins.
 
-TOPO is a Python library to run coarse-grained simulations of globular proteins using the OpenMM toolkit.
+TOPO is a Python library to run coarse-grained simulations of proteins (folded, and disordered via the
+`disordered:` section) using the OpenMM toolkit.
 The library offers flexibility for creating CG models that can be customised to implement different potential models.
 
 Considering an input structure, the library automatizes the creation of forces to specify it.

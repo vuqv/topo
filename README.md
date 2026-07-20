@@ -1,19 +1,26 @@
-# TOPO: TOPOlogy-based coarse-grained model for folded prOteins
+# TOPO
+
+**A unified coarse-grained model for globular and disordered proteins, built on
+[OpenMM](https://openmm.org/).**
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21360706.svg)](https://doi.org/10.5281/zenodo.21360706)
 
-A coarse-grained molecular-dynamics engine for **globular (folded) proteins**,
-built on [OpenMM](https://openmm.org/). From a single folded-protein structure,
-TOPO builds a **one-bead-per-residue, structure-based (Gō-like) model** — bonds,
-angles, sequence-dependent periodic torsions, Debye–Hückel electrostatics, and a
-native-contact potential — and runs Langevin dynamics.
+From a single structure, TOPO builds a
+**one-bead-per-residue, structure-based (Gō-like) model** — bonds, angles,
+sequence-dependent periodic torsions, Debye–Hückel electrostatics, and a
+native-contact potential — and runs Langevin dynamics. One force field spans the
+whole spectrum: **globular (folded) proteins**, **multi-domain proteins with
+intrinsically disordered regions (IDRs)**, and **fully disordered proteins
+(IDPs)** — declare a region disordered and it drops its native contacts for a
+transferable, sequence-dependent potential.
 
 That one model powers **two complementary workflows**:
 
-- **A · Folded-protein simulation** — take a complete structure and study how it
-  moves, unfolds, and comes apart: folding/unfolding, thermal and mechanical
-  stability, and multidomain motions. Contact energies can be scaled per domain
-  and per interface.
+- **A · Folded & disordered protein simulation** — take a complete structure and
+  study how it moves, unfolds, and comes apart: folding/unfolding, thermal and
+  mechanical stability, and multidomain motions. Contact energies can be scaled
+  per domain and per interface, and any part of the chain (or all of it) can be
+  declared intrinsically disordered.
 - **B · Protein synthesis** — grow the nascent chain N→C, one residue at a time,
   with codon-resolved kinetics, so the protein folds *co-translationally* as it
   emerges from the ribosome exit tunnel (analytic-tunnel or explicit CG-ribosome
@@ -125,7 +132,7 @@ only by `pip install`), e.g. `python -m topo.mdrun -f md.ini`.
 
 | Command            | Module               | Purpose                                                              |
 | ------------------ | -------------------- | ------------------------------------------------------------------- |
-| `topo-mdrun`       | `topo.mdrun`         | Run a folded-protein simulation from an `md.ini` control file.       |
+| `topo-mdrun`       | `topo.mdrun`         | Run a protein simulation from an `md.ini` control file.              |
 | `topo-optimize`    | `topo.optimize`      | Calibrate per-domain / per-interface contact `nscale`.              |
 | `topo-csp`         | `topo.csp.protocol`  | Continuous synthesis on an explicit coarse-grained ribosome.         |
 | `topo-cylinder`    | `topo.csp.cylinder`  | Continuous synthesis through an analytic (cylindrical) exit tunnel.  |
@@ -134,7 +141,7 @@ only by `pip install`), e.g. `python -m topo.mdrun -f md.ini`.
 
 ## Usage
 
-### A · Folded-protein simulation
+### A · Folded & disordered protein simulation
 
 Run a simulation from a control file (`md.ini`):
 
@@ -229,8 +236,8 @@ tests/           Test suite
 
 If TOPO contributed to your work, please cite it (and give the repo a ⭐):
 
-> Vu, Q. (2026). *TOPO: a topology-based coarse-grained model for folded
-> proteins* (Version 2026.2) [Computer software]. Zenodo.
+> Vu, Q. (2026). *TOPO: a unified coarse-grained model for globular and
+> disordered proteins* (Version 2026.2) [Computer software]. Zenodo.
 > https://doi.org/10.5281/zenodo.21360706
 
 The DOI above is the **concept DOI** — it always resolves to the latest release.

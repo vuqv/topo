@@ -7,7 +7,7 @@ name = "topo"
 # Version is derived from the git tag (CalVer YEAR.N) by setuptools-scm; see
 # [tool.setuptools_scm] below and scripts/next_version.sh.
 dynamic = ["version"]
-description = "TOPOlogy-based coarse-grained (structure-based / Go-like) model for folded proteins, built on OpenMM."
+description = "A unified coarse-grained model for globular and disordered proteins, built on OpenMM."
 readme = "README.md"
 requires-python = ">=3.9"
 # Runtime dependencies. Floors are the oldest versions known to work; no upper

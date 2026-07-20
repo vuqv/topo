@@ -1,8 +1,8 @@
 # TOPO Tutorials
 
-Hands-on, ready-to-run tutorials for the **TOPO** package — a topology-based
-(structure-based / Gō-like) coarse-grained model for folded proteins, built on
-[OpenMM](https://openmm.org/).
+Hands-on, ready-to-run tutorials for the **TOPO** package — a unified
+(structure-based / Gō-like) coarse-grained model for globular and disordered
+proteins, built on [OpenMM](https://openmm.org/).
 
 Each subfolder is **one self-contained example**: it ships the input files you
 need, and its `README.md` walks you through the run step by step and explains

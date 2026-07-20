@@ -26,7 +26,7 @@ class system:
     structure_path : str
         The path to the input PDB or CIF file. Required.
     model : str, optional, default='topo'
-        The model to be used. Currently only 'topo' (topology-based for folded proteins) is supported.
+        The model to be used. Currently only 'topo' (topology-based for proteins) is supported.
 
     Attributes
     ----------

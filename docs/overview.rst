@@ -2,9 +2,16 @@ What TOPO does
 ==============
 
 TOPO builds a single **one-bead-per-residue, structure-based (Gō-like) model**
-from a folded-protein structure and runs Langevin dynamics on
-`OpenMM <https://openmm.org/>`_. That one model powers **two complementary
-workflows**, each with its own set of tutorials:
+from a protein structure and runs Langevin dynamics on
+`OpenMM <https://openmm.org/>`_. One force field spans the whole spectrum —
+**globular (folded) proteins**, **multi-domain proteins with intrinsically
+disordered regions (IDRs)**, and **fully disordered proteins (IDPs)**: residues
+you declare disordered lose their native contacts and switch to a transferable,
+sequence-dependent potential, so ordered and disordered parts coexist in one
+chain (:doc:`usage/disordered_regions`).
+
+That one model powers **two complementary workflows**, each with its own set of
+tutorials:
 
 * :ref:`A. Coarse-grained simulation of folded proteins <overview-simulation>`
   — take a fully-formed structure and study how it moves, unfolds, and comes
@@ -17,13 +24,15 @@ Part B builds directly on the Part A model, so start with A if you are new here.
 
 .. _overview-simulation:
 
-A. Coarse-grained simulation of folded proteins
------------------------------------------------
+A. Coarse-grained simulation of folded and disordered proteins
+---------------------------------------------------------------
 
 Start from a complete structure and run structure-based MD: folding and
 unfolding, thermal and mechanical stability, and multidomain motions. Contact
 energies can be scaled per domain and per interface, so different parts of a
-protein can be made more or less stable.
+protein can be made more or less stable. Disorder is declared in the same file:
+mark tails, linkers, or whole chains as disordered to simulate a multi-domain
+protein with IDRs — or, with every residue marked, an IDP.
 
 .. rubric:: Tutorials
 
@@ -51,6 +60,7 @@ protein can be made more or less stable.
 * :doc:`The TOPO model: theory & force field <usage/model_theory>`
 * :doc:`Simulation control options (md.ini) <usage/simulation_control>`
 * :doc:`Domain definition file (domain.yaml) <usage/domain_definition>`
+* :doc:`Disordered / IDR regions <usage/disordered_regions>`
 * :doc:`Native-contact (Q) analysis <usage/native_contacts>`
 * :doc:`Output files & log format <usage/outputs>`
 

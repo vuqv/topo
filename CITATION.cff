@@ -5,12 +5,14 @@
 # sync with docs/citation.rst.
 cff-version: 1.2.0
 message: "If you use this software, please cite it as below."
-title: "TOPO: a topology-based coarse-grained model for folded proteins"
+title: "TOPO: a unified coarse-grained model for globular and disordered proteins"
 abstract: >-
   TOPO is a Python library and command-line toolkit for coarse-grained
-  molecular dynamics of globular (folded) proteins, built on OpenMM. It builds a
-  one-bead-per-residue structure-based (Go-like) model from a single folded
-  structure and can also run per-codon co-translational synthesis.
+  molecular dynamics of proteins, built on OpenMM. It builds a
+  one-bead-per-residue structure-based (Go-like) model from a single structure,
+  with one force field spanning globular (folded) proteins, multi-domain
+  proteins with intrinsically disordered regions, and fully disordered
+  proteins; it can also run per-codon co-translational synthesis.
 type: software
 authors:
   - family-names: Vu
@@ -26,6 +28,9 @@ identifiers:
     value: "10.5281/zenodo.21360706"
     description: "Concept DOI — all versions"
   - type: doi
+    value: "10.5281/zenodo.21436269"
+    description: "Version DOI — 2026.2"
+  - type: doi
     value: "10.5281/zenodo.21360707"
     description: "Version DOI — 2026.1"
 url: "https://github.com/vuqv/topo"
@@ -36,6 +41,7 @@ keywords:
   - structure-based-model
   - Go-model
   - protein-folding
+  - intrinsically-disordered-proteins
   - co-translational-folding
   - OpenMM
 # Uncomment and fill in once a paper/preprint describes TOPO. GitHub will then

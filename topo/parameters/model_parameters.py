@@ -1,8 +1,9 @@
 """
-Dictionary contains parameters for TOPO model (topology-based coarse-grained model for folded proteins).
+Dictionary contains parameters for TOPO model (a unified coarse-grained model for
+globular and disordered proteins).
 
 First-level key is the model name. Currently only the "topo" model is defined:
-  - topo: topology-based / structure-based model for globular (folded) proteins,
+  - topo: topology-based / structure-based model for globular and disordered proteins,
     with residue parameters (mass, Rmin_2, charge) and non-bonded
     interaction matrices.
 

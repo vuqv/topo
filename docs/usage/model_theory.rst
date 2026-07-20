@@ -17,22 +17,54 @@ the values hard-coded there.
 What kind of model is this?
 ---------------------------
 
-TOPO is a **structure-based (Gō-like) coarse-grained model** for **globular,
-folded proteins**.
+TOPO is a **unified structure-based (Gō-like) coarse-grained model for globular
+and disordered proteins**. *Unified* is the operative word: one Cα force field
+covers the whole spectrum below, with **all contact energetics — folded and
+disordered alike — tabulated into the same matrices and evaluated by a single**
+``CustomNonbondedForce``. No term switches on or off between regimes; a residue's
+regime is decided entirely by the *parameter values* it receives:
+
+* **Folded proteins and folded domains** — the classical Gō regime described in
+  the rest of this page: native contacts from the input structure, per-domain
+  ``nscale`` calibration (:doc:`domain_definition`).
+* **Multi-domain proteins with intrinsically disordered regions (IDRs)** —
+  ordered and disordered residues coexist in one chain. Residues listed in a
+  ``disordered:`` block get no native contacts; instead they interact through a
+  transferable, sequence-dependent well (generic cohesion + a scaled
+  Betancourt–Thirumalai term) and excluded volume, while the folded domains keep
+  their structure-based energetics untouched. Folded–IDR pairs are
+  excluded-volume only, so an IDR acts as a genuine flexible linker/tail rather
+  than a spurious binder.
+* **Fully disordered proteins (IDPs)** — the limiting case where *every* residue
+  is disordered. No Gō contacts remain and the model reduces to a transferable
+  Cα polymer; the ``eps_gen_kj``/``idr_scale`` defaults are calibrated against
+  SAXS :math:`R_g` for a 24-IDP benchmark.
+
+This page describes the shared force field — every term below applies in all
+three regimes, and the sections on the :ref:`contact potential
+<theory-contacts>` and on :ref:`Rmin_2 <theory-rmin2-transferable>` say exactly
+which parameters change when a residue is disordered. The disorder-specific
+energy function, the ``domain.yaml`` syntax, and the calibration are documented
+in :doc:`disordered_regions`.
+
+Three choices define the model in all three regimes:
 
 * **Coarse-graining — one bead per residue.** TOPO reads an all-atom PDB/CIF
   structure and keeps **only the alpha-carbon (Cα) atom of each residue**
   (:meth:`~topo.core.system.system.getCAlphaOnly`). A 106-residue protein
-  becomes 106 beads. Each bead carries the mass, excluded-volume radius, and
-  charge of its amino-acid type (table below). Consecutive Cα beads *of the same
-  chain* are bonded in sequence.
+  becomes 106 beads. Each bead carries the mass and charge of its amino-acid type
+  (table below) and an excluded-volume radius that is **derived from the
+  structure** for folded residues and taken from the per-type table for
+  disordered ones (see :ref:`theory-rmin2-transferable`). Consecutive Cα beads
+  *of the same chain* are bonded in sequence.
 
 * **Structure-based — the native fold is the energy minimum.** Unlike a transferable
   force field, the energy function is built *from the input structure itself*:
   the pairs of residues that are in contact in your folded PDB are given
   attractive wells centred at their native distances, and everything else is
-  repulsive. The crystal/NMR structure you provide therefore **defines** the
-  global energy minimum. This is what makes TOPO efficient for studying
+  repulsive (residues declared disordered are exempt — they get no native
+  contacts at all). The crystal/NMR structure you provide therefore **defines**
+  the global energy minimum of the folded part. This is what makes TOPO efficient for studying
   **folding, unfolding, domain motions, and thermal/mechanical stability** — the
   thermodynamic reference state is known by construction.
 
@@ -198,16 +230,6 @@ knowledge-based dihedral parameters; TOPO applies a global **0.756 calibration
 factor** to every tabulated :math:`k_{D,n}` (see
 :func:`topo.parameters.dihedral.load_dihedral_params`).
 
-.. admonition:: Heads-up for readers of older docs
-   :class: caution
-
-   Earlier documentation printed a *Gaussian-quartic* dihedral formula
-   (a log-sum of exponentials with quartic terms). That described an inherited
-   COSMO-style potential — it is **not** what the ``topo`` model uses. The
-   implemented torsion is the periodic form above
-   (:meth:`~topo.core.system.system.addPeriodicTorsionForce`).
-
-
 Non-bonded terms (long-range)
 -----------------------------
 
@@ -269,42 +291,73 @@ contact potential with a **12-10-6 (Gō-type)** functional form:
 .. math::
 
    U^\mathrm{nb}_{ij}(r) =
-   \varepsilon_{ij}\Big[\,
-     13\Big(\tfrac{R_{ij}}{r}\Big)^{12}
-   - 18\Big(\tfrac{R_{ij}}{r}\Big)^{10}
-   +  4\Big(\tfrac{R_{ij}}{r}\Big)^{6}
-   \Big]
+   \varepsilon_{ij}\left[\,
+     13\left(\frac{R_{ij}}{r}\right)^{12}
+   - 18\left(\frac{R_{ij}}{r}\right)^{10}
+   +  4\left(\frac{R_{ij}}{r}\right)^{6}
+   \,\right]
 
 This well has its **minimum exactly at** :math:`r = R_{ij}`, where
 :math:`U^\mathrm{nb}_{ij} = -\varepsilon_{ij}` — so :math:`R_{ij}` is the
 preferred distance and :math:`\varepsilon_{ij}` is the **well depth**. The same
 cutoff (2.0 nm) and switching (1.8 nm) as the electrostatics apply.
 
-What distinguishes TOPO from a textbook Gō model is **how the well position**
-:math:`R_{ij}` **and the well depth** :math:`\varepsilon_{ij}` **are assigned**.
-Pairs split into two classes (all built by
-:func:`topo.utils.nonbonded.build_nonbonded_interaction`):
+The well position :math:`R_{ij}` and the well depth :math:`\varepsilon_{ij}` are
+assigned **per pair class**. Pairs of **ordered** residues split into two classes
+(both built by
+:func:`topo.utils.nonbonded.build_nonbonded_interaction`); a pair touching a
+**disordered** residue forms a third and fourth class, imposed afterwards by
+:func:`topo.utils.nonbonded.apply_disorder` (see :doc:`disordered_regions`).
 
 .. important::
 
-   **The same symbol** :math:`R_{ij}` **means two physically different things in
-   the two classes** — it is a real distance for one and a collision radius for
-   the other. For a **native** contact, :math:`R_{ij}` is the *measured* Cα–Cα
-   **distance of that pair** in your input structure, so the attractive well sits
-   exactly at the native geometry. For a **non-native** pair, :math:`R_{ij}` is
-   *not* a distance of the pair at all: it is a **sum of two independent
-   per-residue collision radii**, :math:`R_{ij}=(R_\mathrm{min}/2)_i+(R_\mathrm{min}/2)_j`,
-   i.e. how close beads *i* and *j* may approach before they overlap (excluded
-   volume). What makes one an attractive **well** and the other a soft repulsive
-   **wall** is the paired **well depth** :math:`\varepsilon_{ij}`: a real energy
-   (kJ/mol) for native contacts, but a near-zero value
-   (:math:`1.32\times10^{-4}` kcal/mol) for non-native pairs, so their attractive
-   terms vanish and only the :math:`(R_{ij}/r)^{12}` repulsion remains. Both
-   classes are then stored in the **same** ``rmin_matrix`` / ``energy_matrix`` and
-   evaluated by a **single** ``CustomNonbondedForce`` — the native/non-native
-   distinction lives entirely in the *tabulated parameter values*, not in the
-   functional form. Merging them into one matrix is an exact computational
-   convenience, not an approximation.
+   **The same symbol** :math:`R_{ij}` **means two physically different things** —
+   a real distance in one class, a collision radius in the others. For a
+   **native** contact, :math:`R_{ij}` is the *measured* Cα–Cα **distance of that
+   pair** in your input structure, so the attractive well sits exactly at the
+   native geometry. For every other class, :math:`R_{ij}` is *not* a distance of
+   the pair at all: it is a **sum of two independent per-residue collision
+   radii** — how close beads *i* and *j* may approach before they overlap
+   (excluded volume). What makes one an attractive **well** and another a soft
+   repulsive **wall** is the paired **well depth** :math:`\varepsilon_{ij}`.
+
+   .. list-table::
+      :header-rows: 1
+      :widths: 20 40 40
+
+      * - Pair class
+        - Well position :math:`R_{ij}`
+        - Well depth :math:`\varepsilon_{ij}`
+      * - **Native** (ordered–ordered, in contact)
+        - measured Cα–Cα distance
+        - real energy, :math:`E_\mathrm{HB}+E_\mathrm{BS}+n_\mathrm{scale}E_\mathrm{SS}`
+      * - **Non-native** (ordered–ordered, not in contact)
+        - :math:`(R_\mathrm{min}/2)_i+(R_\mathrm{min}/2)_j`, both Karanicolas–Brooks
+        - :math:`1.32\times10^{-4}` kcal/mol (excluded volume only)
+      * - **IDR–ordered**
+        - :math:`(R_\mathrm{min}/2)_\mathrm{ordered} + r_\mathrm{vdw}^\mathrm{IDR}`
+          — the ordered bead keeps its K–B radius, the IDR bead uses the
+          transferable :math:`r_\mathrm{vdw}`
+        - :math:`1.32\times10^{-4}` kcal/mol (excluded volume only)
+      * - **IDR–IDR**
+        - :math:`r_\mathrm{vdw}^i + r_\mathrm{vdw}^j` (~11 % tighter than the bare
+          :math:`R_\mathrm{min}` sum — O'Brien's generic-bt convention)
+        - :math:`\max\big(1.32\times10^{-4}\ \text{kcal/mol},\;
+          \varepsilon_\mathrm{gen} + s_\mathrm{IDR}\,\varepsilon_\mathrm{BT}\big)`
+
+   The disordered radius is the **transferable** per-amino-acid value
+   :math:`r_\mathrm{vdw} = (R_\mathrm{min}/2)_\text{table}/2^{1/6}`, because a
+   Karanicolas–Brooks radius measured from coordinates is meaningless for a
+   residue whose coordinates are not its native ones — see
+   :ref:`theory-rmin2-transferable`. So a disordered residue always **loses its
+   native contact**, and only an IDR–IDR pair can regain attraction, through the
+   generic + sequence-dependent term rather than through the structure.
+
+   All four classes are stored in the **same** ``rmin_matrix`` / ``energy_matrix``
+   and evaluated by a **single** ``CustomNonbondedForce`` — every distinction
+   lives entirely in the *tabulated parameter values*, not in the functional form.
+   Merging them into one matrix is an exact computational convenience, not an
+   approximation.
 
 **1. Native contacts** — pairs that are genuinely in contact in your input
 structure. A pair counts as a native contact if it has at least one of:
@@ -406,10 +459,11 @@ combined by the **sum rule**
 
 .. math::
 
-   R_{ij} = \Big(\tfrac{R_\mathrm{min}}{2}\Big)_i + \Big(\tfrac{R_\mathrm{min}}{2}\Big)_j,
+   R_{ij} = \left(\frac{R_\mathrm{min}}{2}\right)_i
+          + \left(\frac{R_\mathrm{min}}{2}\right)_j,
    \qquad
-   \Big(\tfrac{R_\mathrm{min}}{2}\Big)_i
-   = \tfrac12\,2^{1/6}\times(\text{nearest non-contact Cα distance}).
+   \left(\frac{R_\mathrm{min}}{2}\right)_i
+   = \frac{2^{1/6}}{2}\times(\text{nearest non-contact Cα distance}).
 
 Each :math:`(R_\mathrm{min}/2)_i` is residue *i*'s collision **radius** (half the
 collision diameter :math:`R_\mathrm{min}`), so the sum rule puts the well minimum
@@ -482,10 +536,20 @@ Per-residue parameters
 ----------------------
 
 Each Cα bead inherits three properties from its amino-acid type (defined in
-:mod:`topo.parameters.model_parameters`): a **mass** (≈ residue molar mass,
-amu), a **charge** (e), and a ``Rmin_2`` collision-radius value (nm) used by the
-inter-chain (ribosome↔nascent) excluded-volume term in protein synthesis
-(see the note below the table).
+:mod:`topo.parameters.model_parameters`): a **mass**, a **charge** (e), and a
+``Rmin_2`` collision radius (nm).
+
+The **mass** is the *residue* molar mass in amu — the free amino acid minus one
+water (18.02), because each residue in a chain has lost a water to the peptide
+bond. It is a per-type constant and is the only one of the three properties that
+every bead uses unconditionally: it sets the particle dynamics.
+
+The ``Rmin_2`` column is a **transferable, per-type** parameter (O'Brien's
+per-amino-acid sidechain Rmin/2 values, plus his per-type RNA values below).
+"Transferable" is the key point: unlike everything else in a structure-based
+model, these numbers depend only on the residue *type*, never on your input
+structure — and consequently they are **not** what a folded protein or a nascent
+chain uses. See :ref:`theory-rmin2-transferable` immediately after the table.
 
 .. list-table::
    :header-rows: 1
@@ -493,91 +557,91 @@ inter-chain (ribosome↔nascent) excluded-volume term in protein synthesis
 
    * - Residue
      - Mass
-     - Radii (nm)
+     - Rmin_2 (nm)
      - Charge
      - Residue
      - Mass
-     - Radii (nm)
+     - Rmin_2 (nm)
      - Charge
    * - ALA
-     - 71.0
-     - 0.504
+     - 71.08
+     - 0.2862
      - 0
      - MET
-     - 131.0
-     - 0.618
+     - 131.19
+     - 0.3424
      - 0
    * - ARG
-     - 114.0
-     - 0.656
+     - 156.19
+     - 0.3704
      - **+1**
      - PHE
-     - 147.0
-     - 0.636
+     - 147.18
+     - 0.3536
      - 0
    * - ASN
-     - 114.0
-     - 0.568
+     - 114.10
+     - 0.3199
      - 0
      - PRO
-     - 114.0
-     - 0.556
+     - 97.12
+     - 0.3087
      - 0
    * - ASP
-     - 114.0
-     - 0.558
+     - 115.09
+     - 0.3143
      - **−1**
      - SER
-     - 87.0
-     - 0.518
+     - 87.08
+     - 0.2918
      - 0
    * - CYS
-     - 114.0
-     - 0.548
+     - 103.14
+     - 0.3031
      - 0
      - THR
-     - 101.0
-     - 0.562
+     - 101.10
+     - 0.3143
      - 0
    * - GLU
-     - 128.0
-     - 0.592
+     - 129.12
+     - 0.3367
      - **−1**
      - TRP
-     - 186.0
-     - 0.678
+     - 186.21
+     - 0.3816
      - 0
    * - GLN
-     - 128.0
-     - 0.602
+     - 128.13
+     - 0.3424
      - 0
      - TYR
-     - 163.0
-     - 0.646
+     - 163.18
+     - 0.3592
      - 0
    * - GLY
-     - 57.0
-     - 0.450
+     - 57.05
+     - 0.2526
      - 0
      - VAL
-     - 99.0
-     - 0.586
+     - 99.13
+     - 0.3311
      - 0
    * - HIS
-     - 114.0
-     - 0.608
+     - 137.14
+     - 0.3424
      - 0
      - ILE
-     - 113.0
-     - 0.618
+     - 113.16
+     - 0.3424
      - 0
    * - LEU
-     - 113.0
-     - 0.618
+     - 113.16
+     - 0.3424
      - 0
      - LYS
-     - 128.0
-     - 0.636
+     - 128.17
+     - 0.3536
      - **+1**
 
 Only the **20 standard amino acids** are parameterized; structures containing
@@ -585,28 +649,67 @@ non-standard or modified residues (e.g. phosphorylated residues) are not
 supported and raise an error at build time. RNA sites P, R, BR are defined for
 planned nucleic-acid support.
 
+.. _theory-rmin2-transferable:
+
+``Rmin_2`` is transferable — and folded structure overrides it
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 Of the three properties, the **charge** enters the Yukawa electrostatics and the
-**mass** sets the particle dynamics. The **collision radii (``Rmin_2``) are not
-used by any force in the single-chain (isolated-protein) model**: every contact
-distance :math:`R_{ij}` — native *and* non-native — is derived from the input
-structure (native distances are the Cα–Cα distances; non-native distances come
-from the nearest non-contact Cα distance, see :ref:`theory-contacts`). They **are**
-used by the **inter-chain** ribosome–nascent-chain excluded-volume term in
-protein synthesis (:mod:`topo.csp.ribosome`), which reproduces O'Brien's
-**12-10-6** form (the *same* functional form as the intra-chain contacts, **not**
-a pure :math:`(\sigma/r)^{12}` repulsion):
+**mass** sets the particle dynamics; both apply to every bead. ``Rmin_2`` is
+different, and the distinction is the single most common source of confusion:
+
+* ``Rmin_2`` is a **transferable** parameter — one fixed number per residue
+  *type*, taken from O'Brien's CHARMM ``.prm`` NONBONDED blocks and independent of
+  any structure. It is used where a bead has **no native structure to measure**:
+
+  - **rigid scenery beads** — the ribosome's RNA (P/R/BR) and ribosomal-protein
+    beads in continuous synthesis (:func:`topo.csp.ribosome.load_ribosome`);
+  - **disordered (IDR) beads** — a residue in a ``disordered:`` region gets the
+    transferable radius
+    :math:`r_\mathrm{vdw} = (R_\mathrm{min}/2)_{\text{table}}\,/\,2^{1/6}`
+    built from its ``Rmin_2`` entry, instead of a structure-derived one (see
+    :doc:`disordered_regions`);
+  - as the **fallback** per-bead radius for a nascent chain when no
+    structure-derived array is supplied ("Option B" in :mod:`topo.csp.ribosome`).
+
+* For a **folded domain or folded protein — the table values are not used.**
+  Every radius and every contact distance :math:`R_{ij}` is **derived from your
+  input structure**: native wells sit at the measured Cα–Cα distances, and each
+  folded residue's collision radius is the per-residue Karanicolas–Brooks value
+  :math:`\tfrac12 2^{1/6}\times(\text{nearest non-contact Cα distance})` computed
+  by :func:`topo.utils.nonbonded.calculate_rmin_2_values` (see
+  :ref:`theory-contacts`). The same residue type therefore carries **different**
+  radii in different structures — that is exactly what makes the model
+  structure-based rather than transferable.
+
+  A consequence worth stating: in a **multi-domain protein with IDRs**, the two
+  conventions coexist inside one chain. Folded beads keep their K-B radii; IDR
+  beads take the transferable :math:`r_\mathrm{vdw}`; a folded–IDR cross pair is
+  placed at
+  :math:`R_{ij} = (R_\mathrm{min}/2)_\mathrm{folded} + r_\mathrm{vdw}^\mathrm{IDR}`.
+
+The transferable values **are** also used by the **inter-chain**
+ribosome–nascent-chain excluded-volume term in protein synthesis
+(:mod:`topo.csp.ribosome`), which reproduces O'Brien's **12-10-6** form (the
+*same* functional form as the intra-chain contacts, **not** a pure
+:math:`(\sigma/r)^{12}` repulsion):
 
 .. math::
 
-   U_{ij}(r) = \varepsilon\Big[\,13(R_{ij}/r)^{12} - 18(R_{ij}/r)^{10}
-   + 4(R_{ij}/r)^{6}\,\Big],
-   \qquad R_{ij} = \Big(\tfrac{R_\mathrm{min}}{2}\Big)_i
-                 + \Big(\tfrac{R_\mathrm{min}}{2}\Big)_j ,
+   U_{ij}(r) = \varepsilon\left[\,
+       13\left(\frac{R_{ij}}{r}\right)^{12}
+     - 18\left(\frac{R_{ij}}{r}\right)^{10}
+     +  4\left(\frac{R_{ij}}{r}\right)^{6}
+   \,\right],
+   \qquad
+   R_{ij} = \left(\frac{R_\mathrm{min}}{2}\right)_i
+          + \left(\frac{R_\mathrm{min}}{2}\right)_j ,
 
 with the **sum** combination rule (each bead's collision radius
-:math:`R_\mathrm{min}/2` comes from ``Rmin_2``: for nascent beads either the
-per-residue Karanicolas–Brooks radii from the native structure or the per-amino-acid
-sidechain values; for ribosome beads O'Brien's per-type/per-residue values) and a
+:math:`R_\mathrm{min}/2` follows the split above: nascent beads use the
+per-residue Karanicolas–Brooks radii from the native structure by default, or the
+per-amino-acid table values as a fallback; ribosome beads always use the
+transferable per-type/per-residue values) and a
 very weak well depth :math:`\varepsilon = 1.32\times10^{-4}` kcal/mol, so in
 practice the term acts as a **soft excluded volume**. An earlier pure
 :math:`(\sigma/r)^{12}` repulsion with the arithmetic-mean combining rule was

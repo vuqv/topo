@@ -250,7 +250,7 @@ man_pages = [
 #  dir menu entry, description, category)
 texinfo_documents = [
     (master_doc, 'TOPO', 'TOPO Documentation',
-     author, 'TOPO', 'Topology-based coarse-grained model for folded proteins.',
+     author, 'TOPO', 'A unified coarse-grained model for globular and disordered proteins.',
      'Miscellaneous'),
 ]
 
