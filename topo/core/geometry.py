@@ -48,7 +48,7 @@ class geometry:
 
         Returns
         -------
-        simtk.unit.quantity.Quantity
+        openmm.unit.quantity.Quantity
             Quantity (value and unit) of the distance length in nanometers.
         """
 

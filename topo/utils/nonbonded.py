@@ -1076,6 +1076,9 @@ def build_nonbonded_interaction(
     energy_matrix : np.ndarray, shape (n_residues, n_residues)
         Pairwise well depth in kJ/mol. Native: sum of H-bond (0.75/1.5 kcal/mol),
         backbone–sidechain (0.37 kcal/mol), and scaled SS; non-native: NON_NATIVE_KJ.
+    rmin_2_nm : np.ndarray, shape (n_residues,)
+        Only when ``return_rmin_2=True`` (the return is then a 3-tuple): the
+        per-residue Rmin/2 array (nm) the sum rule was built from.
 
     Raises
     ------

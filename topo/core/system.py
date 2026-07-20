@@ -93,9 +93,9 @@ class system:
     -------
 
 
-    loadForcefieldFromFile()
-        Loads forcefield parameters from a force field file written with
-        the :code:`dumpForceFieldData()` method.
+    dumpForceFieldData()
+        Writes the force field parameters (particles, bonds, angles, torsions and
+        contacts) to a text file for inspection.
 
     """
 
@@ -308,14 +308,8 @@ class system:
         # Add bonds to topo object
         self.n_bonds = 0
         for bond in bonds:
-            """
-            TODO: Currently this is bond length for protein. Need to deal with system of Protein+DNA+RNA complexes.
-            if bond[0].name in protein_list and bond[1] in protein_list:
-                self.bonds[bond] = (bond_length_protein, None)
-            elif bond[0].name in nucleic_list and bond[1] in nucleic_list:
-                self.bonds[bond] = (bond_length_nucleic, None)
-            """
-
+            # A bond is "protein" only if BOTH residues are protein; anything else
+            # (nucleic, or a protein-nucleic junction) takes the nucleic length.
             is_protein_connect = all(bond[i].residue.name in protein_list for i in [0, 1])
             bond_length = self.bond_length_protein if is_protein_connect else self.bond_length_nucleic
             # print(bond_length)
@@ -776,7 +770,7 @@ class system:
             Whether to minimize the system if large forces are found.
         check_bond_distances : boolean (True)
             Whether to check for large bond distances.
-        check_large_forces : boolean (False)
+        check_large_forces : boolean (True)
             Whether to print force summary of force groups
         force_threshold : float (10.0)
             Threshold to check for large forces.

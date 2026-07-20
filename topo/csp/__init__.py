@@ -4,7 +4,7 @@ The per-codon, three-stage protein synthesis protocol of
 ``continuous_synthesis_v6.py`` (Yang Jiang, Dan Nissley, Ed O'Brien), expressed in
 topo style. It is the kinetic upgrade of :mod:`topo.csp.core`: it times
 every residue from its codon and splits each into peptidyl-transfer / translocation /
-tRNA-binding sub-stages, reusing the translation module's per-length MD machinery.
+tRNA-binding sub-stages, reusing :mod:`topo.csp.core`'s per-length MD machinery.
 
 CLI::
 

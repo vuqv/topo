@@ -13,12 +13,13 @@ It handles **two output layouts** with a shared stitching core
 
 * **CSP (3-stage)** -- ``<out>/L_<L>/`` from the Continuous Synthesis Protocol
   (:mod:`topo.csp.protocol`): one folder per residue with per-stage
-  ``traj_s<1,2,3>.dcd`` and a shared ``traj.psf``, plus ``ejection/``.
+  ``traj_s<1,2,3>.dcd`` and a shared ``traj.psf``, plus the post-synthesis
+  phases ``stall/`` and ``ejection/``.
   Use :func:`stitch_movie` / :func:`find_stage_segments`. The movie
   plays the chain growing **stage by stage** (new residue at the A-site, settle,
   translocate to P).
 * **Flat (per-length)** -- ``<out>/L_<L>/traj.dcd`` from a single-segment per-length loop
-  (e.g. the cylinder runner), plus ``ejection/``.
+  (e.g. the cylinder runner), plus the post-synthesis phases ``stall/`` and ``ejection/``.
   Use :func:`stitch_length_movie` / :func:`find_lengths`.
 
 The :func:`main` CLI (``topo-csp-movie``) **auto-detects** the layout (3-stage if any

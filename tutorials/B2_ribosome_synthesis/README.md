@@ -49,7 +49,6 @@ the domain-scaling idea of
 | `ribosome_trunc.pdb` | TOPO's coarse-grained truncated ribosome. |
 | `csp_val.ini` | Full-length run config (`L0=1 → L_max`, `AllBonds`, equilibrium-PTC, ejection). |
 | `csp_debug.ini` | Short clamped debug profile (4c5c only). |
-| `analyze_standalone.py` | Post-run validation report. |
 
 ## Run it
 
@@ -75,10 +74,6 @@ ribosome, so rigid bonds seed cleanly. A successful full-length run shows **no
 
 ## Validating the run
 
-```bash
-python analyze_standalone.py
-```
-
-It checks that per-stage potential energy stays finite (no blow-ups) and that
-the ejected chain diffuses cleanly out of the tunnel without penetrating the
-ribosome. These checks are self-contained.
+A successful run leaves **no `[stability]` lines** in the log (per-stage potential
+energy stayed finite throughout), and `synth_out/ejection/traj_final.pdb` shows the
+released chain clear of the tunnel — not penetrating the ribosome.

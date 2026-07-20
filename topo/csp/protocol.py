@@ -11,7 +11,7 @@ What is reused vs. new:
 
 - **Reused wholesale** from :mod:`topo.csp.core`: the per-length MD
   machinery -- :func:`run_length` (build-once-subset contacts, coordinate seeding,
-  rigid-ribosome scenery, tunnel wall, minimize/run/finalize), :func:`read_anchor`,
+  rigid-ribosome scenery, tunnel wall, minimize/run/finalize),
   :func:`precompute_contacts`, and :class:`RunParams` for all the MD/ribosome
   knobs. Nothing about the force field or the OpenMM plumbing is re-implemented here.
 - **New** (this module): the O'Brien *kinetics* (:mod:`topo.csp.kinetics`) and the
