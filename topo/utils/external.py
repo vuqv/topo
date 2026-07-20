@@ -69,7 +69,8 @@ def find_executable(name, env_var=None):
 
     raise RuntimeError(
         "'{name}' executable not found. Install it and ensure it is on PATH, "
-        "set {env}=/path/to/{name}, or build it via scripts/install_deps.sh.".format(
+        "set {env}=/path/to/{name}, or build it via "
+        "'scripts/install_deps.sh {name}'.".format(
             name=name, env=env_var
         )
     )

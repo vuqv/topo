@@ -3,9 +3,9 @@ How to install
 
 TOPO is a Python package built on `OpenMM <https://openmm.org/>`_. It depends on
 OpenMM plus NumPy, ParmEd, MDAnalysis, mdtraj, pandas, and PyYAML, which are best
-installed from ``conda-forge``. It also calls two external command-line programs
-(**STRIDE**, **PULCHRA**) that are installed separately. The steps below target
-Linux.
+installed from ``conda-forge``. It also calls one external command-line program,
+**STRIDE**, that is installed separately (plus **PULCHRA**, an opt-in extra only
+needed for all-atom backmapping). The steps below target Linux.
 
 Requirements
 ------------
@@ -28,28 +28,30 @@ versions known to work; there are no upper caps (the package runs on current
 releases, e.g. NumPy 2.x / OpenMM 8.x). The standalone tools under ``scripts/``
 need a few extra packages (``scipy``, ``matplotlib``, ``numba``).
 
-External programs (STRIDE, PULCHRA)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+External program (STRIDE)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-TOPO calls two third-party command-line binaries. They are compiled C programs, so
-they are **not** installed by ``pip`` and **not** bundled in the wheel — you
-install them once and TOPO locates them at run time.
+TOPO calls one third-party command-line binary. It is a compiled C program, so it
+is **not** installed by ``pip`` and **not** bundled in the wheel — you install it
+once and TOPO locates it at run time.
 
 * **STRIDE** (required) — secondary-structure / backbone H-bond assignment for the
   contact map. Only invoked when TOPO has to *build* the contact map; if you supply
   a precomputed STRIDE file (``stride_output_file=...``) it need not be installed
   for that run.
-* **PULCHRA** (optional) — backmapping a coarse-grained (Cα) structure to all-atom
-  coordinates.
 
-Install both with the bundled helper::
+Install it with the bundled helper::
 
-    scripts/install_deps.sh              # both, into $HOME/.local/bin
-    scripts/install_deps.sh stride       # just STRIDE (prefers bioconda if present)
+    scripts/install_deps.sh              # STRIDE, into $HOME/.local/bin
+
+A second program, **PULCHRA**, is *optional* and installed only on request
+(``scripts/install_deps.sh pulchra``). It backmaps a coarse-grained (Cα) structure
+to all-atom coordinates; if you never do that, you do not need it.
 
 TOPO resolves each program in this order: ``$TOPO_STRIDE`` / ``$TOPO_PULCHRA`` (an
 explicit path) → the program on ``PATH`` → a copy vendored at ``topo/bin/``. See
-:doc:`../usage/external_dependencies` for manual installs and details.
+:doc:`../usage/external_dependencies` for manual installs, the optional
+backmapping tools (PULCHRA and the cg2all alternative), and details.
 
 Steps
 -----
@@ -61,12 +63,20 @@ Steps
            mdanalysis mdtraj numpy pandas pyyaml
        mamba activate topo
 
-2. **Install the external programs** (STRIDE required, PULCHRA optional), e.g. with
-   the bundled helper::
+2. **Get the source code.** TOPO is not on PyPI, so clone (or download) the
+   repository from GitHub to a target path, for example ``/path/to/topo``::
+
+       git clone https://github.com/vuqv/topo.git /path/to/topo
+       cd /path/to/topo
+
+   Without ``git``, download the ZIP archive from
+   `github.com/vuqv/topo <https://github.com/vuqv/topo>`_ ("Code" → "Download
+   ZIP") and unpack it; the rest of the steps are the same.
+
+3. **Install STRIDE**, e.g. with the bundled helper, run from the repository
+   root (add ``pulchra`` as an argument only if you need backmapping)::
 
        scripts/install_deps.sh
-
-3. **Download this repository** to a target path, for example ``/path/to/topo``.
 
 4. **Install TOPO.** There are two main ways.
 

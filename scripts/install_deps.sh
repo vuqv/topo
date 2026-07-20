@@ -15,10 +15,10 @@
 #   3. topo/bin/<name>               (only if you install there; see PREFIX below)
 #
 # Usage:
-#   scripts/install_deps.sh                 # install into $HOME/.local/bin
+#   scripts/install_deps.sh                 # STRIDE only, into $HOME/.local/bin
+#   scripts/install_deps.sh pulchra         # PULCHRA only (opt-in)
+#   scripts/install_deps.sh stride pulchra  # both
 #   PREFIX=/path/to/topo/bin scripts/install_deps.sh   # vendor into the package
-#   scripts/install_deps.sh stride          # just STRIDE
-#   scripts/install_deps.sh pulchra         # just PULCHRA
 #
 # NOTE: verify the source URLs below against the upstream projects before use --
 # they are the canonical distribution points at time of writing but may change.
@@ -124,8 +124,11 @@ install_pulchra() {
     return 1
 }
 
-targets=("${@:-stride pulchra}")
-for t in ${targets[@]}; do
+# Default target is STRIDE alone: it is the only binary topo needs to build a
+# contact map. PULCHRA is opt-in -- only backmapping runs use it.
+targets=("$@")
+[ ${#targets[@]} -eq 0 ] && targets=(stride)
+for t in "${targets[@]}"; do
     case "$t" in
         stride)  install_stride ;;
         pulchra) install_pulchra ;;
@@ -137,5 +140,4 @@ echo
 echo "Done. Ensure $PREFIX is on your PATH, or point topo at the binaries:"
 echo "    export PATH=\"$PREFIX:\$PATH\""
 echo "    # or:"
-echo "    export TOPO_STRIDE=\"$PREFIX/stride\""
-echo "    export TOPO_PULCHRA=\"$PREFIX/pulchra\""
+echo "    export TOPO_STRIDE=\"$PREFIX/stride\"        # or TOPO_PULCHRA for pulchra"

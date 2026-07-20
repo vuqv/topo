@@ -84,7 +84,8 @@ optional **PULCHRA**) binaries. In brief::
 
 See :doc:`installation` for the full step-by-step guide (both the editable/regular
 ``pip`` install and the no-install ``PYTHONPATH`` alternative), and
-:doc:`../usage/external_dependencies` for STRIDE and PULCHRA.
+:doc:`../usage/external_dependencies` for STRIDE and the optional backmapping
+tools (PULCHRA, cg2all).
 
 
 Running a simulation

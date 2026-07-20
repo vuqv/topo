@@ -43,24 +43,27 @@ packages (`scipy`, `matplotlib`, `numba`); see the commented section in
 > with **conda/mamba** from `conda-forge` rather than pip. `mamba` is recommended
 > for faster, more reliable solves.
 
-### External programs (STRIDE, PULCHRA)
+### External program (STRIDE)
 
-TOPO also calls two third-party command-line binaries. They are compiled C
-programs, so they are **not** installed by `pip` and **not** bundled in the
-wheel — you install them once and TOPO locates them at run time.
+TOPO also calls a third-party command-line binary, **STRIDE**. It is a compiled C
+program, so it is **not** installed by `pip` and **not** bundled in the wheel —
+you install it once and TOPO locates it at run time.
 
-| Program     | Needed   | Used for                                                                 |
-| ----------- | -------- | ------------------------------------------------------------------------ |
-| **STRIDE**  | Required | Secondary-structure / backbone H-bond assignment for the contact map.    |
-| **PULCHRA** | Optional | Backmapping a coarse-grained (Cα) structure to all-atom coordinates.      |
+| Program     | Needed            | Used for                                                              |
+| ----------- | ----------------- | --------------------------------------------------------------------- |
+| **STRIDE**  | Required          | Secondary-structure / backbone H-bond assignment for the contact map. |
+| **PULCHRA** | Optional (opt-in) | Backmapping a coarse-grained (Cα) structure to all-atom coordinates.  |
 
 STRIDE is only invoked when TOPO has to *build* the contact map; if you supply a
 precomputed STRIDE file (`stride_output_file=...`), it need not be installed for
-that run. Install both with the bundled helper:
+that run. PULCHRA is installed only if you ask for it — nothing but backmapping
+uses it, and [cg2all](https://github.com/huhlim/cg2all) is a deep-learning
+alternative for that step (untested here; see the docs). Install with the bundled
+helper:
 
 ```bash
-scripts/install_deps.sh              # both, into $HOME/.local/bin
-scripts/install_deps.sh stride       # just STRIDE (prefers bioconda if present)
+scripts/install_deps.sh              # STRIDE, into $HOME/.local/bin
+scripts/install_deps.sh pulchra      # PULCHRA only (opt-in)
 ```
 
 TOPO resolves each program in this order: `$TOPO_STRIDE` / `$TOPO_PULCHRA` (an
