@@ -5,6 +5,12 @@ All notable changes to TOPO are documented here. The format is loosely based on
 
 ## [Unreleased]
 
+## [2026.3] — 2026-07-21
+
+Headline: **SAXS-calibrated IDR defaults** — a generic cohesion term and transferable
+van der Waals radii bring disordered-chain dimensions in line with experiment, and TOPO
+is now described as a unified model for globular *and* disordered proteins.
+
 ### Added
 - **Generic cohesion for disordered regions.** The IDR–IDR well depth is now
   `max(eps_NN, eps_gen + idr_scale * eps_BT)`: a sequence-independent generic term
@@ -72,8 +78,6 @@ All notable changes to TOPO are documented here. The format is loosely based on
 - Removed the stale "Heads-up for readers of older docs" note about a
   Gaussian-quartic dihedral, and rendered the 12-10-6 equations with proper
   fractions.
-- Recorded the 2026.2 version DOI (`10.5281/zenodo.21436269`) in `CITATION.cff` and
-  the citation page; only 2026.1's was listed.
 
 ## [2026.2] — 2026-07-18
 
