@@ -28,9 +28,7 @@ Cite the software itself:
    https://doi.org/10.5281/zenodo.21360706
 
 The DOI above is the **concept DOI**, which always resolves to the latest
-release. To pin the exact version you ran, use the version-specific DOI instead:
-2026.2 is https://doi.org/10.5281/zenodo.21436269 (2026.1 was
-https://doi.org/10.5281/zenodo.21360707).
+release.
 
 BibTeX
 ~~~~~~
@@ -49,20 +47,23 @@ A software entry you can drop into your ``.bib`` file:
      note     = {Built on OpenMM}
    }
 
-When the accompanying article is published, add an ``@article`` entry and cite
-both:
+.. Hidden until the accompanying article is published — then uncomment, fill in
+   the fields, and tell readers to cite both entries.
 
-.. code-block:: bibtex
+   When the accompanying article is published, add an ``@article`` entry and cite
+   both:
 
-   @article{topo_paper,
-     author  = {[AUTHORS]},
-     title   = {[PAPER TITLE]},
-     journal = {[JOURNAL]},
-     year    = {[YEAR]},
-     volume  = {[VOL]},
-     pages   = {[PAGES]},
-     doi     = {[DOI]}
-   }
+   .. code-block:: bibtex
+
+      @article{topo_paper,
+        author  = {[AUTHORS]},
+        title   = {[PAPER TITLE]},
+        journal = {[JOURNAL]},
+        year    = {[YEAR]},
+        volume  = {[VOL]},
+        pages   = {[PAGES]},
+        doi     = {[DOI]}
+      }
 
 
 Cite the version you used
