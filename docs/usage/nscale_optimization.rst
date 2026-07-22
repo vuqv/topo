@@ -58,8 +58,8 @@ A multidomain protein is not uniformly stable. Its domains differ in
 * **secondary-structure content** — an all-:math:`\alpha` domain, an all-\
   :math:`\beta` domain, and a mixed :math:`\alpha/\beta` domain reach the same
   marginal stability at *different* contact strengths (this is why the calibrated
-  ladder is indexed by structural class; see Table 1 in
-  :doc:`../tutorials/A5_opt_nscal`);
+  ladder is indexed by structural class; see :ref:`Table 1
+  <nscale-ladder-table>`);
 * **size and contact density** — a small, sparsely packed domain needs a deeper
   well to stay folded than a large, densely packed one;
 * **interface character** — the contacts *between* two domains form their own
@@ -102,13 +102,74 @@ Rather than tuning by hand, TOPO restricts :math:`n_\mathrm{scale}` to a small,
 **pre-calibrated discrete ladder** — five levels per structural class plus a
 median fallback, calibrated on a training set of 19 small single-domain proteins
 (`Leininger et al., PNAS 116, 5523–5532, 2019
-<https://www.pnas.org/doi/full/10.1073/pnas.1813003116>`_). The
-:doc:`optimizer <../tutorials/A5_opt_nscal>` then starts every domain and
-interface at the bottom of its ladder and, round by round, raises only the units
-that fail a stability test (all trajectories keeping *Q* above threshold for
-nearly all frames), freezing each one as soon as it holds. The result is the
-smallest per-unit :math:`n_\mathrm{scale}` that keeps the whole structure folded
-across many independent trajectories.
+<https://www.pnas.org/doi/full/10.1073/pnas.1813003116>`_). A domain climbs the
+ladder for its structural class (:math:`\alpha`, :math:`\beta`, or
+:math:`\alpha/\beta`); every domain–domain interface uses the *Interface* ladder.
+
+.. _nscale-ladder-table:
+
+.. list-table:: Table 1. :math:`n_\mathrm{scale}` levels per structural class.
+   :header-rows: 1
+   :widths: 22 13 13 13 13 13 18
+
+   * - Structural class
+     - Level 1
+     - Level 2
+     - Level 3
+     - Level 4
+     - Level 5
+     - Fallback (median)
+   * - :math:`\alpha`
+     - 1.1954
+     - 1.4704
+     - 1.7453
+     - 2.0322
+     - 2.5044
+     - 1.7453
+   * - :math:`\beta`
+     - 1.4732
+     - 1.8120
+     - 2.1508
+     - 2.5044
+     - 2.5044
+     - 2.1508
+   * - :math:`\alpha/\beta`
+     - 1.1556
+     - 1.4213
+     - 1.6871
+     - 1.9644
+     - 2.5044
+     - 1.6871
+   * - Interface
+     - 1.2747
+     - 1.5679
+     - 1.8611
+     - 2.1670
+     - 2.5044
+     - 1.8611
+
+The optimizer starts every domain and interface at **level 1** and repeats one
+**round** until every unit is stable:
+
+#. **Build** a model with the current per-unit :math:`n_\mathrm{scale}` values.
+#. **Simulate** ``ntraj`` independent trajectories at the reference temperature
+   ``ref_t`` (produced as a single multi-copy run).
+#. **Score** the fraction of native contacts *Q* (:doc:`native_contacts`) for
+   every domain and interface in every trajectory.
+#. **Decide.** A unit is *stable* when **all** ``ntraj`` trajectories keep its
+   *Q* above ``q_threshold`` (default 0.6688) for at least ``frame_fraction``
+   (default 98 %) of the frames. If every unit is stable the search is **done**;
+   otherwise each **unstable** unit climbs one level of its ladder while the
+   already-stable units stay frozen, and the next round runs.
+
+A unit still unstable at level 5 is pinned at its class **median fallback** (the
+level-3 value in Table 1) for the final model. Because domains and their shared
+interfaces are coupled through the contact map, raising one unit's
+:math:`n_\mathrm{scale}` can destabilize a unit that had already held, so
+strongly coupled multidomain systems may need more rounds than the ladder is tall
+— raise ``max_rounds`` for them (see :doc:`optimization_control`). The result is
+the smallest per-unit :math:`n_\mathrm{scale}` that keeps the whole structure
+folded across many independent trajectories.
 
 
 Where to go next
