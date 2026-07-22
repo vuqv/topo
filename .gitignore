@@ -39,6 +39,9 @@
 # --- CodeGraph local index (machine-local tooling, never committed) ---
 /.codegraph/
 
+# --- Claude Code workspace (local settings, runtime state, never committed) ---
+/.claude/
+
 # --- Python / build artifacts ---
 **/__pycache__/
 *.py[cod]
