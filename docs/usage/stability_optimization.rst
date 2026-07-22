@@ -1,6 +1,6 @@
-.. _nscale-optimization:
+.. _stability-optimization:
 
-Why optimize the contact nscale?
+Why stability must be calibrated
 ================================
 
 The single most important *adjustable* quantity in a TOPO model is

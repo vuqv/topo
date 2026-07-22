@@ -748,7 +748,7 @@ multiplies the sidechain–sidechain well depths. The raw, unscaled model
 (:math:`n_\mathrm{scale} = 1`) is usually **under-stabilized** — proteins sit
 only marginally folded. Three pages cover why and how to set it:
 
-* :doc:`nscale_optimization` — **why** calibration is needed and why it is done
+* :doc:`stability_optimization` — **why** calibration is needed and why it is done
   per domain and per interface (start here).
 * :doc:`domain_definition` — the file format, per-domain and per-interface
   scaling, discontiguous domains, and decoupling.

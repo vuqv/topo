@@ -118,7 +118,7 @@ never pass through itself.
    **The depth carries no nscale factor.** The IDR depth uses the
    :math:`\varepsilon_\mathrm{BT}` matrix above (unscaled by any domain factor),
    **not** the domain-scaled sidechain energy. In TOPO ``nscale`` is the per-domain
-   folding-**stability** ladder (:doc:`nscale_optimization`); an IDR has no fold and
+   folding-**stability** ladder (:doc:`stability_optimization`); an IDR has no fold and
    no stability target, so it does not inherit a ladder value (effectively
    ``nscale = 1`` for IDR pairs).
 
@@ -387,7 +387,7 @@ stay consistent with the energy function:
 * **Effective domain membership = domain − disordered.** A residue listed in both
   a domain and ``disordered:`` no longer contributes to that domain's Q (nor to
   any interface Q) — mirroring "disorder wins" on the energy side.
-* **The nscale optimizer** (:doc:`nscale_optimization`) optimizes only the
+* **The nscale optimizer** (:doc:`stability_optimization`) optimizes only the
   **folded domains and their interfaces**; it does **not** optimize the disordered
   region. The IDR is *present in every round's simulation* (each round builds its
   energy through ``apply_disorder``, so the disorder is always active), but it is

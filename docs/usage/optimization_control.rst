@@ -5,7 +5,7 @@ Optimization control options
 
 Optimizer parameters are read from an ``.ini`` file (e.g. ``optimize.ini``) by
 :func:`topo.optimize.read_optimize_config`. For *why* the nscale needs
-optimizing at all, see :doc:`nscale_optimization`; for a worked run see the
+optimizing at all, see :doc:`stability_optimization`; for a worked run see the
 tutorial :doc:`../tutorials/A5_opt_nscal`.
 
 * The file is a flat list of ``key = value`` lines.
@@ -96,6 +96,99 @@ Example ``optimize.ini``:
    protocol uses ~1 µs per trajectory (≈ ``6.7e7`` steps at ``dt = 0.015``).
    Lower ``nstxout`` alongside it: at its ``5000``-step default a 10 000-step
    round yields two frames per trajectory to compute Q from.
+
+.. _opt-domain-def:
+
+The seed ``domain_def`` file
+----------------------------
+
+``domain_def`` is one of the two required inputs, and it is an ordinary
+:doc:`domain definition YAML <domain_definition>` — same ``n_residues`` and
+``intra_domains`` syntax. The optimizer, however, reads it as a **seed** for the
+calibration it is about to run, not as a finished model, so several fields are
+treated differently from a plain :mod:`topo.mdrun`:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 26 74
+
+   * - Field
+     - Role in the optimizer
+   * - ``intra_domains.<name>.residues``
+     - **Read and kept.** The residue ranges define the *scoring units*: each
+       named domain is one unit that climbs its own nscale ladder. Assign every
+       residue you want calibrated — unlike the runner, the optimizer does
+       **not** collect leftover residues into an auto-``X`` domain. Unassigned
+       residues only emit a warning, contribute to the whole-chain Q, and are
+       never a scoring unit (so they are never tuned).
+   * - ``intra_domains.<name>.class``
+     - **Required here** (the runner ignores it). It selects *which* nscale
+       ladder the domain climbs — ``alpha``, ``beta`` or ``alpha-beta`` (``a`` /
+       ``b`` / ``c`` accepted). A domain with no ``class`` aborts the run. See
+       :doc:`stability_optimization` for the per-class ladders.
+   * - ``intra_domains.<name>.nscale``
+     - **Ignored and overwritten** every round — this is the quantity being
+       optimized. Any placeholder (or the seed value) is fine; round 1 resets it
+       to ladder level 1.
+   * - ``inter_domains``
+     - **Not needed and ignored.** The optimizer builds an interface unit for
+       **every pair** of domains automatically and calibrates each on the shared
+       ``interface`` ladder, so you do not list interfaces yourself; an
+       ``inter_domains`` block in the seed is disregarded.
+   * - ``disordered``
+     - Honored as in the runner: IDR residues are subtracted from every domain
+       and dropped from Q so the stability score measures only the foldable core.
+       See :doc:`disordered_regions`.
+
+A three-domain seed then looks like this — every domain carries ``residues``
+and ``class``, ``nscale`` is a placeholder, there is deliberately no
+``inter_domains`` block, and an optional ``disordered:`` block marks a
+C-terminal tail as intrinsically disordered:
+
+.. code-block:: yaml
+
+    n_residues: 400
+    intra_domains:
+      A:
+        residues: [1-120]
+        class: alpha           # picks the alpha nscale ladder
+        nscale: 1.0            # placeholder -- reset to ladder level 1 each round
+      B:
+        residues: [121-260]
+        class: beta
+        nscale: 1.0
+      C:
+        residues: [261-400]
+        class: alpha-beta
+        nscale: 1.0
+    # No inter_domains block needed: the optimizer auto-creates and calibrates
+    # every domain pair (A-B, A-C, B-C) on the shared interface ladder.
+    disordered:
+      residues: [385-400]      # C-terminal tail: native contacts removed
+      # eps_gen_kj: 2.25       # OPTIONAL, generic-attraction well (default 2.25)
+      # idr_scale: 1.0         # OPTIONAL, disorder scale (default 1.0)
+
+The ``disordered:`` block is honored exactly as in the runner. Its residues are
+**subtracted from every domain** before scoring — here residues 385–400 leave
+domain ``C``, so ``C`` is calibrated on residues 261–384 only — and every native
+contact touching a disordered residue is dropped from Q, so each unit's stability
+verdict reflects only its foldable core. Disorder wins over domain membership: if
+a ``disordered:`` range overlaps an ``intra_domains`` range, the overlapping
+residues are governed by the disorder rules regardless of which domain lists
+them. See :doc:`disordered_regions` for the full treatment and the optional
+``eps_gen_kj`` / ``idr_scale`` knobs.
+
+Each round the optimizer writes a fresh ``round_N/domain.yaml`` with the current
+ladder nscales (residues and class carried over from your seed), and the final
+calibrated file is ``domain_optimized.yaml`` in the optimization root (see
+:ref:`opt-writes` below). Your seed file is never modified.
+
+.. tip::
+
+   The minimal seed for the optimizer is therefore ``n_residues`` plus an
+   ``intra_domains`` block in which every domain carries ``residues`` **and**
+   ``class``; ``nscale`` may be any placeholder and no ``inter_domains`` block is
+   required. See the :doc:`domain_definition` scenarios for the YAML syntax.
 
 .. _opt-options:
 
@@ -246,6 +339,8 @@ them in** ``optimize.ini`` **has no effect** — your value is silently replaced
 
 ``device`` and ``md_steps`` are also overridden, but only when you pass the
 corresponding command-line flag; otherwise your ``.ini`` value stands.
+
+.. _opt-writes:
 
 What the optimizer writes
 -------------------------

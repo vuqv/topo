@@ -47,7 +47,12 @@ see :doc:`citation` for the full list with DOIs.
    :caption: The TOPO model
 
    usage/model_theory
-   usage/nscale_optimization
+
+.. toctree::
+   :maxdepth: 1
+   :caption: Domain stability optimization
+
+   usage/stability_optimization
    usage/optimization_control
 
 .. toctree::

@@ -255,7 +255,7 @@ and worth understanding in full:
   domain** — either their own domain or an existing one (a single whole-chain
   domain is the way to apply one uniform factor everywhere; see Scenario 1).
 * **The optimizer does not tune ``X``.** The nscale optimizer
-  (:doc:`nscale_optimization`) only optimizes the domains you name (and their
+  (:doc:`stability_optimization`) only optimizes the domains you name (and their
   interfaces); unassigned residues are simulated at ``1.0`` every round but are
   never a scoring unit and never climb the ladder. If you want a region's
   stability calibrated, give it a name and a ``class``.
