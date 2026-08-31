@@ -2,5 +2,9 @@ Sphinx>=7.2
 furo>=2024.1
 myst-parser>=2.0
 rst2pdf>=0.100
-sphinx-polyversion>=2.0
+# Pinned below 3.0: poly.py and the static.yml ref-materialization step are written
+# against the 2.x API. 3.0.0 removed Git(buffer_size=...) outright, so an unpinned
+# >=2.0 silently upgraded CI into a TypeError at poly.py import. Lift the cap only
+# together with a poly.py migration.
+sphinx-polyversion>=2.0,<3
 setuptools-scm>=8   # conf.py derives the docs version from the git tag
