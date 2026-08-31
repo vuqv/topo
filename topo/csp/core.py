@@ -373,26 +373,38 @@ def read_anchor(pdb_file: str, segid: str, resid: int = 76,
 def precompute_contacts(full_pdb: str,
                         domain_def: Optional[str] = None,
                         stride_output_file: Optional[str] = None
-                        ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+                        ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, Optional[dict]]:
     """Run TOPO's contact builder once on the full native PDB (DESIGN §3.5).
 
-    Returns ``(R_full, eps_full, rmin_2_full)`` -- the ``N_full x N_full`` well-position
-    (nm) and well-depth (kJ/mol) matrices, plus the per-residue Karanicolas-Brooks
-    collision radius ``Rmin/2`` (nm, shape ``(N_full,)``) that O'Brien uses as the
-    nascent excluded-volume radius (the structure-derived ``A_i`` values). STRIDE is
-    run at most once here (and cached by :func:`build_nonbonded_interaction`); each
-    length later reuses the top-left ``L x L`` block (and ``rmin_2_full[:L]``), so
-    neither STRIDE nor the heavy-atom analysis is ever re-run per length.
+    Returns ``(R_full, eps_full, rmin_2_full, idr_full)`` -- the ``N_full x N_full``
+    well-position (nm) and well-depth (kJ/mol) matrices, the per-residue
+    Karanicolas-Brooks collision radius ``Rmin/2`` (nm, shape ``(N_full,)``) that
+    O'Brien uses as the nascent excluded-volume radius (the structure-derived ``A_i``
+    values), and the disorder handle ``{'idx', 'eps_ev_kj'}`` (``None`` when the
+    domain_def has no ``disordered:`` section). STRIDE is run at most once here (and
+    cached by :func:`build_nonbonded_interaction`); each length later reuses the
+    top-left ``L x L`` block (and ``rmin_2_full[:L]``), so neither STRIDE nor the
+    heavy-atom analysis is ever re-run per length.
+
+    ``idr_full`` must be threaded through to :func:`build_length_model`. The contact
+    builder applies the disorder transform whenever the domain_def carries a
+    ``disordered:`` section -- CSP has no say in that -- so dropping the handle would
+    leave the matrices IDR-aware while the Ashbaugh-Hatch force was never created, and
+    those pairs would be evaluated by the coupled 12-10-6 at a scale calibrated for a
+    different functional form. Nothing would raise.
     """
     print("=" * 66)
     print("[ Precompute contacts (build-once-subset) ]")
     print("=" * 66)
     print(f"Running TOPO contact builder on full native structure: {full_pdb}")
-    R_full, eps_full, rmin_2_full = build_nonbonded_interaction(
-        full_pdb, domain_def, stride_output_file, return_rmin_2=True)
+    R_full, eps_full, rmin_2_full, idr_full = build_nonbonded_interaction(
+        full_pdb, domain_def, stride_output_file, return_rmin_2=True, return_idr=True)
     print(f"  full contact matrices: {R_full.shape}; "
-          f"K-B Rmin/2 range {rmin_2_full.min():.3f}-{rmin_2_full.max():.3f} nm")
-    return R_full, eps_full, rmin_2_full
+          f"Rmin/2 range {rmin_2_full.min():.3f}-{rmin_2_full.max():.3f} nm")
+    if idr_full is not None:
+        print(f"  disorder: {len(idr_full['idx'])} of {R_full.shape[0]} residues "
+              f"(eps_ev = {idr_full['eps_ev_kj']} kJ/mol)")
+    return R_full, eps_full, rmin_2_full, idr_full
 
 
 # --------------------------------------------------------------------------
@@ -441,7 +453,8 @@ def write_subset_structure(full_pdb: str, L: int, out_pdb: str) -> None:
 # --------------------------------------------------------------------------
 def build_length_model(sub_pdb: str, R_L: np.ndarray, eps_L: np.ndarray,
                        constraints="AllBonds", model: str = "topo",
-                       nascent_rmin_2: Optional[np.ndarray] = None):
+                       nascent_rmin_2: Optional[np.ndarray] = None,
+                       idr: Optional[dict] = None):
     """Build a length-``L`` TOPO model, injecting the ``L x L`` contact subset.
 
     This is the dedicated "build-once-subset" path the design anticipates
@@ -471,6 +484,12 @@ def build_length_model(sub_pdb: str, R_L: np.ndarray, eps_L: np.ndarray,
         taken from ``model_parameters`` (whose fixed per-AA protein Rmin_2 is the rigid
         *ribosome* scenery value, not the mobile chain's). ``particle_rmin_2`` only feeds
         ``dumpForceFieldData``, so ``None`` is harmless (the radius is left unset).
+    idr : dict or None
+        Disorder handle for **this length**: ``{'idx': ndarray, 'eps_ev_kj': float}``
+        with ``idx`` the 0-based indices of the disordered beads among the ``L``
+        emerged ones (the caller slices the full-chain mask). ``None`` -- no disordered
+        bead has emerged yet, or the domain_def has no ``disordered:`` section -- takes
+        the single-force path with no interaction group, exactly as before.
 
     Returns
     -------
@@ -533,10 +552,22 @@ def build_length_model(sub_pdb: str, R_L: np.ndarray, eps_L: np.ndarray,
     # Electrostatics (no PBC for the nascent-chain runs).
     topo_model.addYukawaForces(use_pbc=False)
 
-    # Structure-based contacts: the injected L x L subset (not recomputed).
+    # Structure-based contacts: the injected L x L subset (not recomputed). With
+    # disordered beads emerged, the pairs are partitioned across two forces with
+    # disjoint domains (12-10-6 on {folded}x{folded}, Ashbaugh-Hatch on everything
+    # touching an IDR bead); with none, the single unrestricted force as before.
     topo_model.rmin_matrix = R_L
     topo_model.energy_matrix = eps_L
-    topo_model.addCustomNonBondedForce(R_L, eps_L, use_pbc=False)
+    if idr is None:
+        topo_model.addCustomNonBondedForce(R_L, eps_L, use_pbc=False)
+    else:
+        idr_idx = [int(i) for i in idr['idx']]
+        folded_idx = sorted(set(range(n_ca)) - set(idr_idx))
+        _vprint(f"  disorder: {len(idr_idx)} IDR bead(s), {len(folded_idx)} folded")
+        topo_model.addCustomNonBondedForce(R_L, eps_L, use_pbc=False,
+                                           interaction_group=(folded_idx, folded_idx))
+        topo_model.addIDRNonBondedForce(R_L, eps_L, False, idr_idx, folded_idx,
+                                        idr['eps_ev_kj'])
 
     # Assemble the OpenMM System. Skip the large-force check (native-structure
     # energy is irrelevant; the seeded structure is minimized explicitly later).
@@ -1004,6 +1035,7 @@ def run_length(L: int, *, full_pdb: str, R_full: np.ndarray, eps_full: np.ndarra
                tether_segid: str = "PtR",
                tether_prev_segid: Optional[str] = None,
                nascent_rmin_2: Optional[np.ndarray] = None,
+               idr_full: Optional[dict] = None,
                minimize_override: Optional[bool] = None,
                outname: str = "traj",
                persist_final: bool = True,
@@ -1050,6 +1082,11 @@ def run_length(L: int, *, full_pdb: str, R_full: np.ndarray, eps_full: np.ndarra
     - ``label`` : short stage tag (e.g. ``"stage 1 peptidyl-transfer"``) shown in
       the concise per-stage summary line and, under ``TOPO_CSP_VERBOSE``, in the
       verbose console banner.
+    - ``idr_full`` : the disorder handle from :func:`precompute_contacts`, for the
+      **full** chain. Sliced here to the emerged chain (``idx[idx < L]``); an empty
+      slice takes the single-force path. Pass it whenever the domain_def has a
+      ``disordered:`` section -- the contact matrices are IDR-aware either way, so
+      omitting it would leave those pairs to the wrong force, silently.
 
     Returns the final **nascent** ``(L, 3)`` nm coordinate array (read from the
     context state, independent of whether ``traj_final.pdb`` was written).
@@ -1078,8 +1115,19 @@ def run_length(L: int, *, full_pdb: str, R_full: np.ndarray, eps_full: np.ndarra
     # nascent particle excluded-volume radius (in build_length_model) and for the nascent
     # side of the NC<->ribosome EV (append_ribosome below).
     nasc_rm = None if nascent_rmin_2 is None else np.asarray(nascent_rmin_2)[:L]
+    # Slice the full-chain disorder mask to the emerged chain, using the same
+    # correspondence as the L x L contact block: particle i (0..L-1) is native residue
+    # i+1, so a full-chain 0-based index is an emerged index iff it is < L. An empty
+    # slice (no disordered residue has emerged yet) yields None and the single-force
+    # path -- correct, not a special case.
+    idr_L = None
+    if idr_full is not None:
+        idx = np.asarray(idr_full['idx'], dtype=int)
+        idx = idx[idx < L]
+        if idx.size:
+            idr_L = {'idx': idx, 'eps_ev_kj': idr_full['eps_ev_kj']}
     cgModel = build_length_model(sub_pdb, R_L, eps_L, constraints=params.constraints,
-                                 nascent_rmin_2=nasc_rm)
+                                 nascent_rmin_2=nasc_rm, idr=idr_L)
 
     # 3. seed nascent coordinates --------------------------------------------
     if seed_override is not None:   # post-synthesis: use the given structure as-is

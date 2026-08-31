@@ -8,13 +8,13 @@
 #                       native contacts. 2.5044 is used here as a reasonable
 #                       default; for quantitative work calibrate it with the
 #                       nscale optimizer (Tutorial A.5).
-#   disordered       -- residues whose native contacts are REMOVED and replaced
-#                       by a weak, non-specific attraction: a sequence-independent
-#                       generic term (eps_gen_kj, default 2.25 kJ/mol) plus the
-#                       sequence-dependent BT energy (scaled by idr_scale, default
-#                       1.0). Both defaults are SAXS-calibrated. These
-#                       regions relax to a disordered ensemble instead of holding
-#                       the AlphaFold conformation.
+#   disordered       -- residues whose native contacts are REMOVED and replaced by a
+#                       weak, non-specific attraction: the sequence-dependent BT
+#                       energy scaled by idr_scale (default 0.10, SAXS-calibrated),
+#                       evaluated on an Ashbaugh-Hatch 12-6 whose repulsive core is
+#                       set independently by eps_ev_kj (default 0.8368 kJ/mol).
+#                       These regions relax to a disordered ensemble instead of
+#                       holding the AlphaFold conformation.
 #
 # NOTE on ranges: where a domain range and a disordered range touch (e.g. the
 # domain boundary at residue 18, and 218-219 / 279-281), the disordered residues
@@ -29,6 +29,7 @@ intra_domains:
     nscale: 2.5044
 disordered:
   residues: [1-18, 218-281]     # N-terminal tail + long intracellular loop
-  eps_gen_kj: 2.25              # generic cohesion, kJ/mol (default)
-  idr_scale: 1.0                # sequence-dependent BT scale (default)
-                                # set BOTH to 0 for a pure self-avoiding chain
+  idr_scale: 0.10               # IDR-IDR well depth, x eps_BT (default)
+                                # set to 0 for a pure self-avoiding chain;
+                                # the theta point is at ~0.32
+  eps_ev_kj: 0.8368             # IDR repulsive core, kJ/mol (default)
