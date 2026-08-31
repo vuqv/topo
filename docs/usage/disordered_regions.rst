@@ -486,6 +486,17 @@ the reported :math:`R_g` is the mass-weighted ensemble average
    revisited, and the 6 are always reported as a control rather than dropped
    silently.
 
+.. figure:: img/idr_validation.png
+   :width: 100%
+   :alt: TOPO and HPS-Urry radii of gyration versus SAXS for 18 disordered proteins
+
+   **Left:** TOPO's Cα IDR model at the calibrated defaults ``idr_scale = 0.10``,
+   ``eps_ev_kj = 0.8368`` kJ/mol. **Right:** the HPS-Urry force field on the same 18
+   proteins, as an external reference point. Dashed line is :math:`y = x`; green is
+   the ordinary-least-squares fit; point colour is the fractional deviation. TOPO
+   tracks :math:`y = x` across the range, while HPS-Urry runs systematically compact
+   (blue) and flattens at the expanded end — the slope difference, 0.81 against 0.68.
+
 Fitting the scaling law :math:`R_g = R_0 N^{\nu}` over the 18 IDPs, at
 ``idr_scale = 0.10`` and ``eps_ev_kj = 0.8368``:
 
