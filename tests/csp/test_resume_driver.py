@@ -84,7 +84,7 @@ def _install_stubs(monkeypatch, crash_at_L=None):
         R = np.zeros((N_FULL, N_FULL))
         eps = np.zeros((N_FULL, N_FULL))
         rmin = np.full(N_FULL, 0.3)
-        return R, eps, rmin
+        return R, eps, rmin, None      # 4th value: the IDR handle (None = no disorder)
 
     def fake_run_length(L, **kw):
         subdir = kw["out_subdir"]
@@ -236,7 +236,7 @@ def test_post_synthesis_resume(tmp_path, monkeypatch):
                             lambda ribo, **k: (np.array([1.0, 0, 0]), np.array([1.381, 0, 0])))
         monkeypatch.setattr(protocol, "precompute_contacts",
                             lambda *a: (np.zeros((N_FULL, N_FULL)), np.zeros((N_FULL, N_FULL)),
-                                        np.full(N_FULL, 0.3)))
+                                        np.full(N_FULL, 0.3), None))
         monkeypatch.setattr(protocol, "run_length", fake_run_length)
 
     make_stubs(crash_ejection=True)

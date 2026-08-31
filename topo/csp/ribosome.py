@@ -221,6 +221,17 @@ def append_ribosome(nascent_model, ribo: Ribosome,
     ``R = rm_i + rm_j``, acting on {nascent}×{ribosome} only); and extends the
     topology with one ribosome chain per segID.
 
+    The nascent<->ribosome force is a 12-10-6 with ``RIBO_NC_EPS_KJ`` for **every**
+    nascent bead, disordered or not: it is a separate force created here, so no
+    ``if disordered`` branch exists anywhere, and the validated 4c5c reproduction is
+    preserved. A disordered bead is therefore on a different footing toward the
+    ribosome than toward the rest of the chain. That is deliberate -- the two are
+    different physics, and the nascent<->ribosome parameters are O'Brien's, calibrated
+    as a set -- and should not be "fixed" later.
+
+    Interaction groups of forces this function did not create are left alone unless
+    they are unset; see the comment at step 2.
+
     Must be called **after** :func:`topo.csp.core.build_length_model`
     (the nascent forces must already exist).
 
@@ -254,12 +265,30 @@ def append_ribosome(nascent_model, ribo: Ribosome,
     for _ in range(M):
         system.addParticle(0.0)
 
-    # 2. Contact force: dummy id=0 per ribosome bead (never read) + restrict to
-    #    nascent x nascent so the L x L table stays nascent-only.
+    # 2. Contact force(s): dummy id=0 per ribosome bead (never read), so the L x L
+    #    table stays nascent-only.
+    #
+    #    Interaction groups are the *creator's* to set: OpenMM takes their union, so
+    #    adding {nascent}x{nascent} to a force that already carries a narrower domain
+    #    would silently re-admit the pairs it was partitioned away from -- and those
+    #    pairs would then be evaluated by both contact forces at once, with no error.
+    #    With a disordered nascent chain the model builder has already split the pairs
+    #    across the 12-10-6 ({folded}x{folded}) and the Ashbaugh-Hatch force
+    #    ({idr}x{idr} + {idr}x{folded}), and both groups are nascent-only already. So
+    #    restrict the contact force only when nobody has claimed it (the fully-folded
+    #    case, where it is otherwise unrestricted and would see the ribosome beads).
     cf = nascent_model.custom_non_bonded_force
     for _ in range(M):
         cf.addParticle((0,))
-    cf.addInteractionGroup(nascent_idx, nascent_idx)
+    if cf.getNumInteractionGroups() == 0:
+        cf.addInteractionGroup(nascent_idx, nascent_idx)
+
+    #    The IDR force, when present, needs the same M dummy entries: every
+    #    CustomNonbondedForce must hold one parameter per system particle.
+    idr_force = getattr(nascent_model, "idr_non_bonded_force", None)
+    if idr_force is not None:
+        for _ in range(M):
+            idr_force.addParticle((0,))
 
     # 3. Yukawa electrostatics: add ribosome charges; restrict to nascent-nascent
     #    + nascent-ribosome (no intra-ribosome electrostatics).
@@ -291,8 +320,8 @@ def append_ribosome(nascent_model, ribo: Ribosome,
     if nascent_rmin_2 is not None:
         if len(nascent_rmin_2) != L:
             raise ValueError(f"nascent_rmin_2 has {len(nascent_rmin_2)} entries but L={L}.")
-        for rm in nascent_rmin_2:                  # Option A: per-residue radius (nm): K-B
-                                                   # Rmin/2 for folded, rvdw for IDR beads
+        for rm in nascent_rmin_2:                  # Option A: per-residue Rmin/2 (nm):
+                                                   # K-B for folded, per-AA table for IDR
             nc.addParticle((float(rm),))
     else:
         for atom in nascent_atoms:                # Option B: per-AA sidechain Rmin/2 (nm)

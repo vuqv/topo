@@ -36,8 +36,12 @@ def replicate_system_intra_only(template_system: mm.System, n_copies: int) -> mm
     Replicate ``template_system`` into ``n_copies`` independent copies.
 
     Particles and constraints are duplicated per copy; each supported force is
-    rebuilt with per-copy atom-index offsets. ``CustomNonbondedForce`` objects get
-    one interaction group per copy so copies never interact with one another.
+    rebuilt with per-copy atom-index offsets. A ``CustomNonbondedForce`` that carries
+    no interaction groups gets one blanket ``{copy} x {copy}`` group per copy, so
+    copies never interact with one another; one that already carries groups has its
+    own groups reproduced per copy with an index offset, which keeps copies separate
+    *and* preserves whatever partition its creator set (see
+    :meth:`topo.core.system.system.addCustomNonBondedForce`).
 
     Supported forces: ``HarmonicBondForce``, ``CustomAngleForce``,
     ``PeriodicTorsionForce``, ``CustomTorsionForce``, ``CustomNonbondedForce``.
@@ -153,10 +157,27 @@ def replicate_system_intra_only(template_system: mm.System, n_copies: int) -> mm
                 for i in range(force.getNumExclusions()):
                     p1, p2 = force.getExclusionParticles(i)
                     nf.addExclusion(p1 + off, p2 + off)
-            # intra-copy only: copy k interacts solely with itself
-            for c in range(n_copies):
-                group = list(range(c * n, (c + 1) * n))
-                nf.addInteractionGroup(group, group)
+            # Interaction groups. A force that already carries groups has had its
+            # domain claimed by whoever built it (e.g. the contact force restricted to
+            # {folded}x{folded} and the Ashbaugh-Hatch force to the IDR-involving
+            # pairs), so replicate *those* groups per copy with an index offset.
+            # Asserting a blanket {copy}x{copy} over them would take the union and
+            # silently re-admit the pairs each force was partitioned away from --
+            # double-counting them across the two forces, with no error raised.
+            # The blanket group is the correct fallback only for an unclaimed force.
+            n_groups = force.getNumInteractionGroups()
+            if n_groups == 0:
+                # intra-copy only: copy k interacts solely with itself
+                for c in range(n_copies):
+                    group = list(range(c * n, (c + 1) * n))
+                    nf.addInteractionGroup(group, group)
+            else:
+                for c in range(n_copies):
+                    off = c * n
+                    for g in range(n_groups):
+                        s1, s2 = force.getInteractionGroupParameters(g)
+                        nf.addInteractionGroup([i + off for i in s1],
+                                               [j + off for j in s2])
             full.addForce(nf)
 
         else:

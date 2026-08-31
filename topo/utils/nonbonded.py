@@ -74,13 +74,33 @@ BT_SHIFT_KCAL = 0.6
 IDR_RMIN_2_NM = {aa: _MODEL_PARAMETERS["topo"][aa]["Rmin_2"] for aa in _PROTEIN_LIST}
 
 # Defaults for a `disordered:` section that omits the corresponding key (spec §2.2).
-# Both were calibrated together against SAXS Rg for 24 fully-disordered proteins
-# (see docs usage/disordered_regions "Validation"): idr_scale = 1.0 with
-# eps_gen_kj = 2.25 kJ/mol gives RMS fractional Rg error ~33% at slope 0.71 /
-# r 0.79 -- the best balance of aggregate accuracy against per-protein dynamic
-# range on that benchmark. idr_scale = 0 selects the pure self-avoiding chain.
-DEFAULT_IDR_SCALE = 1.0
-DEFAULT_EPS_GEN_KJ = 2.25
+#
+# idr_scale sets the Ashbaugh-Hatch well depth alone (eps_ij = idr_scale * eps_BT);
+# eps_ev_kj sets the repulsive core alone. Under the previous coupled 12-10-6 the two
+# were one knob, and no value of it could reproduce the experimental Rg scaling.
+#
+# Calibrated on the 18 genuinely disordered proteins of a 24-protein SAXS set (the
+# other 6 are foldable globular proteins whose published Rg is a folded-state value;
+# see docs usage/disordered_regions "Validation"). Fitting Rg = R0 N^nu at
+# idr_scale = 0.10:
+#
+#     this model  nu 0.566   R0 0.223   RMS 12.0%   r 0.89
+#     experiment  nu 0.551   R0 0.244
+#     HPS-Urry    nu 0.490   R0 0.301   RMS 19.7%   r 0.70
+#
+# A 3-seed confirmation at idr_scale = 0.12 gives nu = 0.559 +/- 0.009. The theta
+# point (B2 = 0) sits at idr_scale ~ 0.32: above it the chain collapses, so a value
+# much beyond ~0.3 should be treated as suspect. idr_scale = 0 selects a pure
+# self-avoiding chain -- and, unlike before, one of *physical* bead size, since
+# eps_ev_kj still sets the core.
+DEFAULT_IDR_SCALE = 0.10
+
+# Repulsive-core strength of the IDR force (kJ/mol) = 0.2 kcal/mol, the HPS/Dignon
+# value. Compatible by construction: sigma = (Rmin/2_i + Rmin/2_j)/2^(1/6) reproduces
+# the published HPS per-residue sigma to a mean -0.1% (max 1.5%, glycine exact). It is
+# a weak handle on bead size -- the core goes as eps_EV^(1/12), so a 100x change moves
+# it only ~46%; use the radius table if bead size must change.
+DEFAULT_EPS_EV_KJ = 0.8368
 
 
 # -----------------------------------------------------------------------------
@@ -685,12 +705,11 @@ def read_yaml_config(filepath: str) -> Tuple[Dict, Dict, Dict, Optional[Dict]]:
 
     The optional ``disordered:`` section marks intrinsically-disordered (IDR)
     residues; it carries ``residues:`` (required, same syntax as a domain's
-    residue list), ``idr_scale:`` (optional, default
-    :data:`DEFAULT_IDR_SCALE` = 1.0 -- the sequence-specific IDR-IDR attraction
-    knob) and ``eps_gen_kj:`` (optional, default :data:`DEFAULT_EPS_GEN_KJ` =
-    2.25 kJ/mol -- an additive, sequence-independent generic-cohesion depth).
-    The two defaults are the jointly SAXS-calibrated pair. It is returned as the
-    fourth value (``None`` when absent) and consumed by :func:`apply_disorder`
+    residue list), ``idr_scale:`` (optional, default :data:`DEFAULT_IDR_SCALE` =
+    0.10 -- the sequence-specific IDR-IDR **well depth**) and ``eps_ev_kj:``
+    (optional, default :data:`DEFAULT_EPS_EV_KJ` = 0.8368 kJ/mol -- the
+    Ashbaugh-Hatch **repulsive core**, independent of the well depth). It is returned
+    as the fourth value (``None`` when absent) and consumed by :func:`apply_disorder`
     inside :func:`build_nonbonded_interaction`.
 
     The per-domain scaling key is ``nscale``. The legacy key ``strength`` is still
@@ -712,7 +731,7 @@ def read_yaml_config(filepath: str) -> Tuple[Dict, Dict, Dict, Optional[Dict]]:
         (d1, d2) and (d2, d1) are both set.
     disorder : dict or None
         ``None`` when there is no ``disordered:`` section; otherwise
-        ``{'residues': [int, ...], 'idr_scale': float, 'eps_gen_kj': float}``
+        ``{'residues': [int, ...], 'idr_scale': float, 'eps_ev_kj': float}``
         (1-based residue numbers).
 
     Raises
@@ -734,8 +753,8 @@ def read_yaml_config(filepath: str) -> Tuple[Dict, Dict, Dict, Optional[Dict]]:
           A-B: 0.5
         disordered:            # optional; None when absent
           residues: [1-24]
-          idr_scale: 1.0        # sequence-specific BT scale (default)
-          eps_gen_kj: 2.25      # additive generic cohesion, kJ/mol (default)
+          idr_scale: 0.10       # IDR-IDR well depth, x eps_BT (default)
+          eps_ev_kj: 0.8368     # IDR repulsive core, kJ/mol (default)
 
     >>> dom, intra, inter, disorder = read_yaml_config("domain.yaml")
     >>> dom["A"][:3]
@@ -808,18 +827,17 @@ def read_yaml_config(filepath: str) -> Tuple[Dict, Dict, Dict, Optional[Dict]]:
                 inter_nscales[('X', other)] = 1.0
                 inter_nscales[(other, 'X')] = 1.0
 
-    # Parse the optional disordered / IDR section (residue set + idr_scale).
+    # Parse the optional disordered / IDR section (residue set + the two knobs).
     disorder = None
     dis_cfg = config.get('disordered')
     if dis_cfg is not None:
         dis_residues = parse_residue_list(dis_cfg['residues'])
         idr_scale = float(dis_cfg.get('idr_scale', DEFAULT_IDR_SCALE))
-        # Optional additive generic-cohesion term (kJ/mol, sequence-independent),
-        # given directly in kJ/mol so it adds to the kJ ss_interaction_energy without
-        # conversion. Default 0.0 -> byte-identical to the idr_scale-only build.
-        eps_gen_kj = float(dis_cfg.get('eps_gen_kj', DEFAULT_EPS_GEN_KJ))
+        # Repulsive-core strength of the Ashbaugh-Hatch IDR force (kJ/mol), independent
+        # of the well depth.
+        eps_ev_kj = float(dis_cfg.get('eps_ev_kj', DEFAULT_EPS_EV_KJ))
         disorder = {'residues': dis_residues, 'idr_scale': idr_scale,
-                    'eps_gen_kj': eps_gen_kj}
+                    'eps_ev_kj': eps_ev_kj}
         # Overlap with an explicit domain is legal -- disorder wins (spec §2.2) -- but
         # a residue accidentally left in both sections is disordered silently, so log
         # it as info (not an error). `all_residues` holds only explicit-domain residues.
@@ -950,8 +968,7 @@ def calculate_rmin_2_values(binary_contact_matrix: np.ndarray, ca_distances: np.
 def apply_disorder(rmin_matrix: np.ndarray, eps_ij: np.ndarray, rmin_2_nm: np.ndarray,
                    dis_idx: np.ndarray, idr_scale: float,
                    index_to_resname: Dict[int, str],
-                   ss_interaction_energy: np.ndarray,
-                   eps_gen_kj: float = 0.0):
+                   ss_interaction_energy: np.ndarray):
     """Transform a folded non-bonded build into an IDR-aware one (spec §2.3).
 
     Runs at the very end of :func:`build_nonbonded_interaction`, after the folded
@@ -959,20 +976,28 @@ def apply_disorder(rmin_matrix: np.ndarray, eps_ij: np.ndarray, rmin_2_nm: np.nd
     the entries that touch a disordered residue, leaving folded-folded pairs and every
     folded residue's Karanicolas-Brooks radius byte-identical to a folded-only run.
 
-    Three pair classes result (spec §2.1): folded-folded (untouched, Go),
-    IDR-IDR (``max(NON_NATIVE_KJ, eps_gen_kj + idr_scale * eps_BT)``), and IDR-folded
-    (excluded-volume only). ``eps_gen_kj`` is an optional additive, sequence-independent
-    generic-cohesion term (0 by default -> the original idr_scale-only well). Each IDR
-    residue's radius is switched to the transferable per-AA sigma-radius
-    ``rvdw = IDR_RMIN_2_NM / 2^(1/6)`` (folded residues keep their K-B Rmin/2), and every
-    IDR-involving well is placed at the bare sum of those per-bead radii. So IDR-IDR comes
-    out ``rvdw[i] + rvdw[j]`` -- the O'Brien generic-bt convention, ~11% tighter than the
-    bare Rmin sum -- while IDR-folded is ``Rmin/2[folded] + rvdw[IDR]``, keeping the folded
-    bead on its native radius rather than shrinking it in cross pairs.
+    Two pair classes result: folded-folded (untouched, Go) and IDR-involving. Every
+    pair touching a disordered residue -- IDR-IDR and IDR-folded alike -- loses its
+    native contact and takes the well depth
+    ``max(NON_NATIVE_KJ, idr_scale * eps_BT(i, j))``; the folded/disordered status of
+    the *partner* does not enter. Each IDR residue's radius is switched to the transferable
+    per-AA ``Rmin/2`` from :data:`IDR_RMIN_2_NM` (folded residues keep their K-B
+    ``Rmin/2``), and every IDR-involving well is placed at the plain sum rule
+    ``Rmin/2[i] + Rmin/2[j]``. Both bead classes therefore carry the **same quantity**,
+    an Rmin/2, so the sum rule is coherent for IDR-IDR and IDR-folded cross pairs alike.
+
+    The 2^(1/6) sigma conversion is *not* applied here: it belongs inside the IDR
+    force's own expression (:meth:`topo.core.system.system.addIDRNonBondedForce`), where
+    ``sigma = 2^(-1/6) R_ij`` recovers the van der Waals sum.
+
+    This transform sets the *matrices* only. Which force evaluates which pair is decided
+    by the caller from the disorder index returned by
+    :func:`build_nonbonded_interaction` (``return_idr=True``): folded-folded pairs go to
+    the Karanicolas-Brooks 12-10-6, every IDR-involving pair to the Ashbaugh-Hatch 12-6.
 
     Overriding the per-residue ``rmin_2_nm`` array (not merely the pair matrix) is a
     requirement: the same array feeds the NC<->ribosome excluded volume in CSP
-    (spec §2.6), so both excluded-volume channels see the *same* rvdw for IDR beads.
+    (spec §2.6), so both excluded-volume channels see the *same* radius for IDR beads.
 
     Parameters
     ----------
@@ -982,8 +1007,8 @@ def apply_disorder(rmin_matrix: np.ndarray, eps_ij: np.ndarray, rmin_2_nm: np.nd
         Folded pairwise well depths (kJ/mol). Modified in place.
     rmin_2_nm : np.ndarray, shape (n,)
         Per-residue radius (nm). Modified in place: IDR entries are overridden with the
-        per-AA sigma-radius ``rvdw = IDR_RMIN_2_NM / 2^(1/6)``; folded entries keep K-B
-        Rmin/2. (So the array mixes conventions by bead class, both feeding a bare sum.)
+        per-AA table ``Rmin/2`` (:data:`IDR_RMIN_2_NM`); folded entries keep their K-B
+        ``Rmin/2``. Both are the same quantity, so the plain sum rule holds throughout.
     dis_idx : np.ndarray of int
         0-based indices of the disordered residues.
     idr_scale : float
@@ -994,12 +1019,6 @@ def apply_disorder(rmin_matrix: np.ndarray, eps_ij: np.ndarray, rmin_2_nm: np.nd
         The RAW per-pair BT energy matrix (kJ/mol) from
         :func:`get_ss_interaction_energy` (abs + shift + kcal->kJ already applied);
         NOT the domain-scaled version -- the IDR well must not inherit ``nscale``.
-    eps_gen_kj : float, optional
-        Additive, sequence-independent generic-cohesion depth (kJ/mol) added to every
-        IDR-IDR well before the excluded-volume floor. Defaults to 0.0 *at this level*
-        (the neutral, idr_scale-only transform); a domain_def that omits ``eps_gen_kj:``
-        gets the calibrated :data:`DEFAULT_EPS_GEN_KJ` from :func:`read_yaml_config`
-        instead, so user-facing runs default to generic cohesion being ON.
 
     Returns
     -------
@@ -1009,29 +1028,43 @@ def apply_disorder(rmin_matrix: np.ndarray, eps_ij: np.ndarray, rmin_2_nm: np.nd
     m = np.zeros(len(rmin_2_nm), dtype=bool)
     m[dis_idx] = True
     involves_dis = m[:, None] | m[None, :]     # pair touches a disordered residue
-    dd = m[:, None] & m[None, :]               # both residues disordered
 
-    # 1. IDR residues' radius -> transferable per-AA sigma-radius rvdw = Rmin_2 / 2^(1/6)
-    #    (K-B is meaningless for disordered coords). Baking the 2^(1/6) in here -- on the
-    #    IDR entries only -- makes rmin_2_nm a single-valued per-bead radius: IDR beads
-    #    carry rvdw, folded beads keep their exact K-B Rmin/2, untouched.
-    rmin_2_nm[dis_idx] = [IDR_RMIN_2_NM[index_to_resname[i]] / RMIN_SCALE_FACTOR
-                          for i in dis_idx]
+    # 1. IDR residues' radius -> the transferable per-AA Rmin/2 straight from the table
+    #    (K-B is meaningless for disordered coords). No sigma conversion: the R slot of
+    #    both the 12-10-6 and the Ashbaugh-Hatch form is an *Rmin*, and
+    #    calculate_rmin_2_values produces the same quantity for folded beads, so
+    #    rmin_2_nm stays single-valued -- one convention for both bead classes -- and the
+    #    plain sum rule R_ij = Rmin/2_i + Rmin/2_j is coherent across every pair class,
+    #    cross pairs included. The 2^(1/6) lives inside the IDR force's own expression,
+    #    where sigma = 2^(-1/6) R_ij recovers the van der Waals sum (and reproduces the
+    #    published HPS per-residue sigma to a mean -0.1%).
+    rmin_2_nm[dis_idx] = [IDR_RMIN_2_NM[index_to_resname[i]] for i in dis_idx]
 
-    # 2. Every IDR-involving pair: drop the native contact, reposition the well at the
-    #    bare sum rule of the (now-updated) per-residue radii, at the excluded-volume
-    #    floor. Because IDR entries are already sigma-radii, IDR-IDR comes out
-    #    rvdw_i + rvdw_j (the O'Brien generic-bt convention, ~11% tighter than the bare
-    #    Rmin sum) while IDR-folded keeps the folded bead on its native K-B Rmin/2.
+    # 2. Every IDR-involving pair -- IDR-IDR and IDR-folded alike -- drops its native
+    #    contact and takes the well at the plain sum rule of the (now-updated)
+    #    per-residue radii. Both bead classes carry an Rmin/2, so the same rule is
+    #    coherent for cross pairs: the folded bead keeps its native K-B Rmin/2 and the
+    #    IDR bead brings its transferable per-AA value.
     rmin_matrix[involves_dis] = (
         rmin_2_nm[:, None] + rmin_2_nm[None, :])[involves_dis]
-    eps_ij[involves_dis] = NON_NATIVE_KJ
 
-    # 3. IDR-IDR only: additive generic cohesion (eps_gen_kj, sequence-independent)
-    #    plus the sequence-specific BT attraction, never below the excluded-volume
-    #    floor (so the chain cannot pass through itself even at idr_scale = 0).
-    eps_ij[dd] = np.maximum(NON_NATIVE_KJ,
-                            eps_gen_kj + idr_scale * ss_interaction_energy[dd])
+    # 3. ...and the same well depth: the sequence-specific BT attraction, never below
+    #    the excluded-volume floor. A disordered residue therefore interacts with a
+    #    folded one exactly as it does with another disordered one. The chemistry is
+    #    the residue's, not the region's -- a hydrophobic IDR bead near a hydrophobic
+    #    surface bead attracts for the same reason it would in the IDR interior -- and
+    #    this matches the dedicated IDP force fields (HPS/Dignon), which draw no
+    #    folded/disordered distinction at all.
+    #
+    #    Under the Ashbaugh-Hatch form this is the well depth *alone*; the repulsive
+    #    core is set by eps_ev_kj, so idr_scale = 0 leaves a clean WCA bead of physical
+    #    size rather than a phantom one.
+    #
+    #    NOTE: idr_scale was calibrated on fully-IDP chains, where every pair is
+    #    IDR-IDR, so the benchmark says nothing about the cross-pair depth. Treat a
+    #    strongly adsorbing tail as a modelling question, not a settled result.
+    eps_ij[involves_dis] = np.maximum(
+        NON_NATIVE_KJ, idr_scale * ss_interaction_energy[involves_dis])
     return rmin_matrix, eps_ij, rmin_2_nm
 
 
@@ -1040,6 +1073,7 @@ def build_nonbonded_interaction(
     domain_def: Optional[str] = None,
     stride_output_file: Optional[str] = None,
     return_rmin_2: bool = False,
+    return_idr: bool = False,
 ):
     """
     Build the well-position (Rmin) and energy matrices for TOPO non-bonded contacts.
@@ -1077,8 +1111,19 @@ def build_nonbonded_interaction(
         Pairwise well depth in kJ/mol. Native: sum of H-bond (0.75/1.5 kcal/mol),
         backbone–sidechain (0.37 kcal/mol), and scaled SS; non-native: NON_NATIVE_KJ.
     rmin_2_nm : np.ndarray, shape (n_residues,)
-        Only when ``return_rmin_2=True`` (the return is then a 3-tuple): the
-        per-residue Rmin/2 array (nm) the sum rule was built from.
+        Only when ``return_rmin_2=True``: the per-residue Rmin/2 array (nm) the sum
+        rule was built from.
+    idr : dict or None
+        Only when ``return_idr=True`` (appended last, so the existing 2- and 3-value
+        unpacks are unaffected): ``None`` when the domain_def has no ``disordered:``
+        section, otherwise ``{'idx': np.ndarray, 'eps_ev_kj': float}`` -- the 0-based
+        indices of the disordered residues and the IDR force's repulsive-core strength.
+        The caller uses it to partition the pairs across the two contact forces
+        (:meth:`topo.core.system.system.addCustomNonBondedForce` on
+        ``{folded} x {folded}``, :meth:`~topo.core.system.system.addIDRNonBondedForce`
+        on everything touching an IDR bead). Ignoring it -- building only the 12-10-6 --
+        evaluates IDR pairs with the wrong functional form, so any caller that passes a
+        ``domain_def`` with a ``disordered:`` section must consume it.
 
     Raises
     ------
@@ -1188,6 +1233,7 @@ def build_nonbonded_interaction(
     # Disorder / IDR transform (spec §2.3): after the fully-folded build, overwrite
     # every pair touching a disordered residue (and those residues' per-residue radius).
     # Not called when there is no `disordered:` section -> folded runs stay byte-identical.
+    idr = None
     if disorder is not None:
         dis_idx = np.asarray(disorder['residues'], dtype=int) - 1   # 1-based -> 0-based
         # Inform how the input-structure native contacts are modified: every native
@@ -1200,12 +1246,16 @@ def build_nonbonded_interaction(
               f"residue -> excluded; {n_native - n_idr_native} native contact(s) kept")
         rmin_matrix, eps_ij, rmin_2_nm = apply_disorder(
             rmin_matrix, eps_ij, rmin_2_nm, dis_idx, disorder['idr_scale'],
-            index_to_resname, ss_interaction_energy,
-            eps_gen_kj=disorder.get('eps_gen_kj', DEFAULT_EPS_GEN_KJ))
+            index_to_resname, ss_interaction_energy)
+        idr = {'idx': dis_idx,
+               'eps_ev_kj': disorder.get('eps_ev_kj', DEFAULT_EPS_EV_KJ)}
 
+    out = (rmin_matrix, eps_ij)
     if return_rmin_2:
-        return rmin_matrix, eps_ij, rmin_2_nm
-    return rmin_matrix, eps_ij
+        out += (rmin_2_nm,)
+    if return_idr:
+        out += (idr,)
+    return out
 
 # Main execution
 if __name__ == "__main__":

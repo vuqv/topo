@@ -177,7 +177,8 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
     # the residues already on disk (see topo.csp.resume).
 
     # --- build-once-subset contacts on the full native structure ------------
-    R_full, eps_full, rmin_2_full = precompute_contacts(full_pdb, domain_def, stride_output_file)
+    R_full, eps_full, rmin_2_full, idr_full = precompute_contacts(
+        full_pdb, domain_def, stride_output_file)
     # Nascent side of the NC<->ribosome excluded volume: per-residue Karanicolas-Brooks
     # Rmin/2 (Option A, "kb", default) or the per-AA fallback in append_ribosome (Option B,
     # "per_aa" -> pass None). See RunParams.nascent_ev_radii.
@@ -327,6 +328,7 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
                         n_steps_override=s1,
                         seed_point=seed_point, tether_segid=stage1_segid,
                         tether_prev_segid=stage1_prev_segid, nascent_rmin_2=nascent_rmin_2_arg,
+                        idr_full=idr_full,
                         label="stage 1 peptidyl-transfer")
 
         # Stage 2: continue from stage 1, still held at the A-site.
@@ -337,6 +339,7 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
                         out_subdir=ldir, outname="traj_s2", persist_final=False,
                         n_steps_override=s2,
                         tether_segid=stage1_segid, nascent_rmin_2=nascent_rmin_2_arg,
+                        idr_full=idr_full,
                         # Stage 2 continues from stage 1's relaxed final at the SAME (A-site)
                         # restraint target, so the seeded structure is already minimized ->
                         # skip the redundant minimization (low-risk speedup).
@@ -352,6 +355,7 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
                         out_subdir=ldir, outname="traj_s3", persist_final=True,
                         n_steps_override=s3,
                         tether_segid="PtR", nascent_rmin_2=nascent_rmin_2_arg,
+                        idr_full=idr_full,
                         label="stage 3 tRNA-binding")
         prev_final = f3
         # The DONE line is the commit point: all three stages of L are on disk.
@@ -382,6 +386,7 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
                 seed_override=prev_final, out_root=out_path, params=ep, ribo=ribo,
                 restrain=True, out_subdir="stall", tether_segid="PtR",
                 n_steps_override=params.stall_steps, nascent_rmin_2=nascent_rmin_2_arg,
+                idr_full=idr_full,
                 label="stalling")
             resume_mod.append_progress(out_path, "stall", "DONE")
 
@@ -427,6 +432,7 @@ def run_continuous_synthesis(full_pdb: str, ribosome_pdb: str, *,
                 seed_override=prev_final, out_root=out_path, params=ep, ribo=ribo,
                 restrain=False, out_subdir="ejection",
                 n_steps_override=params.ejection_steps, nascent_rmin_2=nascent_rmin_2_arg,
+                idr_full=idr_full,
                 checkpoint=True, restart=restart, append=restart,
                 label="ejection")
             resume_mod.append_progress(out_path, "ejection", "DONE")

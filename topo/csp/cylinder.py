@@ -151,6 +151,7 @@ def run_length(L: int, *, full_pdb: str, R_full: np.ndarray, eps_full: np.ndarra
                restrain: bool = True, out_subdir: Optional[str] = None,
                n_steps_override: Optional[int] = None,
                restart: bool = False, append: bool = False,
+               idr_full: Optional[dict] = None,
                label: Optional[str] = None) -> np.ndarray:
     """Build, seed, (restrain,) minimize and run one length-``L`` nascent System.
 
@@ -177,6 +178,9 @@ def run_length(L: int, *, full_pdb: str, R_full: np.ndarray, eps_full: np.ndarra
     - ``n_steps_override`` : run this many steps instead of ``params.n_steps`` (the
       kinetic driver passes the per-residue codon-dwell step count here).
     - ``label`` : console-banner text.
+    - ``idr_full`` : the disorder handle from :func:`precompute_contacts`, for the
+      **full** chain; sliced here to the emerged chain (``idx[idx < L]``). An empty
+      slice takes the single-force path.
 
     Returns the final nascent ``(L, 3)`` nm coordinate array (seeds length L+1).
     """
@@ -196,7 +200,16 @@ def run_length(L: int, *, full_pdb: str, R_full: np.ndarray, eps_full: np.ndarra
     #    (build-once-subset: STRIDE / heavy-atom analysis are never re-run).
     R_L = np.ascontiguousarray(R_full[:L, :L])
     eps_L = np.ascontiguousarray(eps_full[:L, :L])
-    cgModel = build_length_model(sub_pdb, R_L, eps_L, constraints=params.constraints)
+    # Slice the full-chain disorder mask to the emerged chain: particle i (0..L-1) is
+    # native residue i+1, so a full-chain 0-based index is emerged iff it is < L.
+    idr_L = None
+    if idr_full is not None:
+        idx = np.asarray(idr_full['idx'], dtype=int)
+        idx = idx[idx < L]
+        if idx.size:
+            idr_L = {'idx': idx, 'eps_ev_kj': idr_full['eps_ev_kj']}
+    cgModel = build_length_model(sub_pdb, R_L, eps_L, constraints=params.constraints,
+                                 idr=idr_L)
 
     # 3. seed coordinates. Post-elongation (seed_override): use the finished structure
     #    as-is. Cold start (L == L0): lay residues 1..L0 extended along +x from the PTC
@@ -352,7 +365,8 @@ def run_cylinder_synthesis(full_pdb: str, *, L0: int = 1, L_max: Optional[int] =
           f"(k = {params.restraint_k} kJ/mol/nm^2; no tRNA tether).")
 
     # Build-once-subset contacts on the full native structure (STRIDE at most once).
-    R_full, eps_full, _rmin_2_full = precompute_contacts(full_pdb, domain_def, stride_output_file)
+    R_full, eps_full, _rmin_2_full, idr_full = precompute_contacts(
+        full_pdb, domain_def, stride_output_file)
     N_full = R_full.shape[0]
     if L_max is None:
         L_max = N_full
@@ -452,7 +466,7 @@ def run_cylinder_synthesis(full_pdb: str, *, L0: int = 1, L_max: Optional[int] =
             L, full_pdb=full_pdb, R_full=R_full, eps_full=eps_full,
             prev_final=prev_final, out_root=out_path, params=params,
             cterm_seed=cterm_seed, x_lo=x_lo, x_exit=x_exit, seed_point=seed_point,
-            n_steps_override=n_steps,
+            n_steps_override=n_steps, idr_full=idr_full,
             label=f"L={L}  {codon}  ({n_steps} steps, analytic tunnel)")
         resume_mod.append_progress(out_path, f"L_{L:03d}", "DONE")
 
@@ -480,7 +494,7 @@ def run_cylinder_synthesis(full_pdb: str, *, L0: int = 1, L_max: Optional[int] =
                 prev_final=None, out_root=out_path, params=params,
                 cterm_seed=cterm_seed, x_lo=x_lo, x_exit=x_exit,
                 seed_override=prev_final, restrain=True, out_subdir="stall",
-                n_steps_override=params.stall_steps,
+                n_steps_override=params.stall_steps, idr_full=idr_full,
                 label=f"stall (L = {L_max})")
             resume_mod.append_progress(out_path, "stall", "DONE")
             print(f"Done. Stall written to {out_path / 'stall'}/")
@@ -529,7 +543,7 @@ def run_cylinder_synthesis(full_pdb: str, *, L0: int = 1, L_max: Optional[int] =
                 prev_final=None, out_root=out_path, params=params,
                 cterm_seed=cterm_seed, x_lo=x_lo, x_exit=x_exit,
                 seed_override=prev_final, restrain=False, out_subdir="ejection",
-                n_steps_override=params.ejection_steps,
+                n_steps_override=params.ejection_steps, idr_full=idr_full,
                 restart=restart, append=restart,
                 label=f"ejection (L = {L_max})")
             resume_mod.append_progress(out_path, "ejection", "DONE")
