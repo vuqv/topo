@@ -37,8 +37,9 @@ def _install_stubs(monkeypatch, crash_at_L=None):
     calls = []
 
     def fake_precompute_contacts(full_pdb, domain_def, stride_output_file):
+        # 4-tuple: (R, eps, rmin_2, idr) -- idr is None (no `disordered:` section).
         return (np.zeros((N_FULL, N_FULL)), np.zeros((N_FULL, N_FULL)),
-                np.full(N_FULL, 0.3))
+                np.full(N_FULL, 0.3), None)
 
     def fake_run_length(L, **kw):
         subdir = kw.get("out_subdir") or f"L_{L:03d}"

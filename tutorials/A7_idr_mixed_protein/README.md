@@ -50,20 +50,29 @@ intra_domains:
     nscale: 2.5044
 disordered:
   residues: [1-18, 218-281]     # N-terminal tail + long intracellular loop
-  eps_gen_kj: 2.25              # generic cohesion, kJ/mol (default)
-  idr_scale: 1.0                # sequence-dependent BT scale (default)
+  idr_scale: 0.10               # IDR-IDR well depth, x eps_BT (default)
+  eps_ev_kj: 0.8368             # IDR repulsive core, kJ/mol (default)
 ```
 
 - **`residues`** — the residues to treat as disordered. Their native contacts
   (H-bond, backbone–sidechain, and sidechain–sidechain) are removed.
-- **`eps_gen_kj`** — the sequence-independent generic cohesion in kJ/mol (optional,
-  default `2.25`). This is the knob to turn first when tuning compaction.
 - **`idr_scale`** — the scale on the sequence-dependent BT energy, which varies by
-  residue-pair type (optional, default `1.0`).
-  Both defaults are calibrated against SAXS radii of gyration for 24 disordered
-  proteins. Set **both** to `0` for a pure self-avoiding chain — zeroing one alone
-  leaves the other channel on. Disordered↔folded pairs feel only excluded volume
-  (steric) regardless.
+  residue-pair type (optional, default `0.10`, calibrated against SAXS radii of
+  gyration for 18 disordered proteins). This is the compaction knob: raising it
+  lowers the scaling exponent ν, as attraction physically should. Set it to `0` for
+  a pure self-avoiding chain. The θ point is at ≈ `0.32`, so treat anything much
+  above ~0.3 as suspect.
+- **`eps_ev_kj`** — the repulsive-core strength in kJ/mol of the Ashbaugh–Hatch
+  potential used for IDR-involving pairs (optional, default `0.8368`, the HPS
+  value). It sets bead **size**, independently of the well depth — which is the
+  point of that functional form, and why `idr_scale: 0` now gives a self-avoiding
+  chain of *physical* thickness rather than a near-phantom one.
+
+  Disordered↔folded pairs take the **same** depth rule as disordered↔disordered
+  pairs — the interaction depends on the two residue types, not on which region each
+  one is in — so an IDR can transiently associate with the domain surface. What it
+  never regains is a native (fold-encoding) contact. Note `idr_scale` was calibrated
+  on fully-disordered chains, so the cross-pair depth is an extrapolation.
 
 > **You choose the disordered residues.** TOPO applies exactly the set you list —
 > it does not detect disorder. Sources to inform the choice include
@@ -114,9 +123,9 @@ vmd traj/traj.psf traj/traj.dcd
 
 ## Try next
 
-- **Self-avoiding vs collapsing.** Set **both** `eps_gen_kj: 0` and `idr_scale: 0`
-  in `domain.yaml` and rerun; the IDRs expand further. Compare the radius of gyration
-  of a disordered region against the default run.
+- **Self-avoiding vs collapsing.** Set `idr_scale: 0` in `domain.yaml` and rerun;
+  the IDRs expand further. Compare the radius of gyration of a disordered region
+  against the default run.
 - **A fully disordered protein.** Drop `intra_domains` and list every residue under
   `disordered:` — a whole-IDP run (see the *fully-IDP* note in the
   [Disordered / IDR regions](../usage/disordered_regions.rst) page).

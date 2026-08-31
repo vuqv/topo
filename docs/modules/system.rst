@@ -26,6 +26,8 @@ A class containing methods and parameters for generating TOPO coarse-grained sys
    .. automethod:: addPeriodicTorsionForce
    .. automethod:: addYukawaForces
    .. automethod:: addCustomNonBondedForce
+
+   .. automethod:: addIDRNonBondedForce
    .. automethod:: createSystemObject
    .. automethod:: checkBondDistances
    .. automethod:: checkLargeForces

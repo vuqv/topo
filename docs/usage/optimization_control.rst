@@ -165,8 +165,8 @@ C-terminal tail as intrinsically disordered:
     # every domain pair (A-B, A-C, B-C) on the shared interface ladder.
     disordered:
       residues: [385-400]      # C-terminal tail: native contacts removed
-      # eps_gen_kj: 2.25       # OPTIONAL, generic-attraction well (default 2.25)
-      # idr_scale: 1.0         # OPTIONAL, disorder scale (default 1.0)
+      # idr_scale: 0.10        # OPTIONAL, IDR-IDR well depth (default 0.10)
+      # eps_ev_kj: 0.8368      # OPTIONAL, IDR repulsive core, kJ/mol (default 0.8368)
 
 The ``disordered:`` block is honored exactly as in the runner. Its residues are
 **subtracted from every domain** before scoring — here residues 385–400 leave
@@ -176,7 +176,7 @@ verdict reflects only its foldable core. Disorder wins over domain membership: i
 a ``disordered:`` range overlaps an ``intra_domains`` range, the overlapping
 residues are governed by the disorder rules regardless of which domain lists
 them. See :doc:`disordered_regions` for the full treatment and the optional
-``eps_gen_kj`` / ``idr_scale`` knobs.
+``idr_scale`` / ``eps_ev_kj`` knobs.
 
 Each round the optimizer writes a fresh ``round_N/domain.yaml`` with the current
 ladder nscales (residues and class carried over from your seed), and the final

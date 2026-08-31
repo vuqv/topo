@@ -81,6 +81,10 @@ class system:
     custom_non_bonded_force : :code:`mm.CustomNonbondedForce`
         Stores the OpenMM :code:`CustomNonbondedForce` initialized-class. Implements the
         structure-based (native + non-native) contact potential.
+    idr_non_bonded_force : :code:`mm.CustomNonbondedForce`
+        Stores the OpenMM :code:`CustomNonbondedForce` implementing the Ashbaugh-Hatch
+        12-6 for every pair touching a disordered (IDR) bead. :code:`None` for a
+        fully-folded build.
     forceGroups : :code:`collections.OrderedDict`
         A dict that uses force names as keys and their corresponding force
         as values.
@@ -166,6 +170,9 @@ class system:
 
         # Structure-based (native + non-native) contact non-bonded force
         self.custom_non_bonded_force = None
+        # Ashbaugh-Hatch contact force for pairs touching a disordered (IDR) bead.
+        # Stays None for a fully-folded build.
+        self.idr_non_bonded_force = None
 
         # Define parameters for DH potential Force
         self.yukawaForce = None
@@ -671,7 +678,8 @@ class system:
 
    
 
-    def addCustomNonBondedForce(self, rmin_matrix, energy_matrix, use_pbc):
+    def addCustomNonBondedForce(self, rmin_matrix, energy_matrix, use_pbc,
+                               interaction_group=None):
         r"""
         Add the structure-based (native + non-native) contact non-bonded force.
 
@@ -717,6 +725,25 @@ class system:
             ``eps_table(id1, id2)``.
         use_pbc : bool
             If True, use ``CutoffPeriodic``; otherwise ``CutoffNonPeriodic``.
+        interaction_group : tuple of (sequence[int], sequence[int]) or None
+            The one interaction group this force is restricted to, as
+            ``(set1, set2)``. ``None`` (default) leaves the force unrestricted --
+            every pair -- which is the pre-IDR behaviour and the only correct
+            setting for a build with no disordered residues.
+
+            When a model has disordered residues the caller passes
+            ``(folded, folded)``, because IDR-involving pairs belong to the
+            Ashbaugh-Hatch force (:meth:`addIDRNonBondedForce`) instead. An empty
+            ``folded`` list is legal and makes this force contribute exactly zero
+            (a fully disordered chain).
+
+            **This force's groups are set here and nowhere else.** OpenMM takes the
+            *union* of a force's interaction groups, so any later code that adds a
+            broader group silently re-admits pairs this force no longer owns -- and
+            those pairs are then evaluated by both contact forces at once, with no
+            error raised. Code downstream that needs to restrict this force (the
+            ribosome append, the multichain replicator) must do so only when it
+            carries no groups, i.e. only when nobody has claimed ownership.
 
         Returns
         -------
@@ -746,7 +773,132 @@ class system:
         # set exclusion rule
         bonded_exclusions = [(b[0].index, b[1].index) for b in list(self.topology.bonds())]
         self.custom_non_bonded_force.createExclusionsFromBonds(bonded_exclusions, self.bonded_exclusions_index)
-    
+
+        # Domain restriction, set once, here. See the `interaction_group` docstring.
+        if interaction_group is not None:
+            set1, set2 = interaction_group
+            self.custom_non_bonded_force.addInteractionGroup(list(set1), list(set2))
+
+
+    def addIDRNonBondedForce(self, rmin_matrix, energy_matrix, use_pbc,
+                             idr_idx, folded_idx, eps_ev_kj):
+        r"""
+        Add the Ashbaugh-Hatch contact force for every pair touching a disordered bead.
+
+        The sibling of :meth:`addCustomNonBondedForce`. Where that force evaluates
+        folded-folded pairs with the Karanicolas-Brooks 12-10-6, this one evaluates
+        IDR-IDR and IDR-folded pairs with an Ashbaugh-Hatch split on a plain 12-6.
+        With :math:`L(r) = 4[(\sigma/r)^{12} - (\sigma/r)^6]` and
+        :math:`\sigma = 2^{-1/6} R_{ij}`:
+
+        .. math::
+
+            U_{ij}(r) = \begin{cases}
+                \varepsilon_\mathrm{EV}\, L(r) +
+                    (\varepsilon_\mathrm{EV} - \varepsilon_{ij}), & r \le R_{ij} \\
+                \varepsilon_{ij}\, L(r), & r > R_{ij}
+            \end{cases}
+
+        The minimum is at :math:`r = R_{ij}` with depth exactly
+        :math:`-\varepsilon_{ij}` for any :math:`\varepsilon_\mathrm{EV}`, and the
+        join is :math:`C^1`. Two properties follow, and both are the point of the form:
+
+        * :math:`\varepsilon_{ij} = 0` gives :math:`U \equiv 0` beyond
+          :math:`R_{ij}` -- a clean WCA core of *physical* size, so "no attraction"
+          and "no excluded volume" are finally independent statements;
+        * the core (where :math:`U = kT`) is set by :math:`\varepsilon_\mathrm{EV}`
+          alone, moving only ~3% as :math:`\varepsilon_{ij}` runs 0 -> 2 kJ/mol,
+          against 56% for the coupled 12-10-6.
+
+        **Why not the 12-10-6 here.** Two independent defects, both fatal:
+
+        1. Its single ``eps`` multiplies the repulsive wall *and* the well, so any
+           attraction inflates the bead (~3.7x in excluded volume) to buy a well
+           shallower than kT -- adding attraction made the chain expand.
+        2. Its (13, -18, +4) coefficients place a desolvation barrier
+           (:math:`+0.143\,\varepsilon` at :math:`1.45 R`) *beyond* the well. That
+           barrier is real physics for a **native** contact -- forming one expels the
+           solvent between two residues -- but there is no native contact between two
+           disordered residues. Sitting at larger :math:`r` it carries more
+           :math:`4\pi r^2` weight in :math:`B_2` than the well does, holding the
+           theta point at 1.94 kT where a 12-6 puts it at 0.35 kT.
+
+        Folded-folded pairs keep the 12-10-6 *with* its barrier, where it does the job
+        it was designed for.
+
+        Parameters
+        ----------
+        rmin_matrix : numpy.ndarray
+            The same (n_atoms x n_atoms) well-position matrix (nm) the 12-10-6 gets;
+            IDR-involving entries are the sum rule ``Rmin/2_i + Rmin/2_j``. The
+            :math:`2^{-1/6}` conversion to sigma happens inside the expression.
+        energy_matrix : numpy.ndarray
+            The same (n_atoms x n_atoms) well-depth matrix (kJ/mol). Every
+            IDR-involving entry -- IDR-IDR and IDR-folded alike -- is
+            ``max(NON_NATIVE_KJ, idr_scale * eps_BT)``.
+        use_pbc : bool
+            If True, use ``CutoffPeriodic``; otherwise ``CutoffNonPeriodic``.
+        idr_idx : sequence of int
+            0-based indices of the disordered beads.
+        folded_idx : sequence of int
+            0-based indices of the folded beads. May be empty (a fully disordered
+            chain), in which case only the ``{idr} x {idr}`` group is added.
+        eps_ev_kj : float
+            Repulsive-core strength :math:`\varepsilon_\mathrm{EV}` (kJ/mol),
+            exposed as the ``epsEV`` global parameter.
+
+        Returns
+        -------
+        None
+        """
+        idr_idx = [int(i) for i in idr_idx]
+        folded_idx = [int(i) for i in folded_idx]
+        table_R_ravel = rmin_matrix.ravel().tolist()
+        table_eps_ravel = energy_matrix.ravel().tolist()
+        n_atoms = rmin_matrix.shape[0]
+
+        # Written as one branch-free expression rather than two step() terms: at
+        # r = R the LJ term is exactly -1, so (LJ + 1) vanishes and the shift term
+        # drops out from either side -- no double-count at the join, and C1 there.
+        #   r <= R:  eps*LJ + (epsEV - eps)*(LJ + 1) = epsEV*LJ + (epsEV - eps)
+        #   r >  R:  eps*LJ
+        energy_function = 'eps*LJ + step(R - r)*(epsEV - eps)*(LJ + 1);'
+        energy_function += 'LJ = 4*(sr6^2 - sr6);'
+        energy_function += 'sr6 = (sigma/r)^6;'
+        energy_function += 'sigma = R/rmin_scale;'        # sigma = 2^(-1/6) R
+        energy_function += 'eps = eps_table(id1, id2);'
+        energy_function += 'R = R_table(id1, id2);'
+
+        self.idr_non_bonded_force = mm.CustomNonbondedForce(energy_function)
+        self.idr_non_bonded_force.addGlobalParameter('epsEV', eps_ev_kj)
+        self.idr_non_bonded_force.addGlobalParameter('rmin_scale', 2.0 ** (1.0 / 6.0))
+        self.idr_non_bonded_force.addTabulatedFunction(
+            'eps_table', mm.Discrete2DFunction(n_atoms, n_atoms, table_eps_ravel))
+        self.idr_non_bonded_force.addTabulatedFunction(
+            'R_table', mm.Discrete2DFunction(n_atoms, n_atoms, table_R_ravel))
+        self.idr_non_bonded_force.addPerParticleParameter('id')
+        for i, atom in enumerate(self.atoms):
+            self.idr_non_bonded_force.addParticle((i,))
+
+        self.idr_non_bonded_force.setNonbondedMethod(
+            mm.NonbondedForce.CutoffPeriodic if use_pbc else mm.NonbondedForce.CutoffNonPeriodic)
+        self.idr_non_bonded_force.setUseSwitchingFunction(True)
+        self.idr_non_bonded_force.setSwitchingDistance(1.8 * unit.nanometer)
+        self.idr_non_bonded_force.setCutoffDistance(2.0 * unit.nanometer)
+
+        # Identical exclusion list to the 12-10-6 (OpenMM's CPU platform requires
+        # every CustomNonbondedForce in a System to share one).
+        bonded_exclusions = [(b[0].index, b[1].index) for b in list(self.topology.bonds())]
+        self.idr_non_bonded_force.createExclusionsFromBonds(bonded_exclusions,
+                                                            self.bonded_exclusions_index)
+
+        # This force's domain: every pair touching an IDR bead, and nothing else --
+        # the exact complement of the {folded} x {folded} group the 12-10-6 gets.
+        # Set once, here (see addCustomNonBondedForce's `interaction_group` docstring).
+        self.idr_non_bonded_force.addInteractionGroup(idr_idx, idr_idx)
+        if folded_idx:
+            self.idr_non_bonded_force.addInteractionGroup(idr_idx, folded_idx)
+
 
     """ Functions for creating OpenMM system object """
 
@@ -1017,6 +1169,10 @@ class system:
         if self.custom_non_bonded_force is not None:
             self.system.addForce(self.custom_non_bonded_force)
             self.forceGroups['Custom Non-Bonded Energy'] = self.custom_non_bonded_force
+
+        if self.idr_non_bonded_force is not None:
+            self.system.addForce(self.idr_non_bonded_force)
+            self.forceGroups['IDR Non-Bonded Energy'] = self.idr_non_bonded_force
 
     def dumpStructure(self, output_file: str) -> None:
         """

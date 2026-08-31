@@ -155,11 +155,12 @@ class models:
         # energies, and no domain scaling. A failure here must be fatal rather than
         # silently swallowed, otherwise the simulation runs an incomplete force field.
         try:
-            rmin_matrix, energy_matrix, rmin_2 = build_nonbonded_interaction(
+            rmin_matrix, energy_matrix, rmin_2, idr = build_nonbonded_interaction(
                 structure_file,
                 domain_def,
                 stride_output_file,
                 return_rmin_2=True,
+                return_idr=True,
             )
         except Exception as e:
             raise RuntimeError(
@@ -178,8 +179,23 @@ class models:
         # consistent with the actual per-residue radii rather than a fixed per-AA lookup.
         topo_model.setParticlesRadii(list(rmin_2))
 
-        # Add the custom non-bonded (contact) force to the system
-        topo_model.addCustomNonBondedForce(rmin_matrix, energy_matrix, use_pbc)
+        # Add the contact non-bonded force(s). With no disordered residues this is the
+        # single unrestricted 12-10-6 -- the pre-IDR path, untouched. With disorder the
+        # pairs are partitioned across two forces with disjoint domains: the 12-10-6
+        # keeps {folded} x {folded} (a native contact, desolvation barrier and all),
+        # while every pair touching an IDR bead goes to the Ashbaugh-Hatch 12-6. The
+        # partition is computed once, here, and neither force's groups are widened later.
+        if idr is None:
+            topo_model.addCustomNonBondedForce(rmin_matrix, energy_matrix, use_pbc)
+        else:
+            idr_idx = [int(i) for i in idr['idx']]
+            folded_idx = sorted(set(range(topo_model.n_atoms)) - set(idr_idx))
+            print(f'  disorder: {len(idr_idx)} IDR bead(s), {len(folded_idx)} folded '
+                  f'(eps_ev = {idr["eps_ev_kj"]} kJ/mol)')
+            topo_model.addCustomNonBondedForce(rmin_matrix, energy_matrix, use_pbc,
+                                               interaction_group=(folded_idx, folded_idx))
+            topo_model.addIDRNonBondedForce(rmin_matrix, energy_matrix, use_pbc,
+                                            idr_idx, folded_idx, idr['eps_ev_kj'])
 
         # Generate the system object and add previously generated forces. The
         # bond-distance check always runs (it validates the built geometry); the
