@@ -30,15 +30,17 @@ regime is decided entirely by the *parameter values* it receives:
 * **Multi-domain proteins with intrinsically disordered regions (IDRs)** —
   ordered and disordered residues coexist in one chain. Residues listed in a
   ``disordered:`` block get no native contacts; instead they interact through a
-  transferable, sequence-dependent well (generic cohesion + a scaled
-  Betancourt–Thirumalai term) and excluded volume, while the folded domains keep
-  their structure-based energetics untouched. Folded–IDR pairs are
-  excluded-volume only, so an IDR acts as a genuine flexible linker/tail rather
-  than a spurious binder.
+  transferable, sequence-dependent well (a scaled Betancourt–Thirumalai term) on an
+  **Ashbaugh–Hatch 12-6**, which decouples the attraction from the excluded volume.
+  The folded domains keep their structure-based 12-10-6 energetics untouched.
+  Folded–IDR pairs take the same sequence-dependent well as IDR–IDR pairs — the
+  depth is a property of the two residue types, not of the regions they sit in — so
+  an IDR can transiently associate with a domain surface, but never through a
+  native (fold-encoding) contact.
 * **Fully disordered proteins (IDPs)** — the limiting case where *every* residue
   is disordered. No Gō contacts remain and the model reduces to a transferable
-  Cα polymer; the ``eps_gen_kj``/``idr_scale`` defaults are calibrated against
-  SAXS :math:`R_g` for a 24-IDP benchmark.
+  Cα polymer; the ``idr_scale``/``eps_ev_kj`` defaults are calibrated against
+  SAXS :math:`R_g` for an 18-IDP benchmark.
 
 This page describes the shared force field — every term below applies in all
 three regimes, and the sections on the :ref:`contact potential
@@ -309,6 +311,15 @@ assigned **per pair class**. Pairs of **ordered** residues split into two classe
 **disordered** residue forms a third and fourth class, imposed afterwards by
 :func:`topo.utils.nonbonded.apply_disorder` (see :doc:`disordered_regions`).
 
+.. note::
+
+   **The 12-10-6 above applies to folded–folded pairs only.** When a
+   ``disordered:`` section is present the IDR-involving classes are moved to a
+   *second* ``CustomNonbondedForce`` with an Ashbaugh–Hatch 12-6 — no desolvation
+   barrier, and the repulsive core decoupled from the well depth — on interaction
+   groups disjoint from this force's. See
+   :ref:`idr-ashbaugh-hatch` for the form and the reasoning.
+
 .. important::
 
    **The same symbol** :math:`R_{ij}` **means two physically different things** —
@@ -335,23 +346,37 @@ assigned **per pair class**. Pairs of **ordered** residues split into two classe
         - :math:`(R_\mathrm{min}/2)_i+(R_\mathrm{min}/2)_j`, both Karanicolas–Brooks
         - :math:`1.32\times10^{-4}` kcal/mol (excluded volume only)
       * - **IDR–ordered**
-        - :math:`(R_\mathrm{min}/2)_\mathrm{ordered} + r_\mathrm{vdw}^\mathrm{IDR}`
-          — the ordered bead keeps its K–B radius, the IDR bead uses the
-          transferable :math:`r_\mathrm{vdw}`
-        - :math:`1.32\times10^{-4}` kcal/mol (excluded volume only)
-      * - **IDR–IDR**
-        - :math:`r_\mathrm{vdw}^i + r_\mathrm{vdw}^j` (~11 % tighter than the bare
-          :math:`R_\mathrm{min}` sum — O'Brien's generic-bt convention)
+        - :math:`(R_\mathrm{min}/2)_\mathrm{ordered} + (R_\mathrm{min}/2)_\mathrm{IDR}`
+          — the ordered bead keeps its K–B radius, the IDR bead brings the
+          transferable per-AA one; both are :math:`R_\mathrm{min}/2` values, so
+          this is the plain sum rule
         - :math:`\max\big(1.32\times10^{-4}\ \text{kcal/mol},\;
-          \varepsilon_\mathrm{gen} + s_\mathrm{IDR}\,\varepsilon_\mathrm{BT}\big)`
+          s_\mathrm{IDR}\,\varepsilon_\mathrm{BT}\big)`
+      * - **IDR–IDR**
+        - :math:`(R_\mathrm{min}/2)_i + (R_\mathrm{min}/2)_j`, both transferable
+        - :math:`\max\big(1.32\times10^{-4}\ \text{kcal/mol},\;
+          s_\mathrm{IDR}\,\varepsilon_\mathrm{BT}\big)` — the **same** rule
 
-   The disordered radius is the **transferable** per-amino-acid value
-   :math:`r_\mathrm{vdw} = (R_\mathrm{min}/2)_\text{table}/2^{1/6}`, because a
+   The disordered radius is the **transferable** per-amino-acid
+   :math:`R_\mathrm{min}/2` read straight from the parameter table, because a
    Karanicolas–Brooks radius measured from coordinates is meaningless for a
    residue whose coordinates are not its native ones — see
-   :ref:`theory-rmin2-transferable`. So a disordered residue always **loses its
-   native contact**, and only an IDR–IDR pair can regain attraction, through the
-   generic + sequence-dependent term rather than through the structure.
+   :ref:`theory-rmin2-transferable`. No :math:`2^{1/6}` conversion is applied to the
+   radius array: the ``R`` slot of both functional forms is an
+   :math:`R_\mathrm{min}`, and the conversion
+   :math:`\sigma = 2^{-1/6}R_{ij}` lives inside the IDR force's expression.
+
+   So a disordered residue always **loses its native contact**, and what it regains
+   is the sequence-dependent :math:`s_\mathrm{IDR}\varepsilon_\mathrm{BT}` term —
+   with **any** partner, ordered or disordered alike, since the depth depends on the
+   two residue *types* and not on which region each sits in.
+
+   .. note::
+
+      The last two classes are evaluated by a **second force** with a different
+      functional form (an Ashbaugh–Hatch 12-6, no desolvation barrier, repulsive core
+      decoupled from well depth), on interaction groups disjoint from the 12-10-6's.
+      See :ref:`idr-ashbaugh-hatch`.
 
    All four classes are stored in the **same** ``rmin_matrix`` / ``energy_matrix``
    and evaluated by a **single** ``CustomNonbondedForce`` — every distinction
@@ -664,10 +689,9 @@ different, and the distinction is the single most common source of confusion:
 
   - **rigid scenery beads** — the ribosome's RNA (P/R/BR) and ribosomal-protein
     beads in continuous synthesis (:func:`topo.csp.ribosome.load_ribosome`);
-  - **disordered (IDR) beads** — a residue in a ``disordered:`` region gets the
-    transferable radius
-    :math:`r_\mathrm{vdw} = (R_\mathrm{min}/2)_{\text{table}}\,/\,2^{1/6}`
-    built from its ``Rmin_2`` entry, instead of a structure-derived one (see
+  - **disordered (IDR) beads** — a residue in a ``disordered:`` region gets its
+    ``Rmin_2`` table entry **directly** as its :math:`R_\mathrm{min}/2`, instead of
+    a structure-derived one, so both bead classes carry the same quantity (see
     :doc:`disordered_regions`);
   - as the **fallback** per-bead radius for a nascent chain when no
     structure-derived array is supplied ("Option B" in :mod:`topo.csp.ribosome`).
@@ -683,10 +707,11 @@ different, and the distinction is the single most common source of confusion:
   structure-based rather than transferable.
 
   A consequence worth stating: in a **multi-domain protein with IDRs**, the two
-  conventions coexist inside one chain. Folded beads keep their K-B radii; IDR
-  beads take the transferable :math:`r_\mathrm{vdw}`; a folded–IDR cross pair is
-  placed at
-  :math:`R_{ij} = (R_\mathrm{min}/2)_\mathrm{folded} + r_\mathrm{vdw}^\mathrm{IDR}`.
+  *sources* coexist inside one chain — but not two conventions. Folded beads keep
+  their structure-derived K-B :math:`R_\mathrm{min}/2`; IDR beads take the
+  transferable per-AA :math:`R_\mathrm{min}/2`. Both are the same quantity, so every
+  pair, cross pairs included, combines by the plain sum rule
+  :math:`R_{ij} = (R_\mathrm{min}/2)_i + (R_\mathrm{min}/2)_j`.
 
 The transferable values **are** also used by the **inter-chain**
 ribosome–nascent-chain excluded-volume term in protein synthesis
