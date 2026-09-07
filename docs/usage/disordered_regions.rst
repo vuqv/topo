@@ -1,700 +1,1018 @@
-Disordered / IDR regions
-========================
+Disordered regions and intrinsically disordered proteins
+========================================================
 
-TOPO can mark part (or all) of a chain as an **intrinsically disordered region
-(IDR)** — a stretch with no stable fold. A disordered region is declared as an
-optional ``disordered:`` section **inside the same** :doc:`domain_def file
-<domain_definition>` you already pass through ``domain_def``; there is no
-separate file, argument, or INI key. This page explains **how the model treats a
-disordered region** (the physics) and **how you define one** (the YAML).
+TOPO can treat part of a chain as an **intrinsically disordered region (IDR)** or
+an entire chain as an **intrinsically disordered protein (IDP)**. An IDR is
+declared in the optional ``disordered:`` section of the same domain-definition
+YAML file supplied through ``domain_def``. No separate file, argument, or INI key
+is required.
+
+This page explains:
+
+- how to declare an IDR;
+- what changes in the coarse-grained model;
+- why TOPO uses an Ashbaugh–Hatch 12–6 interaction for IDR-involving pairs;
+- how ``idr_scale`` and ``eps_ev_kj`` affect the ensemble;
+- how IDRs affect native-contact analysis, stability optimization, and
+  continuous synthesis.
 
 .. note::
+   **Scope.** This treatment applies only to TOPO's Cα model. It is implemented by
+   :func:`topo.utils.nonbonded.apply_disorder` at the end of the
+   nonbonded build. The same ``disordered:`` declaration is used automatically by
+   isolated-protein simulations, native-contact (Q) analysis, the ``nscale``
+   optimizer, and continuous synthesis (CSP).
 
-   **Scope.** This is the α-carbon (Cα) model only. The disordered treatment is
-   applied by :func:`topo.utils.nonbonded.apply_disorder` at the end of the
-   non-bonded build, and is picked up automatically by isolated-protein
-   simulations, the native-contact (Q) analysis, the nscale optimizer, and
-   continuous synthesis (CSP) — all from the one ``disordered:`` section.
+Quick start
+-----------
 
+Add a ``disordered:`` block to the domain-definition file:
 
-The idea in one paragraph
--------------------------
+.. code:: yaml
 
-In TOPO the local backbone (3.81 Å bonds, the double-well transferable angle, and
-the Karanicolas transferable dihedral) is **already** the disorder-appropriate,
-non-Gō backbone for *every* residue — see :doc:`model_theory`. What makes a
-residue in a folded domain *folded* is therefore **only** its native (Gō) contacts. Marking a
-region disordered means: **remove its native contacts** and replace them with a
-weak, non-specific attraction, while keeping self-avoidance. Bonds, angles,
-dihedrals and electrostatics are untouched; what changes is the contact term, and
-only for pairs that touch a disordered residue — those move to a **second**
-``CustomNonbondedForce`` with a different functional form (below), leaving
-folded–folded pairs on the Gō 12-10-6 exactly as before.
+   n_residues: 283
 
+   intra_domains:
+     A: {residues: [25-149], nscale: 1.0}
+     B: {residues: [150-283], nscale: 1.0}
+   inter_domains:
+     A-B: 0.5
 
-How a disordered region is treated in the model
------------------------------------------------
+   disordered:
+     residues: [1-24, 150-165]
+     idr_scale: 0.10
+     eps_ev_kj: 0.8368
 
-Every residue **pair** falls into exactly one of three classes, decided by how
-many of its two residues are in the disorder mask. The class fixes the pair's well
-**depth**, its well **position**, *and* — unlike a purely folded build — **which of
-two forces evaluates it**:
+The defaults are:
 
-.. list-table::
-   :header-rows: 1
-   :widths: 16 16 14 30 24
+.. code:: yaml
 
-   * - Pair class
-     - Force
-     - Native (Gō) contacts
-     - Well depth :math:`\varepsilon_{ij}`
-     - Well position :math:`R_{ij}`
-   * - **folded–folded**
-       (neither residue in the mask)
-     - 12-10-6 (:ref:`theory-contacts`)
-     - kept (Gō)
-     - unchanged — H-bond + backbone–sidechain + scaled sidechain–sidechain,
-       else the non-native floor
-     - native Cα distance, else the Karanicolas–Brooks (K–B) sum rule
-   * - **IDR–IDR**
-       (both residues in the mask)
-     - Ashbaugh–Hatch 12-6
-     - removed
-     - :math:`\max\!\bigl(\varepsilon_\mathrm{NN},\
-       s_\mathrm{IDR}\,\varepsilon_\mathrm{BT}\bigr)` (defined below)
-     - :math:`R_\mathrm{min}/2 + R_\mathrm{min}/2` (sum rule)
-   * - **folded–IDR**
-       (exactly one residue in the mask)
-     - Ashbaugh–Hatch 12-6
-     - removed
-     - :math:`\max\!\bigl(\varepsilon_\mathrm{NN},\
-       s_\mathrm{IDR}\,\varepsilon_\mathrm{BT}\bigr)` — **the same rule as
-       IDR–IDR**
-     - :math:`R_\mathrm{min}/2 + R_\mathrm{min}/2` (sum rule)
+   idr_scale: 0.10
+   eps_ev_kj: 0.8368
 
-The two forces carry **disjoint interaction groups** — the 12-10-6 gets
-``{folded} × {folded}``, the Ashbaugh–Hatch force gets ``{idr} × {idr}`` and
-``{idr} × {folded}`` — so every pair is evaluated exactly once. (OpenMM sums forces
-independently and takes the *union* of a force's interaction groups, so a pair
-admitted to both would silently receive both potentials, added together, with no
-error raised. Each force's groups are therefore set once, by the code that creates
-it, and never widened afterwards.)
+Use these defaults unless you have experimental information that supports
+recalibration for your system.
 
-Above, :math:`s_\mathrm{IDR}` is the ``idr_scale`` knob,
-:math:`\varepsilon_\mathrm{NN}` is the non-native floor
-(:math:`1.32\times10^{-4}` kcal/mol), and :math:`\varepsilon_\mathrm{BT}(i,j)` is
-the **sidechain–sidechain BT interaction energy** for the two residue types — the
-*same* per-pair energy the model uses for native SS contacts, namely
+Declaring a residue disordered has one central consequence:
 
-.. math::
+   Its native Gō contacts are removed and replaced by weak,
+   sequence-dependent, non-native interactions, while excluded volume and the
+   transferable backbone remain active.
 
-   \varepsilon_\mathrm{BT}(i,j) \;=\; 4.184 \cdot
-   \bigl|\,\mathrm{raw}(i,j) - 0.6\,\bigr| \quad\text{[kJ/mol]},
+Bonds, angles, dihedrals, and electrostatics are not changed.
 
-i.e. the raw ``bt_potential.csv`` value shifted by the 0.6 kcal/mol reference,
-made positive with :math:`|\cdot|`, and converted kcal→kJ (this is exactly
-:func:`topo.utils.nonbonded.get_ss_interaction_energy`) — **not** the bare CSV
-number.
+Physical picture
+----------------
 
-**Depth — one channel, one rule.** Every non-local pair that touches a disordered
-residue gets
+An IDR model must represent two distinct physical properties:
 
-.. math::
+1. **Excluded volume:** every residue has a finite size, so two beads cannot
+   occupy the same space.
+2. **Residue-dependent attraction:** different residue pairs can have different
+   weak tendencies to associate.
 
-   \varepsilon_{ij}^\mathrm{IDR} \;=\; \max\!\bigl(\varepsilon_\mathrm{NN},\;
-   s_\mathrm{IDR}\,\varepsilon_\mathrm{BT}(i,j)\bigr)
+A useful analogy is a solid ball with an adjustable sticky surface. The hardness
+and size of the ball determine whether particles can overlap; the surface
+stickiness determines how strongly they attract after approaching one another.
 
-:math:`\varepsilon_\mathrm{BT}(i,j)` carries the **sequence dependence**. It is
-*non-specific in coverage* (it acts on every non-local IDR–IDR pair, not just
-would-be native contacts) but *chemically heterogeneous in depth* — the BT energy
-varies by residue-pair type, so a hydrophobic pair attracts more strongly than a
-polar one. ``idr_scale`` (:math:`s_\mathrm{IDR}`) scales it, and is the single
-solvent-quality dial: raising it lowers the scaling exponent :math:`\nu`.
+For IDRs, these properties should be tunable independently. A polar pair may be
+only weakly attractive, but its beads must not become smaller or easier to
+overlap. Conversely, strengthening hydrophobic attraction should not
+simultaneously inflate the repulsive core.
 
-The **same rule applies to folded–IDR cross pairs**: the depth is a property of the
-two *residue types*, not of which region each one sits in. A hydrophobic IDR bead
-near a hydrophobic surface bead attracts for exactly the reason it would inside the
-IDR, so there is no branch on region anywhere in the depth expression. This is also
-what dedicated IDP force fields do — HPS/Dignon draw no folded/disordered
-distinction at all. The practical consequence is that a disordered tail can
-**adsorb onto its own folded core** rather than only sampling free solution.
+This separation is particularly important for IDPs. Unlike a folded protein,
+an IDP has no single native structure stabilized by a fixed contact network. Its
+dimensions emerge from a delicate balance among:
 
-.. warning::
+- excluded volume;
+- weak residue–residue attraction;
+- electrostatic attraction and repulsion;
+- backbone conformational entropy;
+- solvent-mediated effects.
 
-   **The cross-pair depth is an extrapolation of the calibration, not a result of
-   it.** ``idr_scale = 0.10`` was fitted on **fully-IDP** chains
-   (:ref:`idr-validation`), where every pair is IDR–IDR — folded–IDR pairs never
-   entered the benchmark. Applying the same scale across the boundary is a modelling
-   choice the SAXS data cannot confirm. If a tail in your system collapses onto its
-   domain more than you can justify, that is the parameter to question first; and if
-   you want the tail to behave as a purely entropic linker, ``idr_scale: 0`` still
-   gives excluded volume only.
+Small changes in that balance can move an ensemble from expanded to compact.
 
-Physically this is a weak, non-fold-encoding attraction — a collapsing
-self-avoiding chain, **not** a Gō fold. The :math:`\max(\varepsilon_\mathrm{NN},
-\cdot)` floor keeps a nominal depth even at ``idr_scale = 0`` (and for the handful of
-pairs whose :math:`\varepsilon_\mathrm{BT}\approx 0`); the *excluded volume* itself
-comes from ``eps_ev_kj``, independently, as the next section explains.
+What marking a region as disordered changes
+-------------------------------------------
 
+TOPO already uses a transferable, non-Gō local backbone for every residue:
+
+- 3.81 Å bonds;
+- a double-well transferable angle potential;
+- the Karanicolas transferable dihedral potential.
+
+Folded structure is encoded through native Gō contacts. Marking a region
+disordered therefore removes every native contact involving that region and
+replaces it with a weak interaction that does not encode a particular fold.
+
+Every nonlocal residue pair belongs to one of three classes:
+
++---------------+----------------+-------------+-----------------------------+--------------------+
+| Pair class    | Nonbonded      | Native      | Well depth                  | Well position      |
+|               | potential      | contacts    |                             |                    |
++===============+================+=============+=============================+====================+
+| Folded–folded | Gō 12–10–6     | Retained    | Existing native-contact     | Native Cα          |
+|               |                |             | energy, or the non-native   | distance, or the   |
+|               |                |             | floor                       | Karanicolas–Brooks |
+|               |                |             |                             | sum rule           |
++---------------+----------------+-------------+-----------------------------+--------------------+
+| IDR–IDR       | Ashbaugh–Hatch | Removed     | ``max(εNN, sIDR εBT(i,j))`` | Sum of the two     |
+|               | 12–6           |             |                             | residue radii      |
++---------------+----------------+-------------+-----------------------------+--------------------+
+| Folded–IDR    | Ashbaugh–Hatch | Removed     | Same rule as IDR–IDR        | Sum of the folded  |
+|               | 12–6           |             |                             | and IDR residue    |
+|               |                |             |                             | radii              |
++---------------+----------------+-------------+-----------------------------+--------------------+
+
+The two potentials act on disjoint OpenMM interaction groups:
+
+- the 12–10–6 force evaluates ``{folded} × {folded}``;
+- the Ashbaugh–Hatch force evaluates ``{idr} × {idr}`` and
+  ``{idr} × {folded}``.
+
+Consequently, each pair is evaluated exactly once. This is important because
+OpenMM takes the union of a force’s interaction groups. If the same pair were
+admitted to both forces, OpenMM would add both potentials without raising an
+error.
 
 .. _idr-ashbaugh-hatch:
 
-The IDR functional form — and why it is not the 12-10-6
+How IDR-involving pairs interact: the current AH–LJ form
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-With :math:`L(r) = 4\bigl[(\sigma/r)^{12} - (\sigma/r)^{6}\bigr]` and
-:math:`\sigma = 2^{-1/6} R_{ij}`, an IDR-involving pair is evaluated by an
-**Ashbaugh–Hatch** split:
+Define the dimensionless Lennard–Jones shape
 
 .. math::
 
-   U_{ij}(r) = \begin{cases}
-     \varepsilon_\mathrm{EV}\, L(r) + (\varepsilon_\mathrm{EV} -
-       \varepsilon_{ij}), & r \le R_{ij}\\
-     \varepsilon_{ij}\, L(r), & r > R_{ij}
+
+   L(r)=4\left[
+   \left(\frac{\sigma}{r}\right)^{12}
+   -
+   \left(\frac{\sigma}{r}\right)^6
+   \right],
+
+with
+
+.. math::
+
+
+   \sigma=2^{-1/6}R_{ij}.
+
+The minimum of :math:`L(r)` is therefore at :math:`r=R_{ij}`, where
+:math:`L(R_{ij})=-1`. TOPO evaluates every IDR–IDR and folded–IDR pair with
+
+.. math::
+
+
+   U_{ij}(r)=
+   \begin{cases}
+   \varepsilon_{\mathrm{EV}}L(r)
+   +\left(\varepsilon_{\mathrm{EV}}-\varepsilon_{ij}\right),
+   & r\le R_{ij},\\[4pt]
+   \varepsilon_{ij}L(r),
+   & r>R_{ij}.
    \end{cases}
 
-The minimum sits at :math:`r = R_{ij}` with depth exactly
-:math:`-\varepsilon_{ij}` for any :math:`\varepsilon_\mathrm{EV}`, and the join is
-:math:`C^1`. So :math:`\varepsilon_\mathrm{EV}` (``eps_ev_kj``) sets the
-**repulsive core** and :math:`\varepsilon_{ij}` sets the **well depth**,
-independently — the whole point of the form.
+The three quantities have separate roles:
 
-The Gō 12-10-6 cannot express this, for two separate reasons. Both matter; fixing
-either alone is not enough.
+- :math:`R_{ij}` sets the geometric length scale and the minimum-energy separation;
+- :math:`\varepsilon_{\mathrm{EV}}` (``eps_ev_kj``) controls the energetic hardness of
+  the repulsive core—that is, the energy penalty for bead overlap;
+- :math:`\varepsilon_{ij}` controls the residue-pair-specific attractive well depth,
+  or bead “stickiness.”
 
-**1. One** :math:`\varepsilon` **scales both the wall and the well.** In
-:math:`U = \varepsilon\,[13(R/r)^{12} - 18(R/r)^{10} + 4(R/r)^{6}]` the same
-:math:`\varepsilon` multiplies the repulsive :math:`r^{-12}` term and the
-attractive well, so there is no way to ask for "more attraction at the same bead
-size". Measuring the core as the radius where :math:`U = +k_BT`, switching on *any*
-attraction moves it from **0.58 R to ~0.91 R** — a 56 % increase in radius, ~3.7×
-in excluded volume — to buy a well shallower than :math:`k_BT`. The excluded-volume
-gain dominates and the chain **expands** when attraction is added. Under the
-Ashbaugh–Hatch split the core moves only 0.846 R → 0.819 R (3.2 %) as
-:math:`\varepsilon_{ij}` runs 0 → 2 kJ/mol, and that residual runs the *benign* way
-— more attraction slightly **softens** the core.
-
-**2. The 12-10-6 carries a desolvation barrier.** Its coefficients
-:math:`(13, -18, +4)` place a repulsive bump **beyond** the well: the shape
-function crosses zero at :math:`1.25 R` and peaks at :math:`1.45 R` at
-:math:`+0.143\,\varepsilon`, so a pair must climb :math:`0.143\,\varepsilon`
-before it can reach the well. That barrier is deliberate and physically right **for
-a native contact** — forming one requires expelling the solvent between two
-residues, a real free-energy barrier, and it is what gives Gō models their
-two-state contact kinetics. Between two *disordered* residues there is no native
-contact and no desolvation event to represent. Worse, sitting at larger :math:`r`
-it carries more :math:`4\pi r^2` weight in the second virial coefficient
-:math:`B_2 = -\tfrac12\int (e^{-U/k_BT} - 1)\,4\pi r^2\,dr` than the well does,
-so it holds the θ point (:math:`B_2 = 0`) at **1.94** :math:`k_BT` where a 12-6 puts
-it at **0.35** :math:`k_BT`:
-
-.. list-table::
-   :header-rows: 1
-   :widths: 34 33 33
-
-   * - :math:`\varepsilon_\mathrm{att}` (kJ/mol)
-     - :math:`B_2/\mathrm{hs}` — 12-10-6 split
-     - :math:`B_2/\mathrm{hs}` — 12-6 Ashbaugh–Hatch
-   * - 0.0
-     - 0.832
-     - 0.744
-   * - 1.0
-     - 0.967
-     - −0.109
-   * - 2.0
-     - 0.993
-     - −1.169
-   * - 3.0
-     - 0.869
-     - −2.516
-   * - **θ point** (:math:`B_2 = 0`)
-     - **4.84 kJ/mol (1.94** :math:`k_BT` **)**
-     - **0.88 kJ/mol (0.35** :math:`k_BT` **)**
-
-With the barrier, :math:`B_2` *rises* up to :math:`\varepsilon_\mathrm{att}
-\approx 1.5` — adding attraction makes the chain **more** swollen. Without it,
-:math:`B_2` falls monotonically from the first increment, which the BT table reaches
-at :math:`s_\mathrm{IDR} \approx 0.32`.
-
-This prediction was tested, and it is directional: under the coupled 12-10-6,
-:math:`\nu` **rose** with ``idr_scale`` (0.605 → 0.723 across 0 → 1); under the
-Ashbaugh–Hatch 12-6 it **falls** (0.637 → 0.276 across 0 → 0.30), sweeping through
-the experimental 0.551 and out the other side into collapse. Same benchmark, same
-proteins, opposite sign — the functional form, not the parameter value, was the
-defect.
-
-A plain 12-6 with a single :math:`\varepsilon` would re-introduce defect 1. The
-Ashbaugh–Hatch construction splits the potential *at its minimum*, holding the
-repulsive branch fixed and scaling only the attractive branch, which is exactly the
-separation required — and it yields a clean WCA limit at :math:`\varepsilon_{ij} =
-0`: a purely repulsive bead of **physical** size, so "no attraction" and "no
-excluded volume" finally become independent statements. This is the standard form
-in dedicated IDP force fields (HPS/Dignon, Ashbaugh–Hatch), and it is *why* the
-hydropathy parameter behaves as a solvent-quality dial there.
-
-**Folded–folded pairs keep the 12-10-6, barrier and all**, because there the
-barrier is doing the job it was designed for. The change is scoped precisely to
-pairs where a native contact does not exist.
-
-.. note::
-
-   **The depth carries no nscale factor.** The IDR depth uses the
-   :math:`\varepsilon_\mathrm{BT}` matrix above (unscaled by any domain factor),
-   **not** the domain-scaled sidechain energy. In TOPO ``nscale`` is the per-domain
-   folding-**stability** ladder (:doc:`stability_optimization`); an IDR has no fold and
-   no stability target, so it does not inherit a ladder value (effectively
-   ``nscale = 1`` for IDR pairs).
-
-   So at ``idr_scale = 1.0`` an IDR–IDR pair would get a sequence-dependent
-   attraction equal to **the unscaled (nscale = 1) sidechain–sidechain interaction
-   energy** that the *same pair of residue types* carries as a native contact —
-   :math:`\langle\varepsilon_\mathrm{BT}\rangle \approx 2.36` kJ/mol. That is far
-   past the θ point; the calibrated default is ``idr_scale = 0.10``, i.e. ~10 % of a
-   native sidechain contact. Read it against the **raw** SS energy, not against a
-   folded domain's contacts: a real domain additionally scales its SS contacts by
-   its own ``nscale`` (typically > 1), so relative to *that* the IDR attraction is
-   weaker still.
-
-**Position — the excluded-volume radius.** The collision radius is a property of
-the **residue**. For a residue in an IDR region the structure-derived K–B radius is
-meaningless (its input coordinates do not define a fold), so those residues take the
-**transferable per-AA** :math:`R_\mathrm{min}/2` from the parameter table. Residues
-in folded domains keep their K–B :math:`R_\mathrm{min}/2` unchanged. Both
-populations therefore carry the **same quantity**, and every pair combines by the
-plain sum rule:
+The additive term
+:math:`\left(\varepsilon_{\mathrm{EV}}-\varepsilon_{ij}\right)` in the repulsive
+branch makes the potential continuous at :math:`R_{ij}`. Because :math:`L(R_{ij})=-1`,
 
 .. math::
 
-   R_{ij} = R_\mathrm{min}/2_i + R_\mathrm{min}/2_j
-   \qquad\text{for every pair class, cross pairs included.}
+
+   \begin{aligned}
+   U_{ij}(R_{ij}^{-})
+   &=-\varepsilon_{\mathrm{EV}}
+     +\left(\varepsilon_{\mathrm{EV}}-\varepsilon_{ij}\right)
+     =-\varepsilon_{ij},\\
+   U_{ij}(R_{ij}^{+})
+   &=-\varepsilon_{ij}.
+   \end{aligned}
+
+Without this additive term, the two branches would meet at
+:math:`-\varepsilon_{\mathrm{EV}}` and :math:`-\varepsilon_{ij}` and would generally be
+discontinuous. The force is also continuous: :math:`R_{ij}` is the minimum of
+:math:`L(r)`, so :math:`\mathrm{d}L/\mathrm{d}r=0` there, and the additive constant has
+zero derivative.
+
+This construction **largely decouples bead size and hardness from bead
+attraction**. :math:`R_{ij}` sets where the core is located,
+:math:`\varepsilon_{\mathrm{EV}}` sets how energetically difficult it is to push two
+beads into that core, and :math:`\varepsilon_{ij}` sets how strongly the beads attract
+outside the minimum. Thus, residue-pair attraction can be tuned without using
+the same parameter to rescale the repulsive wall. The decoupling is not
+mathematically perfect if bead size is defined through an energy-dependent
+effective-core criterion, but it is the main practical advantage of the AH
+split.
+
+Thus, marking a residue as disordered gives every nonlocal pair involving that
+residue a finite excluded-volume core and a sequence-dependent attractive well,
+without encoding a native contact.
+
+Why Ashbaugh–Hatch LJ is appropriate for IDRs
+---------------------------------------------
+
+The AH construction splits the potential at its minimum. The repulsive branch
+uses :math:`\varepsilon_{\mathrm{EV}}`, whereas the attractive branch uses the
+pair-specific :math:`\varepsilon_{ij}`. Consequently, TOPO can change residue
+stickiness without using the same parameter to rescale the repulsive wall.
+
+In conventional Ashbaugh–Hatch notation, the pair stickiness can be written as
+
+.. math::
+
+
+   \lambda_{ij}=\frac{\varepsilon_{ij}}
+   {\varepsilon_{\mathrm{EV}}}.
+
+Two useful limits follow:
+
+- If :math:`\varepsilon_{ij}=0`, the mathematical expression becomes a WCA-like
+  repulsive core with zero energy for :math:`r>R_{ij}`.
+- If :math:`\varepsilon_{ij}=\varepsilon_{\mathrm{EV}}`, it becomes ordinary LJ
+  12–6.
+
+In the actual TOPO parameterization, the non-native energy floor means that
+``idr_scale: 0`` leaves a very small residual well rather than producing the exact
+:math:`\varepsilon_{ij}=0` mathematical limit. It is therefore best described as an
+**approximately self-avoiding or WCA-like reference**, not a strictly pure WCA
+chain.
+
+Under this split, varying :math:`\varepsilon_{ij}` from 0 to 2 kJ/mol moves the
+:math:`U(r)=k_BT` core only from approximately :math:`0.846R` to :math:`0.819R`. The attraction
+changes strongly while the effective bead size changes by only about 3.2%.
+
+Why IDR pairs do not use TOPO’s Gō 12–10–6 potential
+----------------------------------------------------
+
+TOPO’s folded-contact potential is
+
+.. math::
+
+
+   U_{12-10-6}(r)
+   =
+   \varepsilon\left[
+   13\left(\frac{R}{r}\right)^{12}
+   -18\left(\frac{R}{r}\right)^{10}
+   +4\left(\frac{R}{r}\right)^6
+   \right].
+
+It has a minimum of :math:`-\varepsilon` at :math:`r=R`. This form remains appropriate for
+TOPO’s folded native-contact model, but it has two undesirable properties when
+applied to every nonlocal IDR pair.
+
+1. The repulsive core and attractive well are coupled
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The same parameter :math:`\varepsilon` multiplies the entire potential. Increasing
+:math:`\varepsilon` therefore changes both:
+
+- the attractive well;
+- the energetic repulsive wall.
+
+Thus, the model cannot request “stronger attraction with the same excluded
+volume.” A parameter intended to describe residue stickiness would also alter the
+distance at which the repulsive energy becomes comparable with :math:`k_BT`. This makes
+it difficult to interpret that parameter as a clean solvent-quality control: an
+observed change in chain dimensions could arise from stronger attraction, altered
+excluded volume, or both.
+
+2. This particular 12–10–6 form has an outer repulsive barrier
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The coefficients :math:`(13,-18,+4)` produce more than a contact minimum. They also
+produce a positive bump outside the minimum:
+
+- the potential crosses zero near :math:`1.25R`;
+- it reaches a local maximum near :math:`1.45R`;
+- the maximum is approximately :math:`+0.143\varepsilon`.
+
+A pair approaching from large separation must cross this bump before entering
+the contact well.
+
+Such a barrier can be useful as an effective description within a
+native-contact model. However, it is not automatically justified as the same
+isotropic barrier for every pair involving an IDR residue. IDR residues still
+reorganize and displace solvent when they associate; the narrower claim is that
+they do not possess the predefined native-contact event for which TOPO’s Gō
+barrier was parameterized.
+
+The barrier is also important thermodynamically because it occupies a larger
+shell of space than the short-range contact well. It can therefore strongly
+affect the net balance between attraction and repulsion, as described below
+using the second virial coefficient.
+
+   **The name “12–10–6” does not itself guarantee a barrier.**
+
+   The barrier arises from the particular signs and coefficients used by TOPO.
+   Other potentials described as 12–10–6 may have different shapes.
+
+Why ordinary Lennard–Jones 12–6 is not sufficient
+-------------------------------------------------
+
+The ordinary Lennard–Jones potential is
+
+.. math::
+
+
+   U_{\mathrm{LJ}}(r)
+   =
+   4\varepsilon
+   \left[
+   \left(\frac{\sigma}{r}\right)^{12}
+   -
+   \left(\frac{\sigma}{r}\right)^6
+   \right].
+
+It has no outer barrier. Its minimum occurs at
+
+.. math::
+
+
+   r_{\min}=2^{1/6}\sigma.
+
+Replacing the 12–10–6 potential with ordinary LJ would remove the barrier, but
+it would not solve the coupling problem. The same :math:`\varepsilon` scales both the
+repulsive term, :math:`4\varepsilon(\sigma/r)^{12}`, and the attractive term,
+:math:`-4\varepsilon(\sigma/r)^6`. Therefore, making a residue pair more attractive
+by increasing :math:`\varepsilon` simultaneously makes close bead overlap more
+energetically costly. Although :math:`\sigma` and the zero-crossing distance remain
+fixed, the distance at which the repulsive energy reaches a thermal scale such
+as :math:`k_BT` changes. Ordinary LJ therefore does not provide an independent
+“stickiness” parameter at fixed energetic core hardness.
+
+AH-LJ supplies this missing control by using two energy scales. The inner branch
+is governed primarily by :math:`\varepsilon_{\mathrm{EV}}`, whereas the attractive
+well depth is :math:`\varepsilon_{ij}`. Consequently, the residue-specific
+:math:`\varepsilon_{ij}` values can tune solvent quality and sequence-dependent
+attraction without proportionally rescaling the repulsive wall. Conversely,
+:math:`\varepsilon_{\mathrm{EV}}` can be chosen to prevent excessive bead overlap
+without forcing every residue pair to have the same attraction strength. This
+separation is especially useful for IDRs because their sequence-dependent
+interactions must vary among residue pairs while their beads should retain a
+comparable excluded-volume core.
+
+The separation is best described as **practical or approximate decoupling**:
+:math:`R_{ij}` fixes the geometric contact scale, but an energy-defined effective core
+can still move slightly when :math:`\varepsilon_{ij}` changes. As shown above, that
+movement is small for the parameter range used here.
+
+The progression is therefore:
+
+.. code:: text
+
+   TOPO Gō 12–10–6
+       ├── couples the repulsive core to the well depth
+       └── contains an outer repulsive barrier
+                       │
+                       │ remove the barrier
+                       ▼
+   Standard LJ 12–6
+       └── still couples the repulsive core to the well depth
+                       │
+                       │ separate the two energy scales
+                       ▼
+   Ashbaugh–Hatch LJ
+
+Thermodynamic interpretation: the second virial coefficient
+-----------------------------------------------------------
+
+Well depth alone does not tell us whether a potential is effectively attractive
+or repulsive. The width and position of every attractive or repulsive region
+also matter. The **second virial coefficient**, :math:`B_2`, summarizes this net
+pairwise effect.
+
+At low concentration, the osmotic pressure can be expanded as
+
+.. math::
+
+
+   \frac{\Pi}{k_BT}=\rho+B_2\rho^2+B_3\rho^3+\cdots,
+
+where :math:`\rho` is the particle number density. An ideal gas has only the first
+term. The :math:`B_2\rho^2` term is the leading correction caused by interactions
+between pairs.
+
+Begin with the non-interacting reference
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+For completely non-interacting particles,
+
+.. math::
+
+
+   U(r)=0
+   \qquad\text{at every }r.
+
+Their osmotic pressure is exactly the ideal-gas result,
+
+.. math::
+
+
+   \frac{\Pi}{k_BT}=\rho,
+
+and there is no pair-interaction correction. Therefore,
+
+.. math::
+
+
+   B_2=0.
+
+This can also be seen directly from the integral below. If :math:`U(r)=0`, then
+:math:`e^{-U(r)/(k_BT)}=1`, so the integrand is zero at every distance.
+
+For a spherically symmetric pair potential,
+
+.. math::
+
+
+   B_2
+   =
+   2\pi\int_0^\infty
+   \left[1-e^{-U(r)/(k_BT)}\right]r^2\,dr.
+
+The sign follows directly from the integrand:
+
+- If :math:`U(r)>0`, the region is repulsive and contributes positively to :math:`B_2`.
+- If :math:`U(r)<0`, the region is attractive and contributes negatively to :math:`B_2`.
+
+Therefore:
+
++----------------+-----------------+-----------------+-------------+-------------------------+
+| Microscopic    | :math:`B_2`     | Solvent regime  | Net pair    | Expected polymer        |
+| situation      |                 |                 | behavior    | tendency                |
++================+=================+=================+=============+=========================+
+| :math:`U(r)=0` | Exactly zero    | Non-interacting | No pair     | Ideal random-walk       |
+| everywhere     |                 | ideal reference | interaction | chain, :math:`\nu=1/2`  |
++----------------+-----------------+-----------------+-------------+-------------------------+
+| Repulsion      | Positive        | **Good          | Effective   | Expanded, self-avoiding |
+| dominates      |                 | solvent**       | excluded    | chain,                  |
+|                |                 |                 | volume      | :math:`\nu\approx0.588` |
++----------------+-----------------+-----------------+-------------+-------------------------+
+| Repulsion and  | Approximately   | **Theta         | Net pair    | Ideal-like large-scale  |
+| attraction     | zero            | solvent**       | interaction | dimensions,             |
+| cancel         |                 |                 | cancels     | :math:`\nu\approx1/2`   |
++----------------+-----------------+-----------------+-------------+-------------------------+
+| Attraction     | Negative        | **Poor          | Net         | Compact chain;          |
+| dominates      |                 | solvent**       | attraction  | approaching             |
+|                |                 |                 |             | :math:`\nu\approx1/3`   |
+|                |                 |                 |             | in the dense-globule    |
+|                |                 |                 |             | limit                   |
++----------------+-----------------+-----------------+-------------+-------------------------+
+
+The non-interacting and theta cases both have :math:`B_2=0`, but they are not
+microscopically identical:
+
+- In a **non-interacting system**, :math:`U(r)=0` and every distance contributes zero.
+- At the **theta condition**, repulsive regions contribute positively and
+  attractive regions contribute negatively, but their total contributions cancel.
+
+The theta chain therefore looks ideal at sufficiently large length scales even
+though its residues still interact locally.
+
+The factor :math:`r^2` counts the volume of the spherical shell at distance :math:`r`.
+Consequently, a modest repulsive barrier at a relatively large distance may
+contribute strongly. Likewise, two potentials with the same minimum depth need
+not have the same :math:`B_2`: a broad shallow attractive well can contribute more
+than a narrow deep well.
+
+For TOPO’s current AH 12–6 parameterization, the attractive energy in this
+calculation is the already defined pair well depth :math:`\varepsilon_{ij}`:
+
+.. math::
+
+
+   \varepsilon_{ij}
+   =
+   \max\left(
+   \varepsilon_{\mathrm{NN}},
+   s_{\mathrm{IDR}}\varepsilon_{\mathrm{BT}}(i,j)
+   \right).
+
+It is the depth of the AH minimum,
+:math:`U_{ij}(R_{ij})=-\varepsilon_{ij}`; it is not an additional model parameter.
+
+The following values were calculated for actual residue pairs from
+``bt_potential.csv``, using ``idr_scale = 0.10``,
+:math:`\varepsilon_{\mathrm{EV}}=0.8368` kJ/mol, and :math:`T=300` K. The pair distance is
+:math:`R_{ij}=R_{\min/2,i}+R_{\min/2,j}`, and the integral includes TOPO’s switching
+region from 1.8 to 2.0 nm. These values describe the AH non-electrostatic term
+only; Debye–Hückel electrostatics are not included.
+
++-----------------+--------------------------+----------------+---------------+-------------------+
+| System or pair  | Pair well depth          | :math:`R_{ij}` | :math:`B_2`   | Interpretation    |
+|                 | :math:`\varepsilon_{ij}` | (nm)           | (nm³)         |                   |
+|                 | (kJ/mol)                 |                |               |                   |
++=================+==========================+================+===============+===================+
+| Non-interacting | —                        | —              | 0             | No pair           |
+| reference,      |                          |                |               | interaction       |
+| :math:`U(r)=0`  |                          |                |               |                   |
++-----------------+--------------------------+----------------+---------------+-------------------+
+| **CYS–CYS**     | **0.81170**              | 0.60613        | **−0.01890**  | Slight net        |
+|                 |                          |                |               | attraction        |
++-----------------+--------------------------+----------------+---------------+-------------------+
+| PHE–MET         | 0.62342                  | 0.69593        | +0.09878      | Repulsion still   |
+|                 |                          |                |               | dominates         |
++-----------------+--------------------------+----------------+---------------+-------------------+
+| TRP–MET         | 0.64434                  | 0.72399        | +0.09907      | Repulsion still   |
+|                 |                          |                |               | dominates         |
++-----------------+--------------------------+----------------+---------------+-------------------+
+| LEU–ASP         | 0.00837                  | 0.65664        | +0.38327      | Very weak         |
+|                 |                          |                |               | attraction;       |
+|                 |                          |                |               | excluded volume   |
+|                 |                          |                |               | dominates         |
++-----------------+--------------------------+----------------+---------------+-------------------+
+| ARG–LYS         | 0.04184                  | 0.72399        | **+0.49337**  | Largest positive  |
+|                 |                          |                |               | non-electrostatic |
+|                 |                          |                |               | :math:`B_2`       |
++-----------------+--------------------------+----------------+---------------+-------------------+
+
+CYS–CYS is the strongest pair because its raw BT value is −1.34 kcal/mol:
+
+.. math::
+
+
+   \varepsilon_{\mathrm{BT}}(\mathrm{CYS,CYS})
+   =4.184\left|-1.34-0.6\right|
+   =8.11696\ \mathrm{kJ/mol},
+
+and therefore
+
+.. math::
+
+
+   \varepsilon_{\mathrm{CYS,CYS}}
+   =0.10\times8.11696
+   =0.811696\ \mathrm{kJ/mol}.
 
 .. note::
+   **Pairwise behavior at the current default parameters.**
 
-   **The radius is an** :math:`R_\mathrm{min}/2` **, not a σ-radius.** The ``R``
-   slot of both the 12-10-6 and the Ashbaugh–Hatch form is an
-   :math:`R_\mathrm{min}`, and :func:`~topo.utils.nonbonded.calculate_rmin_2_values`
-   produces the same quantity for folded beads — so no :math:`2^{1/6}` division is
-   applied when populating the per-residue radius array. The conversion lives inside
-   the IDR force's own expression, where :math:`\sigma = 2^{-1/6} R_{ij}` recovers
-   the van der Waals sum. That is also why the σ values are directly comparable to a
-   published IDP force field: :math:`\sigma = (R_\mathrm{min}/2_i +
-   R_\mathrm{min}/2_j)/2^{1/6}` reproduces the HPS per-residue σ to a mean −0.1 %
-   (max 1.5 %, glycine exact), which is what makes ``eps_ev_kj = 0.8368`` (the HPS
-   value) transferable here by construction.
+   With
+   :math:`\varepsilon_{ij}=\max(\varepsilon_{\mathrm{NN}},
+   0.10\,\varepsilon_{\mathrm{BT}}(i,j))` and
+   :math:`\varepsilon_{\mathrm{EV}}=0.8368` kJ/mol, 209 of the 210 unique amino-acid
+   pair types have positive second virial coefficients. Their values range from
+   :math:`+0.09878` nm³ for PHE–MET to :math:`+0.49337` nm³ for ARG–LYS. CYS–CYS is the only
+   negative pair, with :math:`B_2=-0.01890` nm³.
 
-A residue in a folded domain keeps its *native* radius even when it meets a residue
-in an IDR region — it is not shrunk in cross pairs. Because the override is applied
-to the **per-residue radius array**, the same radius reaches both the intra-chain
-and (for synthesis) the nascent↔ribosome excluded-volume channels — they cannot
-disagree. No new parameter file is shipped.
+Thus, the default does not make every pair attractive. Most pairs remain
+excluded-volume dominated, while the strongest pair is only slightly net
+attractive. The overall behavior of an IDP still depends on the frequencies and
+sequence arrangement of all pair types, electrostatics, bonded terms, and
+collective conformational sampling.
 
-**What does not change.** Bonds, angles, dihedrals, and Yukawa electrostatics are
-untouched (the global transferable backbone is already the disordered-appropriate
-choice). A run with **no** ``disordered:`` section builds the single unrestricted
-12-10-6 exactly as before and is byte-for-byte identical; even *with* a section,
-folded–folded well positions and depths, and the K–B radius of every residue in a
-folded domain, are unchanged to floating-point equality.
+As the AH attraction increases, :math:`B_2` decreases. The interaction therefore moves
+in the expected thermodynamic direction: from excluded-volume-dominated behavior,
+through the theta condition, and then toward net attraction.
+The simulated chain dimensions follow the same trend: :math:`\nu` decreases from 0.637
+at ``idr_scale: 0`` to 0.276 at ``idr_scale: 0.30``, passing through experimentally
+relevant IDP dimensions before reaching the collapsed regime.
 
-.. warning::
+Sequence-dependent well depth
+-----------------------------
 
-   **Declaring an IDR deletes cross-boundary native contacts.** Every native contact
-   with *one* end in the disordered region is removed — intended (a disordered
-   residue's crystal contacts are artifacts) but not free. For the 4c5c tutorial
-   system with residues 1–40 disordered, 88 of 819 contacts go and 34 folded
-   residues lose at least one contact, so the folded remainder is a **less
-   stabilized fold** than the full Gō model. The build prints the count. This is
-   also why you must run the nscale optimizer on the domain_def that already
-   contains the ``disordered:`` section (see below).
+Every nonlocal pair touching a disordered residue receives
+
+.. math::
 
 
-Defining a disordered region in ``domain.yaml``
------------------------------------------------
+   \varepsilon_{ij}^{\mathrm{IDR}}
+   =
+   \max\left(
+   \varepsilon_{\mathrm{NN}},
+   s_{\mathrm{IDR}}\varepsilon_{\mathrm{BT}}(i,j)
+   \right),
 
-Add a ``disordered:`` block to the domain_def file. All three top-level sections
-(``intra_domains``, ``inter_domains``, ``disordered``) are **optional**; only
-``n_residues`` is required.
+where:
 
-.. important::
+- :math:`s_{\mathrm{IDR}}` is ``idr_scale``;
+- :math:`\varepsilon_{\mathrm{NN}}` is the very small non-native floor;
+- :math:`\varepsilon_{\mathrm{BT}}(i,j)` is the sidechain–sidechain BT energy for
+  residue types :math:`i` and :math:`j`.
 
-   **Deciding which residues are disordered.** Choosing the disordered residues is
-   **your responsibility** — TOPO applies exactly the set you list in
-   ``residues:`` and makes no attempt to detect disorder itself. The definition of
-   an IDR is model-dependent, so the ranges you commit to are a modeling choice you
-   should be able to justify. The following are common **sources to inform that
-   decision** (not automatic assignments):
+The BT energy is
 
-   * **MobiDB** (`<https://mobidb.org/>`_) — a database of protein disorder and
-     mobility that aggregates curated and predicted intrinsically disordered
-     regions. Look up your protein by its UniProt accession to see candidate
-     disordered ranges.
-   * **AlphaFold pLDDT < 70** — residues whose AlphaFold per-residue confidence
-     (pLDDT) falls below **70** are a widely used proxy for disorder: low-confidence
-     stretches correspond closely to intrinsically disordered regions. This is the
-     threshold used to define IDRs at proteome scale in Tesei *et al.* [Tesei2024]_.
-     The pLDDT is stored in the B-factor column of the AlphaFold model.
-
-   Both report 1-based residue numbers. Treat them as evidence, reconcile them
-   against your own knowledge of the system, and then enter the ranges **you**
-   decide on into the ``residues:`` list below.
-
-.. code-block:: yaml
-
-    n_residues: 283
-
-    # --- domain scaling of native side-chain contacts (optional, unchanged) ---
-    intra_domains:
-      A: { residues: [25-149],  nscale: 1.0 }
-      B: { residues: [150-283], nscale: 1.0 }
-    inter_domains:
-      A-B: 0.5
-
-    # --- disordered / IDR region (optional) ---
-    disordered:
-      residues: [1-24, 150-165]   # native contacts removed for these residues
-      idr_scale: 0.10             # OPTIONAL, well depth; defaults to 0.10
-      eps_ev_kj: 0.8368           # OPTIONAL, repulsive core (kJ/mol); defaults to 0.8368
-
-The residue-list syntax is exactly the one used everywhere else in the file:
-inclusive ranges as strings (``"1-24"``), bare integers, or a mix
-(``[1, 2, "5-10", 150-165]``). Numbering is 1-based and matches the input PDB.
+.. math::
 
 
-Field reference
-~~~~~~~~~~~~~~~
+   \varepsilon_{\mathrm{BT}}(i,j)
+   =
+   4.184\left|\operatorname{raw}(i,j)-0.6\right|
+   \quad\text{[kJ/mol]}.
 
-.. list-table::
-   :header-rows: 1
-   :widths: 24 12 16 48
+This is the value returned by
+``topo.utils.nonbonded.get_ss_interaction_energy``: the raw
+``bt_potential.csv`` value is shifted by the 0.6 kcal/mol reference, converted to
+an absolute magnitude, and converted from kcal/mol to kJ/mol.
 
-   * - Key
-     - Required?
-     - Type (default)
-     - Meaning / allowed values
-   * - ``disordered``
-     - no
-     - mapping (absent)
-     - Presence of this block turns on the IDR treatment. Omit it entirely for a
-       fully-folded protein (then the run is byte-identical to before).
-   * - ``disordered.residues``
-     - **yes** (if the block is present)
-     - list (—)
-     - Residues to mark disordered. Same syntax as a domain's ``residues``:
-       ranges (``"1-24"``, inclusive), bare integers, or a mix. Their native
-       contacts are removed.
-   * - ``disordered.idr_scale``
-     - no
-     - float (``0.10``)
-     - The scale :math:`s_\mathrm{IDR}` on the sequence-dependent BT channel — i.e.
-       the IDR–IDR **well depth**, and the only compaction knob. **Defaults to
-       0.10**, the calibrated value (:ref:`idr-validation`). Raise it to compact,
-       lower it to expand; ``0`` gives a pure self-avoiding chain. The θ point is at
-       :math:`\approx 0.32` — above that the chain collapses, so treat a value much
-       beyond ~0.3 as suspect. It sets the depth for folded–IDR cross pairs too.
-   * - ``disordered.eps_ev_kj``
-     - no
-     - float (``0.8368``)
-     - The repulsive-core strength :math:`\varepsilon_\mathrm{EV}` (kJ/mol) of the
-       Ashbaugh–Hatch force, independent of the well depth. **Defaults to 0.8368**
-       (0.2 kcal/mol, the HPS/Dignon value). It is a *weak* handle on bead size —
-       the core goes as :math:`\varepsilon_\mathrm{EV}^{1/12}`, so a 100× change
-       moves the bead only ~46 %. If bead size must change, change the radius table.
+The interaction is:
 
+- **nonspecific in coverage**, because it acts on every eligible nonlocal pair
+  rather than only native contacts;
+- **chemically heterogeneous in depth**, because the BT energy depends on the
+  two residue types.
 
-Overlap with a domain is allowed — disorder wins
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Thus, the model can favor hydrophobic contacts more strongly without assigning
+the IDR a predetermined fold.
 
-A ``disordered:`` range **may overlap** an ``intra_domains`` range. The disorder
-transform runs *after* the whole folded build (including domain scaling), so for
-any pair touching a disordered residue the domain ``nscale`` is computed and then
-**discarded** — the pair is governed entirely by the disorder rules. In other
-words: **if either residue of a pair is disordered, disorder governs it**, no
-matter which domains the two residues belong to.
+Folded–IDR cross interactions
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-This makes overlap a convenience — define a domain broadly and carve a disordered
-loop out of it without splitting the domain:
+The same depth rule is used for IDR–IDR and folded–IDR pairs. A disordered tail
+can therefore form transient, sequence-weighted contacts with its folded domain
+and may adsorb onto its surface.
 
-.. code-block:: yaml
+This is a modeling choice rather than a result established by the calibration.
+The default ``idr_scale = 0.10`` was fitted using fully disordered proteins, for
+which every relevant pair was IDR–IDR. Folded–IDR pairs were not represented in
+that benchmark. Excessive adsorption of an IDR onto its folded domain should
+therefore be treated as a model-sensitivity question.
 
-    n_residues: 100
-    intra_domains:
-      A: { residues: [1-100], nscale: 1.6871 }   # one domain over the whole chain ...
-    disordered:
-      residues: [40-50]                           # ... with a disordered loop carved out
+No ``nscale`` factor is applied
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Here residues 40–50 are disordered (their ``nscale`` has no effect); the rest of
-domain A folds as **one unit with a hole**, still joined across the loop by its
-40↔ folded and 50↔ folded backbone bonds and by the retained 1–39 ↔ 51–100
-contacts. The reader prints an **info** line listing any overlapping residues, so
-an accidental double-listing is visible (it is not an error — overlap is legal).
+The IDR well depth uses the unscaled BT energy matrix. It does not inherit a
+folded domain’s ``nscale`` because ``nscale`` is a folding-stability parameter and an
+IDR has no native fold to stabilize.
+
+At ``idr_scale: 1.0``, the IDR attraction equals the unscaled sidechain–sidechain
+BT energy for the same residue-type pair. The mean BT energy is approximately
+2.36 kJ/mol, which is well beyond the AH theta point. The calibrated default
+``idr_scale: 0.10`` is therefore approximately 10% of an unscaled native
+sidechain-contact energy.
+
+Pair distance and radius convention
+-----------------------------------
+
+For an IDR-involving pair,
+
+.. math::
 
 
-Tuning the compaction
----------------------
+   R_{ij}=R_{\min/2,i}+R_{\min/2,j}.
 
-* **The default is calibrated** (``idr_scale = 0.10``) — use it unless you have a
-  specific reason not to. It was fit against SAXS
-  :math:`R_g` for 18 disordered proteins (:ref:`idr-validation`). A chain with
-  no attraction at all systematically **over-expands** most IDPs: SAXS/smFRET place
-  them at scaling exponent :math:`\nu \approx 0.5\text{–}0.55`, versus
-  :math:`\nu \approx 0.588` for a self-avoiding walk. The non-specific attraction
-  reweights the same broad, flexible ensemble toward the observed compaction
-  **without** locking in a fold. Because TOPO's Debye–Hückel electrostatics are
-  always on (a repulsive term for charged chains), the balanced physical picture is
-  *repulsion balanced by weak attraction*.
-* **To tune compaction, move** ``idr_scale``. It is now a true solvent-quality
-  dial: raising it *lowers* :math:`\nu`, as attraction physically should. Do not
-  reach for ``eps_ev_kj`` — that sets bead size, not solvent quality, and is a very
-  weak handle on size at that.
-* **Values above ~0.32 are past the θ point** and give a collapsed globule. If you
-  have carried an ``idr_scale`` over from an older domain_def (the previous default
-  was ``1.0``), delete the key and take the new default, or set ``0.10``. A value
-  someone *fitted* against the old coupled 12-10-6 has no meaning under this force
-  and must be re-fitted.
-* **Self-avoiding is the better call** for: a disordered **linker** whose role is
-  reach / entropic tethering (compaction is not the observable); a **strongly
-  charged, highly expanded** IDP that genuinely approaches self-avoiding-walk
-  statistics; or a deliberately minimal, assumption-free reference ensemble. Set
-  ``idr_scale: 0`` — and note this now gives a self-avoiding chain of *physical*
-  bead size, since ``eps_ev_kj`` still sets the core.
-* **Re-calibrate when you can.** If you have SAXS/smFRET :math:`R_g` or :math:`\nu`
-  for *your* system, treat ``idr_scale`` as the fit parameter.
+An IDR residue uses the transferable amino-acid-specific :math:`R_{\min}/2` from the
+parameter table. A folded residue keeps its structure-derived
+Karanicolas–Brooks :math:`R_{\min}/2`, including when it interacts with an IDR
+residue.
+
+The radius is an :math:`R_{\min}/2` value, not a :math:`\sigma/2` value. TOPO performs the
+conversion inside the AH force:
+
+.. math::
+
+
+   \sigma_{ij}=2^{-1/6}R_{ij}.
+
+No additional :math:`2^{1/6}` conversion should be applied when populating the
+per-residue radius array.
+
+Overriding the per-residue radius, rather than only the pair matrix, also keeps
+the nascent-chain–nascent-chain and nascent-chain–ribosome excluded-volume
+channels consistent during continuous synthesis.
+
+Configuration reference
+-----------------------
+
+All three top-level sections—``intra_domains``, ``inter_domains``, and
+``disordered``—are optional. Only ``n_residues`` is required.
+
++--------------------------+-----------------+-----------------+--------------------+
+| Key                      | Required?       | Type and        | Meaning            |
+|                          |                 | default         |                    |
++==========================+=================+=================+====================+
+| ``disordered``           | No              | Mapping; absent | Enables the IDR    |
+|                          |                 |                 | treatment when     |
+|                          |                 |                 | present.           |
++--------------------------+-----------------+-----------------+--------------------+
+| ``disordered.residues``  | Yes, if         | List            | Residues to treat  |
+|                          | ``disordered``  |                 | as disordered.     |
+|                          | is present      |                 | Native contacts    |
+|                          |                 |                 | involving these    |
+|                          |                 |                 | residues are       |
+|                          |                 |                 | removed.           |
++--------------------------+-----------------+-----------------+--------------------+
+| ``disordered.idr_scale`` | No              | Float; ``0.10`` | Scales the         |
+|                          |                 |                 | sequence-dependent |
+|                          |                 |                 | BT attraction for  |
+|                          |                 |                 | IDR–IDR and        |
+|                          |                 |                 | folded–IDR pairs.  |
+|                          |                 |                 | Increase to favor  |
+|                          |                 |                 | compaction;        |
+|                          |                 |                 | decrease to favor  |
+|                          |                 |                 | expansion.         |
++--------------------------+-----------------+-----------------+--------------------+
+| ``disordered.eps_ev_kj`` | No              | Float;          | Sets the AH        |
+|                          |                 | ``0.8368``      | repulsive-core     |
+|                          |                 |                 | energy in kJ/mol,  |
+|                          |                 |                 | independently of   |
+|                          |                 |                 | the pair well      |
+|                          |                 |                 | depth.             |
++--------------------------+-----------------+-----------------+--------------------+
+
+Residue numbering is one-based and must match the input PDB. Lists may contain
+inclusive ranges, individual integers, or both:
+
+.. code:: yaml
+
+   disordered:
+     residues: [1, 2, 5-10, 150-165]
+
+TOPO applies exactly the residues supplied by the user. It does not predict
+disorder. MobiDB annotations, experimental information, and low AlphaFold pLDDT
+may help identify candidate regions, but the final residue definition remains a
+modeling decision.
+
+Low AlphaFold confidence should not be treated as proof of disorder. When used
+as a practical screening rule, pLDDT below 70 has been used as an IDR proxy at
+proteome scale [1].
+
+Overlap with folded domains: disorder wins
+------------------------------------------
+
+A ``disordered:`` range may overlap an ``intra_domains`` range. The disorder
+transformation runs after the folded nonbonded build. For every pair touching a
+disordered residue, the domain scaling computed earlier in the build is discarded and the
+IDR rule is applied.
+
+.. code:: yaml
+
+   n_residues: 100
+   intra_domains:
+     A: {residues: [1-100], nscale: 1.6871}
+   disordered:
+     residues: [40-50]
+
+Here, residues 40–50 are disordered and their ``nscale`` has no effect. The
+remaining portions of domain A still belong to one domain. The reader prints an
+informational message listing overlapping residues so accidental overlap remains
+visible.
+
+Choosing and tuning ``idr_scale``
+---------------------------------
+
+The calibrated default is
+
+.. code:: yaml
+
+   idr_scale: 0.10
+
+Use it unless system-specific experimental data support another value.
+
+- Increasing ``idr_scale`` strengthens the sequence-dependent attractive well and
+  generally lowers :math:`\nu`, favoring compaction.
+- Decreasing ``idr_scale`` favors expansion.
+- ``idr_scale: 0`` removes the BT-scaled attraction but retains the tiny
+  non-native floor and the excluded-volume core. It is an approximately
+  self-avoiding reference, not a noninteracting ghost chain.
+- ``eps_ev_kj`` is primarily a repulsive-core parameter, not the preferred solvent-
+  quality dial.
+
+The benchmark theta point occurs near ``idr_scale ≈ 0.32``. Values much above 0.3
+therefore enter the collapsed regime for that benchmark and should be justified
+for the system being studied.
+
+A self-avoiding reference may be appropriate for:
+
+- an entropic linker whose reach is more important than its compaction;
+- a strongly charged, highly expanded sequence;
+- a deliberately minimal reference ensemble.
+
+If SAXS, smFRET, or other ensemble measurements are available for the system of
+interest, treat ``idr_scale`` as a parameter to recalibrate rather than assuming
+that the global default is optimal.
+
+Electrostatics must be interpreted separately. TOPO’s Debye–Hückel term can
+favor expansion or compaction depending on charge composition and sequence
+patterning; it is not universally repulsive.
 
 .. _idr-validation:
 
-Validation against SAXS :math:`R_g`
-------------------------------------
+Validation against SAXS radii of gyration
+-----------------------------------------
 
-The default was calibrated and validated on a benchmark of **24 proteins**
-(24–273 residues) with published SAXS radii of gyration, of which **18 are used for
-calibration** and **6 are reported as a control** (see the split below). Each
-protein was simulated as a fully-IDP chain (``residues: [1-N]``) for 90 ns of
-Langevin dynamics at 300 K from an expanded-coil start, discarding the first 15 ns;
-the reported :math:`R_g` is the mass-weighted ensemble average
-:math:`\sqrt{\langle R_g^2\rangle}` over the remaining 75 ns.
+The default was evaluated on 24 proteins of 24–273 residues with published SAXS
+radii of gyration. Eighteen IDPs were used for calibration, and six foldable
+globular proteins were reported separately as controls.
 
-.. important::
+The excluded control proteins were CspTm, R15, R17, hCyp, Protein-L, and sNase.
+Their published :math:`R_g` values describe folded states, so comparing those values
+with fully disordered simulations does not test the IDR model. This
+classification was made from protein identity rather than a label stored in the
+benchmark dataset and should remain visible as a judgment call.
 
-   **The 18/6 split is a judgement, not a datum.** Six of the 24 — **CspTm, R15,
-   R17, hCyp, Protein-L, sNase** — are foldable globular proteins whose published
-   :math:`R_g` is a *folded-state* value. Simulating them as fully disordered chains
-   and comparing to that number measures nothing about the IDR model, so they are
-   excluded from the calibration. That classification is made by protein identity and
-   is **not recorded in the dataset**; if it is wrong for any of them the fitted
-   ``idr_scale`` shifts (including all 24 moved the optimum measurably). The split,
-   its members and its rationale are stated here so the choice is visible and can be
-   revisited, and the 6 are always reported as a control rather than dropped
-   silently.
+Each protein was simulated as a fully disordered chain for 90 ns of Langevin
+dynamics at 300 K, starting from an expanded coil. The first 15 ns were
+discarded. The reported value was the mass-weighted ensemble average
+
+.. math::
+
+
+   \sqrt{\left\langle R_g^2\right\rangle}
+
+over the remaining 75 ns.
 
 .. figure:: img/idr_validation.png
    :width: 100%
-   :alt: TOPO and HPS-Urry radii of gyration versus SAXS for 18 disordered proteins
+   :alt: TOPO and HPS-Urry radii of gyration versus SAXS measurements for 18 intrinsically disordered proteins
 
-   **Left:** TOPO's Cα IDR model at the calibrated defaults ``idr_scale = 0.10``,
-   ``eps_ev_kj = 0.8368`` kJ/mol. **Right:** the HPS-Urry force field on the same 18
-   proteins, as an external reference point. Dashed line is :math:`y = x`; green is
-   the ordinary-least-squares fit; point colour is the fractional deviation. TOPO
-   tracks :math:`y = x` across the range, while HPS-Urry runs systematically compact
-   (blue) and flattens at the expanded end — the slope difference, 0.81 against 0.68.
+   **Left:** TOPO's Cα IDR model at the calibrated defaults
+   ``idr_scale = 0.10`` and ``eps_ev_kj = 0.8368`` kJ/mol. **Right:** the
+   HPS-Urry force field evaluated for the same 18 proteins as an external
+   reference. The dashed line is :math:`y=x`, the green line is the
+   ordinary-least-squares fit, and point color represents fractional deviation.
+   TOPO follows :math:`y=x` more closely across the measured range; its fitted
+   slope is 0.81, compared with 0.68 for HPS-Urry.
 
-Fitting the scaling law :math:`R_g = R_0 N^{\nu}` over the 18 IDPs, at
-``idr_scale = 0.10`` and ``eps_ev_kj = 0.8368``:
+For the 18-IDP calibration set:
 
-.. list-table::
-   :header-rows: 1
-   :widths: 30 14 14 14 14 14
++------------+-------------+-------------+------------+-----------+-----------+
+| Model      | :math:`\nu` | :math:`R_0` | RMS        | Pearson   | OLS slope |
+|            |             |             | fractional | :math:`r` |           |
+|            |             |             | error      |           |           |
++============+=============+=============+============+===========+===========+
+| **TOPO Cα  | **0.566**   | **0.223**   | **12.0%**  | **0.89**  | **0.81**  |
+| IDR**      |             |             |            |           |           |
++------------+-------------+-------------+------------+-----------+-----------+
+| HPS-Urry   | 0.490       | 0.301       | 19.7%      | 0.70      | 0.68      |
+| reference  |             |             |            |           |           |
++------------+-------------+-------------+------------+-----------+-----------+
+| Experiment | 0.551       | 0.244       | —          | —         | —         |
++------------+-------------+-------------+------------+-----------+-----------+
 
-   * - Model
-     - :math:`\nu`
-     - :math:`R_0`
-     - RMS
-     - Pearson *r*
-     - OLS slope
-   * - **TOPO Cα IDR (this model)**
-     - **0.566**
-     - **0.223**
-     - **12.0 %**
-     - **0.89**
-     - **0.81**
-   * - HPS-Urry (reference)
-     - 0.490
-     - 0.301
-     - 19.7 %
-     - 0.70
-     - 0.68
-   * - *experiment*
-     - *0.551*
-     - *0.244*
-     - —
-     - —
-     - —
+The scaling relation was
 
-RMS is the root-mean-square **fractional** deviation
-:math:`\sqrt{\tfrac{1}{N}\sum_i \bigl((R_g^\mathrm{sim} - R_g^\mathrm{exp})/
-R_g^\mathrm{exp}\bigr)^2}`.
-
-The headline result is that :math:`\nu` is **tunable and on target**: ``idr_scale``
-acts as a true solvent-quality dial, sweeping :math:`\nu` from 0.637 at
-``idr_scale = 0`` down through the experimental 0.551 and into collapse (0.276 at
-``idr_scale = 0.30``), so the calibrated 0.10 lands on 0.566. A 3-seed confirmation
-at ``idr_scale = 0.12`` gives :math:`\nu = 0.559 \pm 0.009`. Against HPS-Urry on the
-same 18 proteins, TOPO gives a closer exponent, a lower RMS, a higher
-rank-correlation, and a slope nearer 1 (less compression of the range between
-compact and expanded chains).
-
-.. warning::
-
-   **Read the RMS against the right bar.** 12.0 % is *not* evidence that the model
-   captures sequence-specific differences. The power law is fitted **to** the same
-   data and still leaves a **9.5 %** residual, so a bare :math:`R_g = 0.244\,
-   N^{0.551}` — chain length and nothing else — already explains almost all of it.
-   The model does not yet beat chain length alone. Concretely: three chains at
-   :math:`N = 185` span **36 %** in experiment and **7 %** in the model, in the wrong
-   rank order. Closing that gap is a separate problem, believed to lie in the bonded
-   terms or in charge patterning rather than in the contact channel. Use the model
-   for the *ensemble dimensions* of a disordered region; do not use it to rank two
-   IDPs of similar length against each other.
-
-.. note::
-
-   **folded ↔ IDR attraction is on, and it is the same knob.** A residue in a folded
-   domain and a residue in an IDR region interact through the same
-   :math:`\max(\varepsilon_\mathrm{NN}, s_\mathrm{IDR}\varepsilon_\mathrm{BT})`
-   depth as two IDR residues — transient, non-specific ("fuzzy") IDR–domain
-   association is therefore an active part of the model, not a future extension.
-   What those pairs never get back is a **native contact**: any Gō contact crossing
-   the boundary was deleted with the disorder declaration, so the attraction is
-   sequence-weighted and non-specific, never fold-encoding. To switch it off, set
-   ``idr_scale: 0`` — which switches off the IDR–IDR attraction too, since it is one
-   knob.
-
-.. note::
-
-   **Starting coordinates do not matter.** The equilibrium IDR ensemble is set by
-   the *potential* (no native contacts + flexible backbone + the IDR attraction
-   ``idr_scale``), not
-   by the input geometry. With its native contacts removed, a region initialized
-   from a folded structure relaxes toward the disordered ensemble; discard the
-   initial relaxation in analysis as you would for any MD run. You do **not** need
-   to pre-build an extended-chain PDB for the disordered part.
+.. math::
 
 
-Effect on native-contact analysis (Q) and the nscale optimizer
---------------------------------------------------------------
+   R_g=R_0N^\nu.
 
-The IDR mask reaches **both** of TOPO's native-contact definitions so that they
-stay consistent with the energy function:
+The RMS value is the root-mean-square fractional deviation:
 
-* **Q analysis** (:doc:`native_contacts`,
-  :func:`topo.analysis.native_contacts.build_native_contacts`): any native
-  contact touching a disordered residue is **dropped** from every Q series
-  (``Q_protein``, each ``Q_domain``, and interfaces). If it were kept, those
-  never-forming contacts would sit permanently in the denominator and deflate Q.
-  The Q driver reads the *same* ``disordered:`` section from the domain_def you
-  already pass with ``-d/--domain``.
-* **Effective domain membership = domain − disordered.** A residue listed in both
-  a domain and ``disordered:`` no longer contributes to that domain's Q (nor to
-  any interface Q) — mirroring "disorder wins" on the energy side.
-* **The nscale optimizer** (:doc:`stability_optimization`) optimizes only the
-  **folded domains and their interfaces**; it does **not** optimize the disordered
-  region. The IDR is *present in every round's simulation* (each round builds its
-  energy through ``apply_disorder``, so the disorder is always active), but it is
-  **not a scoring unit and never enters the convergence check** — the optimizer
-  makes no attempt to stabilize it. In this it behaves like the auto-created
-  ``X`` domain (:doc:`domain_definition`): present in the run at a fixed
-  treatment, but left out of the optimization. Disordered residues are governed by
-  ``idr_scale`` and are never assigned an ``nscale``. The masked Q keeps the
-  IDR's (never-forming) contacts out of each folded domain's stability score so
-  they cannot deflate it.
-
-.. important::
-
-   **Optimize with the IDR present.** Because masking a region removes any native
-   contacts it made with a domain, the domain is genuinely *less stable* when the
-   IDR is present. Always run the optimizer on the domain_def that already
-   contains the ``disordered:`` section — do not calibrate on the fully-folded
-   structure and then add disorder afterward.
+.. math::
 
 
-Continuous synthesis (CSP)
---------------------------
+   \sqrt{
+   \frac{1}{N}
+   \sum_i
+   \left(
+   \frac{R_{g,i}^{\mathrm{sim}}-R_{g,i}^{\mathrm{exp}}}
+   {R_{g,i}^{\mathrm{exp}}}
+   \right)^2
+   }.
 
-Continuous synthesis honours a ``disordered:`` section with no extra
-configuration: it already threads ``domain_def`` into the contact build, and the
-disorder mask is **sliced to the emerged chain** at each length (particle ``i`` is
-native residue ``i+1``, so a residue is emerged iff its index is ``< L``). While the
-emerged chain is still inside a disordered N-terminal prefix the 12-10-6's
-interaction group is empty and contributes zero; once folded residues emerge, the
-Ashbaugh–Hatch force carries both ``{idr}×{idr}`` and ``{idr}×{folded}`` groups.
-Because the per-residue radius array is what CSP feeds to both the nascent↔nascent
-pair matrix and the nascent↔ribosome excluded volume, an IDR nascent bead meets the
-ribosome with the correct per-AA radius on both sides. With no ``disordered:``
-section a CSP contact build is byte-identical to before.
+At ``idr_scale: 0.10``, TOPO gave :math:`\nu=0.566`. A three-seed check at
+``idr_scale: 0.12`` gave :math:`\nu=0.559\pm0.009`.
 
-.. note::
+Important limitation
+~~~~~~~~~~~~~~~~~~~~
 
-   **The nascent↔ribosome interaction stays a 12-10-6 for every nascent bead**,
-   disordered or not, at the unchanged ``RIBO_NC_EPS_KJ``. It is a *separate* force
-   created by :func:`topo.csp.ribosome.append_ribosome`, so this holds structurally
-   — there is no ``if disordered`` branch anywhere in that path — and the validated
-   4c5c reproduction is preserved. The consequence is that a disordered bead is on a
-   different footing toward the ribosome than toward the rest of the chain. That is
-   deliberate: the two are different physics, and the nascent↔ribosome parameters
-   are O'Brien's, calibrated as a set.
+The 12.0% RMS deviation does not demonstrate that the model captures detailed
+sequence-specific differences. A power law fitted directly to the same
+experimental data already leaves a 9.5% residual. In addition, three chains of
+length 185 span 36% in experimental :math:`R_g` but only 7% in the model, in the wrong
+rank order.
+
+The model is therefore supported for approximate ensemble dimensions across
+different chain lengths. It should not currently be used to confidently rank
+the dimensions of two IDPs of similar length. The remaining discrepancy may
+involve bonded terms, charge patterning, or other omitted interactions rather
+than only the contact potential.
+
+Effect on native-contact analysis and stability optimization
+------------------------------------------------------------
+
+The IDR mask is applied consistently to the energy function and native-contact
+definitions.
+
+Native-contact Q analysis
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Any native contact touching a disordered residue is removed from:
+
+- ``Q_protein``;
+- every ``Q_domain``;
+- interface-Q calculations.
+
+Otherwise, contacts that cannot form would remain permanently in the
+denominator and artificially lower Q.
+
+Effective domain membership is therefore
+
+.. math::
 
 
-Edge case — a fully disordered protein (IDP)
---------------------------------------------
+   \text{effective domain}=\text{declared domain}-\text{disordered residues}.
 
-If **every** residue is disordered, list them all and omit ``intra_domains``:
+The ``nscale`` optimizer
+~~~~~~~~~~~~~~~~~~~~~~~~
 
-.. code-block:: yaml
+The optimizer evaluates folded domains and their interfaces. The IDR remains
+present and physically active in every simulation round, but it is not a scoring
+unit, does not enter the convergence check, and is never assigned an ``nscale``.
 
-    n_residues: 92
-    disordered:
-      residues: [1-92]
-      # idr_scale / eps_ev_kj omitted -> the calibrated defaults (0.10, 0.8368 kJ/mol)
+Always run the optimizer using the domain-definition file that already contains
+the ``disordered:`` section. Declaring an IDR removes cross-boundary native
+contacts and can therefore alter the stability of the remaining folded domain.
+Optimizing the fully folded model and adding the IDR afterward would optimize a
+different energy function.
 
-This fully-IDP case is exactly the configuration the defaults were validated on
-(:ref:`idr-validation`). The energy build runs normally and is then fully
-overwritten to IDR–IDR everywhere (finite radii, no native contacts) — a valid
-collapsing (or, with **both** knobs at 0, self-avoiding) homopolymer-like chain.
-The Q analysis returns
-an empty contact list (Q = ``NaN``, not a crash), and the nscale optimizer detects
-that there are no foldable contacts and exits cleanly with a
-*"nothing to optimize"* message rather than reporting a vacuous convergence
-(there is genuinely no ``nscale`` to tune).
+Continuous synthesis
+--------------------
 
+CSP uses the same ``disordered:`` section without additional configuration. At
+each nascent-chain length, the full disorder mask is restricted to the residues
+that have emerged.
+
+- Before any folded residue emerges, the folded 12–10–6 interaction group is
+  empty.
+- After folded residues emerge, the AH force evaluates IDR–IDR and folded–IDR
+  pairs, while the Gō force evaluates folded–folded pairs.
+- The per-residue radius array is shared with the nascent-chain–ribosome
+  excluded-volume construction.
+
+The separate nascent-chain–ribosome interaction remains the existing 12–10–6
+form at ``RIBO_NC_EPS_KJ`` for every nascent bead, including disordered beads. This
+preserves the O’Brien ribosome-interaction parameterization. It also means that
+an IDR bead uses different effective interactions toward the ribosome and toward
+the protein chain; users should keep this distinction in mind when interpreting
+nascent-chain behavior.
+
+Fully disordered proteins
+-------------------------
+
+For a fully disordered protein, list every residue and omit ``intra_domains``:
+
+.. code:: yaml
+
+   n_residues: 92
+   disordered:
+     residues: [1-92]
+
+This is the configuration used to calibrate the defaults. All native contacts
+are removed, and all eligible nonlocal pairs use the AH interaction.
+
+The Q analysis returns an empty contact list and Q is ``NaN``. The ``nscale``
+optimizer detects that no foldable native contacts remain and exits with a
+“nothing to optimize” message.
+
+Do not set both ``idr_scale`` and ``eps_ev_kj`` to zero as a way to create a
+self-avoiding chain. Setting ``eps_ev_kj: 0`` removes the intended AH repulsive
+core. To obtain the approximately self-avoiding reference while retaining
+physical bead size, use:
+
+.. code:: yaml
+
+   disordered:
+     residues: [1-92]
+     idr_scale: 0
+     eps_ev_kj: 0.8368
+
+Starting structures and equilibration
+-------------------------------------
+
+The starting coordinates do not determine the equilibrium ensemble, provided
+the simulation samples the equilibrium distribution adequately. An IDR that
+starts from a compact or folded-looking structure can relax after its native
+contacts are removed, so an extended-chain PDB is not strictly required.
+
+Starting coordinates can nevertheless affect equilibration time. Discard the
+initial relaxation period, check convergence, and consider simulations from
+both compact and expanded starting structures when slow collapse, adsorption,
+or barrier crossing is plausible.
 
 Common pitfalls
 ---------------
 
-* **A stale** ``idr_scale`` **from an older domain_def is legal YAML and parses
-  without complaint.** The previous default was ``1.0``, which under this force is
-  ~3× past the θ point and gives a collapsed globule. Delete the key and take the
-  new default, or set ``0.10``.
-* **``idr_scale: 0`` is not "no interaction".** It removes the *attraction* but keeps
-  the excluded-volume core set by ``eps_ev_kj``, so IDR pairs still cannot
-  interpenetrate. It is a self-avoiding chain of physical thickness, not a ghost
-  chain. (Under the previous coupled form the "zero attraction" limit really was
-  nearly a ghost chain — the bead was thin *because* it had no energy. That is the
-  coupling this change removed.)
-* **Numbering must match the structure.** Disordered residues use the same 1-based
-  PDB numbering as the domains; a wrong number silently disorders the wrong
-  residue.
-* **Overlap is silent-but-logged.** A residue accidentally left in both a domain
-  and ``disordered:`` becomes disordered (disorder wins). The reader prints an
-  info line naming the overlap — check it if a domain seems weaker than expected.
-* **Single chain only.** ``disordered:`` is one flat residue set for the system;
-  there is no per-chain qualifier yet.
-* **YAML indentation** — as with the rest of the file, use spaces (never tabs) and
-  put a space after every colon. See *YAML syntax in 60 seconds* on the
-  :doc:`domain_definition` page.
+- ``idr_scale: 0`` **does not remove excluded volume.** It retains the core set by
+  ``eps_ev_kj`` and also retains TOPO’s minute non-native attraction floor.
+- ``eps_ev_kj: 0`` **removes the intended repulsive core.** Do not use it to define
+  a self-avoiding reference.
+- **Numbering must match the input structure.** Residue numbering is one-based;
+  an incorrect number disorders the wrong residue.
+- **Domain overlap is legal.** If a residue appears in both a domain and the
+  disorder mask, disorder wins and TOPO prints an informational message.
+- **The current disorder mask is system-wide.** It is a flat residue set and has
+  no per-chain qualifier.
+- **Declaring an IDR weakens the original Gō network.** Every native contact with
+  at least one disordered endpoint is deleted. Re-optimize folded-domain
+  stability with the IDR declaration already present.
+- **Use spaces in YAML.** Do not use tab indentation, and include a space after
+  each colon.
 
+Reference
+---------
 
-References
-----------
-
-.. [Tesei2024] Tesei, G. *et al.* Conformational ensembles of the human
-   intrinsically disordered proteome. *Nature* **626**, 897–904 (2024).
+1. Tesei G. *et al.* Conformational ensembles of the human intrinsically
+   disordered proteome. *Nature*. 2024;626:897–904.
    https://doi.org/10.1038/s41586-023-07004-5
