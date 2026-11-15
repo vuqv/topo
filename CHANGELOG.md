@@ -5,6 +5,23 @@ All notable changes to TOPO are documented here. The format is loosely based on
 
 ## [Unreleased]
 
+### Docs
+- New "Start here" tutorial (`tutorials/A0_start_here`): one page that takes a
+  globular protein from an all-atom structure to Q curves after a temperature
+  quench. It covers structure and domain assignment, `nscale` optimization with
+  `topo-optimize`, the quench with `topo-mdrun`, and Q analysis, with the checks
+  to make between stages and a workflow schematic. The figure is drawn by
+  `tutorials/_viz/workflow_schematic.py`.
+- The tutorials index now leads with a pointer to the "Start here" page, followed
+  by what TOPO is, the prerequisites and how to run a simulation. The tutorial
+  tables come after these sections.
+- The tutorials index no longer says the tutorials default to `device = CPU`.
+  Most tutorial control files set `device = GPU`.
+- Plain-prose pass over the README, the tutorials and the usage and module pages:
+  em dashes and bold inside sentences were removed, and tutorial titles now use a
+  colon ("Tutorial A.1: ..."). No commands, keys, numbers or technical statements
+  were changed.
+
 ## [2026.3] — 2026-07-21
 
 Headline: **SAXS-calibrated IDR defaults** — a generic cohesion term and transferable

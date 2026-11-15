@@ -1,29 +1,29 @@
 Domain definition file (``domain.yaml``)
 ========================================
 
-The domain definition file tells TOPO how to scale the **sidechain–sidechain
-(SS) contact energies** of the structure-based non-bonded potential on a
+The domain definition file tells TOPO how to scale the sidechain–sidechain
+(SS) contact energies of the structure-based non-bonded potential on a
 per-domain basis. It is passed through ``domain_def`` in ``md.ini`` and consumed
 by :func:`topo.utils.nonbonded.read_yaml_config` and
 :func:`~topo.utils.nonbonded.get_scaling_ss_matrix`.
 
-It is **optional**: if you omit ``domain_def``, every SS contact is scaled by
+It is optional: if you omit ``domain_def``, every SS contact is scaled by
 1.0 (i.e. no domain scaling at all).
 
 .. note::
 
-   **Disordered / IDR regions live in this same file.** The domain_def file can
+   Disordered / IDR regions live in this same file. The domain_def file can
    also carry an optional ``disordered:`` section that marks residues as
    intrinsically disordered (native contacts removed + a weak non-specific
    attraction). When that section is present, ``intra_domains`` becomes optional
-   too — a file with only ``disordered:`` + ``n_residues`` is valid. See
+   too: a file with only ``disordered:`` + ``n_residues`` is valid. See
    :doc:`disordered_regions` for the full treatment and syntax.
 
 .. tip::
 
-   **Where to get domain boundaries.** If your simulation uses a native
+   Where to get domain boundaries. If your simulation uses a native
    structure from the AlphaFold Database, you can obtain ready-made domain
-   assignments (residue ranges) from `TED — The Encyclopedia of Domains
+   assignments (residue ranges) from `TED: The Encyclopedia of Domains
    <https://ted.cathdb.info/>`_, which provides consensus domain definitions
    for the AlphaFold predicted structures. Look up your model by its UniProt
    accession and use the reported domain residue ranges to populate the
@@ -36,9 +36,9 @@ YAML syntax in 60 seconds
 If you have not used YAML before, these are the only rules you need for a
 ``domain.yaml``. YAML is a plain-text format for nested key/value data.
 
-* **Key/value pairs** are written ``key: value`` — note the **space after the
-  colon** (``nscale:1.1`` is wrong; ``nscale: 1.1`` is right).
-* **Nesting is by indentation**, using **spaces only — never tabs**. Use a
+* Key/value pairs are written ``key: value``: note the space after the
+  colon (``nscale:1.1`` is wrong; ``nscale: 1.1`` is right).
+* Nesting is by indentation, using spaces only: never tabs. Use a
   consistent number of spaces per level (2 is used throughout this page). A
   block indented further "belongs to" the key above it::
 
@@ -46,25 +46,25 @@ If you have not used YAML before, these are the only rules you need for a
         A:                #   ... has child A (indented 2 spaces)
           nscale: 1.1     #     ... which has child nscale (indented 4 spaces)
 
-* **Lists** are written either one item per line, each starting with a dash
+* Lists are written either one item per line, each starting with a dash
   and a space (``-``)::
 
       residues:
         - 1-117
         - 166-214
 
-  or inline in square brackets on one line — ``residues: [1-117, 166-214]``.
+  or inline in square brackets on one line: ``residues: [1-117, 166-214]``.
   Both forms are identical; this page uses the inline ``[...]`` form because
   residue lists are short.
-* **Inline mappings** collapse a whole block onto one line with braces:
+* Inline mappings collapse a whole block onto one line with braces:
   ``A: { residues: [1-164], nscale: 1.114 }`` is exactly the same as the
   three-line indented block for ``A``. Use whichever reads better.
-* **Comments** start with ``#`` and run to the end of the line. They are
+* Comments start with ``#`` and run to the end of the line. They are
   ignored by the parser.
-* **Numbers vs. text.** ``1.1556`` and ``214`` are read as numbers.
+* Numbers vs. text. ``1.1556`` and ``214`` are read as numbers.
   A residue *range* like ``1-117`` contains a dash, so YAML reads it as the
-  text string ``"1-117"`` — which is exactly what TOPO wants (see
-  ``residues`` below). You normally do **not** need quotes; add them only if
+  text string ``"1-117"``, which is what TOPO wants (see
+  ``residues`` below). You normally do not need quotes; add them only if
   you want to be explicit (``"1-117"`` and ``1-117`` behave identically here).
 
 .. tip::
@@ -100,7 +100,7 @@ Field reference
 ---------------
 
 Every key TOPO reads from ``domain.yaml``, its type, and its allowed values.
-Any key **not** in this table is silently ignored by the reader.
+Any key not in this table is silently ignored by the reader.
 
 .. list-table::
    :header-rows: 1
@@ -111,7 +111,7 @@ Any key **not** in this table is silently ignored by the reader.
      - Type
      - Meaning / allowed values
    * - ``n_residues``
-     - **yes**
+     - yes
      - integer
      - Total residue count of the chain. Defines the full range ``1..n_residues``
        used to detect unassigned residues. Must match the structure being
@@ -119,60 +119,60 @@ Any key **not** in this table is silently ignored by the reader.
    * - ``intra_domains``
      - usually
      - mapping
-     - One entry per domain. Each key is a **domain name** (see naming rules
+     - One entry per domain. Each key is a domain name (see naming rules
        below); each value is a mapping with ``residues`` and ``nscale`` (and
-       optionally ``class``). Required for a folded protein; **optional** when a
+       optionally ``class``). Required for a folded protein; optional when a
        ``disordered:`` section is present (a fully-disordered chain has no
-       domains — see :doc:`disordered_regions`).
+       domains: see :doc:`disordered_regions`).
    * - ``intra_domains.<name>.residues``
-     - **yes**
+     - yes
      - list
-     - Residues belonging to this domain. Each list item is either a **bare
-       integer** (``5``) or a **range string** ``"start-end"`` (``1-117``,
+     - Residues belonging to this domain. Each list item is either a bare
+       integer (``5``) or a range string ``"start-end"`` (``1-117``,
        inclusive of both ends). Mix freely: ``[1, 2, "5-10", 166-214]``. A
        domain may list several ranges to cover non-contiguous segments.
    * - ``intra_domains.<name>.nscale``
-     - **yes**
+     - yes
      - float
-     - Multiplicative scale factor for SS contact energy **within** this domain.
+     - Multiplicative scale factor for SS contact energy within this domain.
        ``1.0`` = unscaled. Any positive float is allowed; ``0.0`` removes the
        domain's internal native contacts.
    * - ``intra_domains.<name>.class``
      - no
      - string
-     - Structural class, used **only** by the nscale optimizer, ignored by the
+     - Structural class, used only by the nscale optimizer, ignored by the
        runner. One of ``alpha``, ``beta``, ``alpha-beta`` (or ``a`` / ``b`` /
        ``c``).
    * - ``intra_domains.<name>.strength``
      - no
      - float
-     - **Deprecated** alias for ``nscale``. Still accepted (prints a one-time
+     - Deprecated alias for ``nscale``. Still accepted (prints a one-time
        notice); use ``nscale`` instead.
    * - ``inter_domains``
      - no
      - mapping
-     - Scale factors **between** domains. Each key is ``"<name1>-<name2>"``;
-       each value is a float. Symmetric — ``A-B`` also covers ``B-A``. Omit for
+     - Scale factors between domains. Each key is ``"<name1>-<name2>"``;
+       each value is a float. Symmetric: ``A-B`` also covers ``B-A``. Omit for
        single-domain systems. Any pair you do not list defaults to ``1.0``.
 
 .. important::
 
-   **Domain-name rules.** A domain name may be any text (``A``, ``B``,
+   Domain-name rules. A domain name may be any text (``A``, ``B``,
    ``NTD``, ``core`` …) with two hard constraints:
 
-   * It must **not contain a hyphen** (``-``). The ``inter_domains`` keys are
+   * It must not contain a hyphen (``-``). The ``inter_domains`` keys are
      split on ``-`` to recover the two domain names, so a name like ``N-term``
      would break that parsing. Use ``Nterm`` or ``N_term`` instead.
-   * The name **``X`` is reserved.** TOPO auto-creates a domain called ``X``
+   * The name ``X`` is reserved. TOPO auto-creates a domain called ``X``
      for any residues you leave unassigned (see the note under *How it is
-     interpreted*). If you define your own ``X`` **and** also leave some
+     interpreted*). If you define your own ``X`` and also leave some
      residues unassigned, your ``X`` will be overwritten. Do not name a domain
      ``X``.
-   * Names are **case-sensitive and matched exactly** between blocks. The name
+   * Names are case-sensitive and matched exactly between blocks. The name
      used in an ``inter_domains`` key must be spelled identically to the
-     domain defined in ``intra_domains`` — if you define ``NTD`` and ``CTD``,
+     domain defined in ``intra_domains``. If you define ``NTD`` and ``CTD``,
      the interface key must be ``NTD-CTD`` (not ``ntd-ctd``, ``Ntd-Ctd``, or a
-     different label). A mismatched name is **not** an error: the pair you
+     different label). A mismatched name is not an error: the pair you
      wrote is stored under a name that never appears in ``intra_domains``, so
      it is never applied, and the real interface silently stays at the default
      scale of ``1.0``.
@@ -181,80 +181,80 @@ Any key **not** in this table is silently ignored by the reader.
 How it is interpreted
 ---------------------
 
-* **Residue numbering is 1-based** and matches the residue order of the input
-  PDB. Ranges are written as the **string** ``"start-end"`` and are
-  **inclusive** of both ends (``1-117`` → residues 1, 2, …, 117). Single
+* Residue numbering is 1-based and matches the residue order of the input
+  PDB. Ranges are written as the string ``"start-end"`` and are
+  inclusive of both ends (``1-117`` → residues 1, 2, …, 117). Single
   residues may be given as bare integers (e.g. ``[5, 9, 20-25]``).
-* A single domain may span **multiple, non-contiguous segments** — just list
+* A single domain may span multiple, non-contiguous segments: list
   several ranges (see the multi-segment scenario below). The contact matrix is
   ordered by sorted residue number internally, so the segments do not need to be
   contiguous or in order.
 * ``nscale`` is the multiplicative scale factor applied to the SS contact
-  **energy** for native contacts whose two residues are in that domain. It is a
-  *scaling factor*, not an absolute energy — at ``nscale = 1.0`` the contacts keep
+  energy for native contacts whose two residues are in that domain. It is a
+  *scaling factor*, not an absolute energy. At ``nscale = 1.0`` the contacts keep
   their unscaled sidechain–sidechain well depths.
 
   .. note::
 
      ``nscale`` was previously called ``strength``. The old key is still accepted
-     as a **deprecated alias** (the reader prints a one-time notice and keeps
+     as a deprecated alias (the reader prints a one-time notice and keeps
      working), but new ``domain.yaml`` files should use ``nscale``.
 * ``inter_domains`` gives the scale factor for native contacts whose two
-  residues are in **different** domains. The key ``"A-B"`` is split on ``-`` and
+  residues are in different domains. The key ``"A-B"`` is split on ``-`` and
   stored symmetrically, so ``A-B`` also covers ``B-A``.
-* Only the **SS** part of the contact energy is scaled. The hydrogen-bond and
+* Only the SS part of the contact energy is scaled. The hydrogen-bond and
   backbone–sidechain contributions are not affected by these factors.
-* ``class`` is an **optional** per-domain field (``alpha``, ``beta`` or
-  ``alpha-beta``; ``a``/``b``/``c`` accepted). It is used **only** by the nscale
+* ``class`` is an optional per-domain field (``alpha``, ``beta`` or
+  ``alpha-beta``; ``a``/``b``/``c`` accepted). It is used only by the nscale
   optimizer (:doc:`../tutorials/A5_opt_nscal`) to pick which *n*\ :sub:`scale`
-  ladder a domain climbs, and is **ignored** by the runner — the YAML reader only
+  ladder a domain climbs, and is ignored by the runner: the YAML reader only
   reads ``residues`` and ``nscale``. Include it on domains you intend to
   optimize; omit it otherwise.
 
 .. important::
 
-   **If an inter-domain pair is not listed in ``inter_domains``, its scale
-   factor defaults to 1.0** (the identity — no scaling). The scaling matrix only
+   If an inter-domain pair is not listed in ``inter_domains``, its scale
+   factor defaults to 1.0 (the identity: no scaling). The scaling matrix only
    *modulates* contacts that already exist in the native contact map, so an
    unspecified interface leaves those native contacts at full nscale rather
-   than removing them. To intentionally **decouple** two domains (remove their
+   than removing them. To intentionally decouple two domains (remove their
    inter-domain native contacts), set the pair explicitly to ``0.0``.
 
-Unassigned residues — the auto ``X`` domain
+Unassigned residues: the auto ``X`` domain
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Any residue in ``1..n_residues`` that you do **not** list in an ``intra_domains``
-block is not dropped — after parsing, the reader gathers all such residues into a
+Any residue in ``1..n_residues`` that you do not list in an ``intra_domains``
+block is not dropped: after parsing, the reader gathers all such residues into a
 single automatically-created domain named ``X``. Its ``nscale`` behavior is fixed
 and worth understanding in full:
 
-* **Every contact touching an unassigned residue is scaled by 1.0.** ``X`` is
+* Every contact touching an unassigned residue is scaled by 1.0. ``X`` is
   given intra ``nscale = 1.0`` *and* inter ``nscale = 1.0`` to every real domain.
   So both an ``X``–``X`` contact (both residues unassigned) and an ``X``–``A``
   contact (one unassigned, one in domain ``A``) use a factor of ``1.0``, whatever
   ``A``'s own ``nscale`` is. Unassigned residues are effectively "everything left
   at the raw, uncalibrated scale".
-* **1.0 means *kept*, not *removed*.** A scale of ``1.0`` leaves the
-  sidechain–sidechain well depths at their unscaled values; it does **not** delete
+* 1.0 means *kept*, not *removed*. A scale of ``1.0`` leaves the
+  sidechain–sidechain well depths at their unscaled values; it does not delete
   any native contacts. Unassigned residues therefore still form all of their
-  native contacts (H-bond, backbone–sidechain, and SS at raw strength) and **fold
-  normally** — ``X`` is simply the un-tuned default, *not* a flexible or
+  native contacts (H-bond, backbone–sidechain, and SS at raw strength) and fold
+  normally: ``X`` is the un-tuned default, *not* a flexible or
   disordered region. (To actually *remove* a region's native contacts and make it
-  disordered, use the ``disordered:`` section instead — see
+  disordered, use the ``disordered:`` section instead: see
   :doc:`disordered_regions`.)
-* **``X`` is one bucket, regardless of sequence position.** All unassigned
+* ``X`` is one bucket, regardless of sequence position. All unassigned
   residues land in the *same* ``X`` even if they are scattered across the chain
   (e.g. an N-terminal tail and a C-terminal tail). A contact between two such
-  residues is treated as **intra-``X``** (scale 1.0), not as an interface between
+  residues is treated as intra-``X`` (scale 1.0), not as an interface between
   two separate pieces.
-* **You cannot set ``X``'s nscale from the file.** ``X`` is synthesized *after*
+* You cannot set ``X``'s nscale from the file. ``X`` is synthesized *after*
   the YAML is parsed and is always ``1.0``; there is no key to change it, and a
   block you write named ``X`` is overwritten whenever any residue is left
   unassigned (hence the "do not name a domain ``X``" rule in *Field reference*).
-  To give those residues any scale other than ``1.0``, **assign them to a named
-  domain** — either their own domain or an existing one (a single whole-chain
+  To give those residues any scale other than ``1.0``, assign them to a named
+  domain: either their own domain or an existing one (a single whole-chain
   domain is the way to apply one uniform factor everywhere; see Scenario 1).
-* **The optimizer does not tune ``X``.** The nscale optimizer
+* The optimizer does not tune ``X``. The nscale optimizer
   (:doc:`stability_optimization`) only optimizes the domains you name (and their
   interfaces); unassigned residues are simulated at ``1.0`` every round but are
   never a scoring unit and never climb the ladder. If you want a region's
@@ -262,8 +262,8 @@ and worth understanding in full:
 
 .. tip::
 
-   For reproducible, intentional runs it is best to **assign every residue
-   explicitly** so nothing silently lands in ``X`` at scale 1.0. Relying on ``X``
+   For reproducible, intentional runs it is best to assign every residue
+   explicitly so nothing silently lands in ``X`` at scale 1.0. Relying on ``X``
    is fine for a quick run or a genuinely default-scale linker/tail, but a
    forgotten residue range is indistinguishable from a deliberate one once it is
    in ``X``. Scenario 6 shows the auto-``X`` fallback in use.
@@ -314,7 +314,7 @@ Native A–A and B–B contacts are scaled by 1.114; A–B interface contacts by
 
 A domain that is split in sequence (e.g. an N-terminal lobe that wraps around a
 second domain). Adenylate kinase (1AKE) is a classic example: domain A is
-residues 1–117 **and** 166–214, with domain B (118–165) inserted between them.
+residues 1–117 and 166–214, with domain B (118–165) inserted between them.
 
 .. code-block:: yaml
 
@@ -337,7 +337,7 @@ within B use 1.6871; across the A/B interface use 1.8611.
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 To make two domains independent (remove their inter-domain native contacts),
-set the pair to ``0.0`` **explicitly**:
+set the pair to ``0.0`` explicitly:
 
 .. code-block:: yaml
 
@@ -349,7 +349,7 @@ set the pair to ``0.0`` **explicitly**:
       A-B: 0.0                  # explicitly remove A-B interface contacts
 
 (The compact ``{ ... }`` inline-mapping form shown here is equivalent to the
-indented block form.) Note: simply *omitting* ``A-B`` would leave the interface
+indented block form.) Note: *omitting* ``A-B`` would leave the interface
 at the default scale of 1.0 (contacts kept), not remove it.
 
 
@@ -393,32 +393,32 @@ you want left at the default scale:
 Common pitfalls
 ---------------
 
-* **Empty / missing ``nscale``** — every domain must have a numeric
+* Empty / missing ``nscale``: every domain must have a numeric
   ``nscale``. A blank value parses as ``None`` and raises an error when the
   scaling matrix is built.
-* **Omitting an ``inter_domains`` pair** leaves that interface at the default
+* Omitting an ``inter_domains`` pair leaves that interface at the default
   scale of 1.0 (native contacts kept, unscaled). If you instead want to *remove*
   an interface, you must set the pair to ``0.0`` explicitly.
-* **``n_residues`` too small** — must equal the true number of residues; if it
+* ``n_residues`` too small: must equal the true number of residues; if it
   is smaller than the highest residue you list, the contact matrix and your
   domain assignment will be inconsistent.
-* **Quoting ranges** — ``1-117`` is parsed as a YAML string, which is what the
+* Quoting ranges: ``1-117`` is parsed as a YAML string, which is what the
   parser expects. Quotes are optional (``1-117`` and ``"1-117"`` behave
-  identically). Mixed ints and range strings — ``[1, 2, "5-10"]`` — are also
-  valid. Only single ``start-end`` ranges are supported; do **not** write
+  identically). Mixed ints and range strings (``[1, 2, "5-10"]``) are also
+  valid. Only single ``start-end`` ranges are supported; do not write
   strides or open-ended ranges (``"1-117-2"`` or ``"117-"`` will error).
-* **Hyphen in a domain name** — domain names must not contain ``-`` (it clashes
+* Hyphen in a domain name: domain names must not contain ``-`` (it clashes
   with the ``inter_domains`` ``"A-B"`` key syntax). See the domain-name rules in
   *Field reference*.
-* **Naming a domain ``X``** — ``X`` is reserved for auto-collected unassigned
+* Naming a domain ``X``: ``X`` is reserved for auto-collected unassigned
   residues; a user-defined ``X`` can be silently overwritten. Pick another name.
-* **Name mismatch between blocks** — an ``inter_domains`` key must spell the
+* Name mismatch between blocks: an ``inter_domains`` key must spell the
   domain names exactly as in ``intra_domains`` (case-sensitive). A typo such as
-  ``ntd-ctd`` for domains ``NTD``/``CTD`` does not error; it is simply never
+  ``ntd-ctd`` for domains ``NTD``/``CTD`` does not error; it is never
   applied, and that interface silently stays at the default scale of ``1.0``.
-* **Tabs / bad indentation** — YAML requires spaces, not tabs, and consistent
+* Tabs / bad indentation: YAML requires spaces, not tabs, and consistent
   indentation per nesting level. This is the most common parse failure; see
   *YAML syntax in 60 seconds*.
-* **Chain / residue order** — assignments follow the residue order of the input
+* Chain / residue order: assignments follow the residue order of the input
   PDB (1-based). Make sure your numbering matches the structure actually being
   simulated.

@@ -1,29 +1,29 @@
 Introduction
 ============
 
-**TOPO** is **a unified coarse-grained model for globular and disordered
-proteins**, built on the `OpenMM <https://openmm.org/>`_ engine — a Python
+TOPO is a unified coarse-grained model for globular and disordered
+proteins, built on the `OpenMM <https://openmm.org/>`_ engine: a Python
 library and command-line toolkit covering globular (folded) proteins,
 multi-domain proteins with disordered regions, and fully disordered proteins in
 one force field.
 
 Given only a protein structure (a PDB or CIF file), TOPO automatically
-builds a **one-bead-per-residue (alpha-carbon) structure-based model** — bonds,
+builds a one-bead-per-residue (alpha-carbon) structure-based model (bonds,
 angles, sequence-dependent torsions, screened electrostatics, and a Gō-like
-native-contact potential — and runs Langevin dynamics. Because the native state
-is the energy minimum by construction, TOPO is well suited to **protein folding
-and unfolding, thermal/mechanical stability, and multidomain motions**.
+native-contact potential) and runs Langevin dynamics. Because the native state
+is the energy minimum by construction, TOPO is well suited to protein folding
+and unfolding, thermal/mechanical stability, and multidomain motions.
 
 If you are new here, read :doc:`../usage/model_theory` for what the model *is*,
 then work through the :doc:`../tutorials/index`.
 
 .. note::
 
-   **Disorder is supported.** Folded proteins are the core case, but residues
+   Disorder is supported. Folded proteins are the core case, but residues
    declared in a ``disordered:`` section drop their native contacts and switch to
-   a transferable, sequence-dependent potential — so TOPO also covers
-   **multi-domain proteins with IDRs** (ordered and disordered residues in one
-   chain) and, with every residue declared, **fully disordered proteins (IDPs)**.
+   a transferable, sequence-dependent potential, so TOPO also covers
+   multi-domain proteins with IDRs (ordered and disordered residues in one
+   chain) and, with every residue declared, fully disordered proteins (IDPs).
    See :doc:`../usage/disordered_regions` and
    :doc:`../tutorials/A7_idr_mixed`.
 
@@ -38,12 +38,12 @@ The model in one paragraph
 --------------------------
 
 TOPO keeps only the alpha-carbon of each residue and builds a potential with
-**bonded** terms (rigid or harmonic Cα–Cα bonds, a bimodal Gaussian backbone
-angle, and four-periodicity sequence-dependent torsions) and **non-bonded**
+bonded terms (rigid or harmonic Cα–Cα bonds, a bimodal Gaussian backbone
+angle, and four-periodicity sequence-dependent torsions) and non-bonded
 terms (Debye–Hückel screened electrostatics between charged residues, and a
-12-10-6 structure-based contact potential). Native contacts — pairs in contact
+12-10-6 structure-based contact potential). Native contacts, pairs in contact
 in your input structure (via backbone hydrogen bonds detected by STRIDE, and
-backbone–sidechain / sidechain–sidechain heavy-atom proximity) — get attractive
+backbone–sidechain / sidechain–sidechain heavy-atom proximity), get attractive
 wells at their native Cα–Cα distances; all other pairs get a soft excluded-volume
 repulsion. The full functional forms, constants, and parameter sources are in
 :doc:`../usage/model_theory`.
@@ -80,8 +80,8 @@ Installation
 ------------
 
 TOPO depends on OpenMM (and ParmEd, MDAnalysis, mdtraj, NumPy, pandas, PyYAML),
-which are best installed from ``conda-forge``, plus the external **STRIDE** (and
-optional **PULCHRA**) binaries. In brief::
+which are best installed from ``conda-forge``, plus the external STRIDE (and
+optional PULCHRA) binaries. In brief::
 
     mamba create -n topo -c conda-forge python">=3.9" openmm parmed \
         mdanalysis mdtraj numpy pandas pyyaml

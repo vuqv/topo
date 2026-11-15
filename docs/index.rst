@@ -3,25 +3,25 @@
 Welcome to the TOPO documentation
 =================================
 
-**TOPO** is **a unified coarse-grained model for globular and disordered
-proteins**, built on `OpenMM <https://openmm.org/>`_ — a Python library and
+TOPO is a unified coarse-grained model for globular and disordered
+proteins, built on `OpenMM <https://openmm.org/>`_: a Python library and
 command-line toolkit. From a single structure it builds a one-bead-per-residue,
 structure-based (Gō-like) model and runs Langevin dynamics, for studying folding,
 unfolding, thermal/mechanical stability, and multidomain motions. *Unified* means
-one force field spans the whole spectrum: **globular (folded) proteins**,
-**multi-domain proteins with intrinsically disordered regions**, and **fully
-disordered proteins (IDPs)** — see :doc:`usage/disordered_regions`.
+one force field spans the whole spectrum: globular (folded) proteins,
+multi-domain proteins with intrinsically disordered regions, and fully
+disordered proteins (IDPs); see :doc:`usage/disordered_regions`.
 
-**New here?** Read :doc:`overview` to see the two things TOPO does and jump to
+New here? Read :doc:`overview` to see the two things TOPO does and jump to
 the right tutorials, :doc:`modules/installation` to get it running,
 :doc:`modules/introduction` for the package layout, and
 :doc:`usage/model_theory` for what the model is.
 
-**Lineage.** TOPO implements the models developed in the **O'Brien lab** (E. P.
+Lineage. TOPO implements the models developed in the O'Brien lab (E. P.
 O'Brien and co-workers): the coarse-grained structure-based model of O'Brien
 *et al.* (2012) and the per-codon co-translational-synthesis (CSP) protocol of
 Jiang *et al.* (2023). Its physics and elongation kinetics reproduce that work.
-If you publish with TOPO, please cite those references alongside the software —
+If you publish with TOPO, please cite those references alongside the software:
 see :doc:`citation` for the full list with DOIs.
 
 .. toctree::

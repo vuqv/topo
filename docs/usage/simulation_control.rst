@@ -8,7 +8,7 @@ Simulation parameters are read from an ``.ini`` file (e.g. ``md.ini``) by
 * The file is a flat list of ``key = value`` lines.
 * Comments: inline or on their own line, starting with ``;`` or ``#``.
 * Keyword and value are separated by ``=`` or ``:``.
-* Every option below has a default **except** the ones marked *required*; you
+* Every option below has a default except the ones marked *required*; you
   only need to set the options you want to change.
 
 Running a simulation
@@ -101,13 +101,13 @@ description).
      - Type (default)
      - Required
      - Description
-   * - **System input & force field**
+   * - System input & force field
      -
      -
      -
    * - ``pdb_file``
      - str (``—``)
-     - **yes**
+     - yes
      - Input structure (``.pdb`` / ``.cif``) used to build the model (topology, force field) and, by default, the initial coordinates.
    * - ``model``
      - str (``topo``)
@@ -121,7 +121,7 @@ description).
      - str (``—``)
      - no
      - Path to a precomputed STRIDE output. If omitted, STRIDE is run automatically on the structure (and cached to ``{prefix}_stride.dat``).
-   * - **Integration & bonds**
+   * - Integration & bonds
      -
      -
      -
@@ -141,7 +141,7 @@ description).
      - float (``1e-5``)
      - no
      - Integrator relative constraint tolerance. Only meaningful with ``constraints = AllBonds``.
-   * - **Thermostat (temperature coupling)**
+   * - Thermostat (temperature coupling)
      -
      -
      -
@@ -157,14 +157,14 @@ description).
      - float [ps⁻¹] (``0.05``)
      - no
      - Friction coefficient coupling the system to the heat bath. Used when ``tcoupl = yes``.
-   * - **Temperature protocol (anneal / quench)** — optional, off by default
+   * - Temperature protocol (anneal / quench): optional, off by default
      -
      -
      -
    * - ``anneal``
      - bool (``no``)
      - no
-     - Temperature protocol. ``no`` → constant-temperature equilibrium at ``ref_t`` (one phase). ``yes`` → a **quench** phase (hold at ``t_high``, then quench/cool to ``ref_t``; written to ``<outname>_quench.dcd``/``.log``) followed by a **production** phase (``md_steps`` at ``ref_t``; written to ``<outname>.dcd``/``.log``). Requires ``tcoupl = yes``. See :doc:`../tutorials/A6_anneal`.
+     - Temperature protocol. ``no`` → constant-temperature equilibrium at ``ref_t`` (one phase). ``yes`` → a quench phase (hold at ``t_high``, then quench/cool to ``ref_t``; written to ``<outname>_quench.dcd``/``.log``) followed by a production phase (``md_steps`` at ``ref_t``; written to ``<outname>.dcd``/``.log``). Requires ``tcoupl = yes``. See :doc:`../tutorials/A6_anneal`.
    * - ``t_high``
      - float [K] (``—``)
      - if ``anneal = yes``
@@ -172,7 +172,7 @@ description).
    * - ``anneal_steps``
      - int > 0 (``0``)
      - no
-     - Quench-phase steps held at ``t_high``. **Separate from** ``md_steps`` (grand total = ``anneal_steps`` (+ ``anneal_ramp_steps``) + ``md_steps``). Must be many thermal relaxation times (``~1/tau_t``) and long enough to unfold. Used when ``anneal = yes``.
+     - Quench-phase steps held at ``t_high``. Separate from ``md_steps`` (grand total = ``anneal_steps`` (+ ``anneal_ramp_steps``) + ``md_steps``). Must be many thermal relaxation times (``~1/tau_t``) and long enough to unfold. Used when ``anneal = yes``.
    * - ``anneal_ramp``
      - str (``jump``)
      - no
@@ -185,7 +185,7 @@ description).
      - int (``20``)
      - no
      - Number of discrete temperature steps in the ramp; the last lands exactly on ``ref_t``. Used only when ``anneal_ramp = linear``.
-   * - **Periodic boundaries & pressure** — optional
+   * - Periodic boundaries & pressure: optional
      -
      -
      -
@@ -209,19 +209,19 @@ description).
      - int [steps] (``25``)
      - no
      - Barostat move attempt frequency. Used when ``pcoupl = yes``.
-   * - **Multi-copy replication** — optional, off by default
+   * - Multi-copy replication: optional, off by default
      -
      -
      -
    * - ``n_copies``
      - int (``1``)
      - no
-     - Number of independent, **non-interacting** copies of the input chain to pack into one simulation (better GPU utilization; ``n_copies`` trajectories per run). ``1`` disables replication. See :doc:`../tutorials/A4_multicopy`.
+     - Number of independent, non-interacting copies of the input chain to pack into one simulation (better GPU utilization; ``n_copies`` trajectories per run). ``1`` disables replication. See :doc:`../tutorials/A4_multicopy`.
    * - ``copy_shift``
      - float [nm] (``5.0``)
      - no
      - Initial x-translation between successive copies. Only used when ``n_copies > 1``; since copies never interact, the exact value affects only the starting layout, not the physics.
-   * - **Output & reporting**
+   * - Output & reporting
      -
      -
      -
@@ -252,7 +252,7 @@ description).
    * - ``nstcomm``
      - int (``—``, off)
      - no
-     - Steps between center-of-mass motion removals. **Unset by default → no COM removal.** COM removal suits a single chain but couples the drift of independent chains, so leave it off for multi-copy runs (``n_copies > 1``).
+     - Steps between center-of-mass motion removals. Unset by default → no COM removal. COM removal suits a single chain but couples the drift of independent chains, so leave it off for multi-copy runs (``n_copies > 1``).
    * - ``log_precision``
      - int (``4``)
      - no
@@ -261,7 +261,7 @@ description).
      - int (``14``)
      - no
      - Minimum width (characters) of each ``.log`` column, right-justified, so columns line up. Each column uses ``max(header_length, log_width)``. Set to ``None`` to disable fixed-width formatting.
-   * - **Initial state, restart & minimization**
+   * - Initial state, restart & minimization
      -
      -
      -
@@ -277,7 +277,7 @@ description).
      - bool (``yes``)
      - no
      - Energy-minimize the input structure before dynamics. Forced ``no`` when ``restart = yes``.
-   * - **Hardware**
+   * - Hardware
      -
      -
      -
@@ -307,7 +307,7 @@ Notes on individual options
 
 Bond treatment (``constraints``)
     ``AllBonds`` (default) makes every bond a rigid distance constraint and adds
-    no harmonic bond force — appropriate for the standard CA model and required
+    no harmonic bond force: appropriate for the standard CA model and required
     for the usual 15 fs / 0.015 ps time step. ``None`` (also ``none`` / empty)
     instead adds a harmonic bond force and no constraints (flexible bonds). The
     two modes are mutually exclusive.
@@ -318,41 +318,41 @@ Temperature / pressure coupling
     requires ``pbc = yes`` (asserted at parse time).
 
 Temperature protocol (``anneal`` / ``t_high`` / ``anneal_*``)
-    By default a run is **equilibrium**: the Langevin thermostat is held at
+    By default a run is equilibrium: the Langevin thermostat is held at
     ``ref_t`` for all ``md_steps``, written to ``<outname>.dcd`` / ``.log``.
-    Setting ``anneal = yes`` splits the run into **two phases**, each writing its
+    Setting ``anneal = yes`` splits the run into two phases, each writing its
     own trajectory and log:
 
-    * **Quench** — hold at ``t_high`` for ``anneal_steps`` and, for
+    * Quench: hold at ``t_high`` for ``anneal_steps`` and, for
       ``anneal_ramp = linear``, cool to ``ref_t`` over ``anneal_ramp_steps`` (in
       ``anneal_ramp_increments`` discrete temperature steps). Written to
       ``<outname>_quench.dcd`` / ``.log``.
-    * **Production** — ``md_steps`` at ``ref_t``. Written to the usual
+    * Production: ``md_steps`` at ``ref_t``. Written to the usual
       ``<outname>.dcd`` / ``.log``, so the production trajectory is never
       contaminated by the hot hold.
 
-    ``anneal_steps`` is therefore **separate** from ``md_steps``: the grand total
+    ``anneal_steps`` is therefore separate from ``md_steps``: the grand total
     is ``anneal_steps`` (+ ``anneal_ramp_steps`` for ``linear``) + ``md_steps``.
     For ``anneal_ramp = jump`` the drop to ``ref_t`` is instantaneous and lands
     exactly on the boundary between the two files. ``ref_t`` is always the low /
-    refold temperature — there is no separate ``t_low`` key. The runner prints
+    refold temperature: there is no separate ``t_low`` key. The runner prints
     both phases at startup.
 
-    The quench is a **one-time preparation**: it writes no checkpoint, and the
-    step/time clock is **reset to zero** when production starts, so the production
+    The quench is a one-time preparation: it writes no checkpoint, and the
+    step/time clock is reset to zero when production starts, so the production
     run looks like an ordinary standalone run (``Step`` from 0) and the single
     checkpoint ``<outname>.chk`` holds only production state. Positions and
-    velocities carry over in the same context. Consequently **restart applies to
-    production only**: ``restart = yes`` skips the quench and resumes production
+    velocities carry over in the same context. Consequently restart applies to
+    production only: ``restart = yes`` skips the quench and resumes production
     from the checkpoint (appending to ``<outname>.dcd`` / ``.log``); a run killed
     during the short quench has no checkpoint yet, so a restart falls back to a
-    fresh run and simply redoes the quench.
+    fresh run and redoes the quench.
 
     Choose ``jump`` for clean folding kinetics (folding happens at a single
     temperature) and ``linear`` for maximum refolding yield. A Langevin
     thermostat relaxes toward a new setpoint over roughly ``1/tau_t``, so
-    ``anneal_steps`` must be **many** relaxation times (and long enough to actually
-    unfold the protein) — with a production-typical ``tau_t = 0.05`` ps⁻¹ (≈20 ps
+    ``anneal_steps`` must be many relaxation times (and long enough to actually
+    unfold the protein), with a production-typical ``tau_t = 0.05`` ps⁻¹ (≈20 ps
     relaxation) that means a hold of many nanoseconds. Annealing requires
     ``tcoupl = yes``. See :doc:`../tutorials/A6_anneal` for a full walkthrough.
 
@@ -381,7 +381,7 @@ Output layout (``output_dir`` / ``outname``)
     Every generated file is written to ``<output_dir>/<outname><suffix>``, so a run
     is one self-contained folder (default ``traj/``): ``traj.dcd`` (trajectory),
     ``traj.log`` (state log), ``traj.psf`` (single-chain topology), ``traj.chk``
-    (checkpoint), ``traj_final.pdb`` (last conformation — reusable as
+    (checkpoint), ``traj_final.pdb`` (last conformation; reusable as
     ``init_position`` for a follow-up run), ``traj_runinfo.log`` (provenance), and
     ``traj_multi.psf`` for a multi-copy run. ``output_dir`` is created
     automatically if missing. To keep
@@ -391,7 +391,7 @@ Output layout (``output_dir`` / ``outname``)
 Output frequency and log formatting (``nstxout`` / ``nstchk`` / ``nstcomm`` / ``log_precision`` / ``log_width``)
     ``nstxout`` controls trajectory (DCD) frames; ``nstchk`` controls checkpoint
     writes and defaults to ``nstxout`` when unset, so the two can be decoupled.
-    ``nstcomm`` is **off unless set** — center-of-mass motion removal is only
+    ``nstcomm`` is off unless set: center-of-mass motion removal is only
     appropriate for a single chain (it couples the drift of independent chains),
     so leave it unset for multi-copy runs. The log reporter is
     :class:`topo.topoReporter`, which writes a fixed-width, aligned ``.log``:
@@ -402,7 +402,7 @@ Output frequency and log formatting (``nstxout`` / ``nstchk`` / ``nstcomm`` / ``
     and machine-parsable (see :func:`topo.reporter.readOpenMMReporterFile`).
 
 ``restart`` and ``minimize``
-    ``restart = yes`` loads positions **and** velocities from ``checkpoint`` and
+    ``restart = yes`` loads positions and velocities from ``checkpoint`` and
     continues; reporters append to the existing log/trajectory, and ``minimize``
     is forced off. With ``restart = no`` you may choose ``minimize``. A native
     input structure is already the energy minimum of the structure-based model,
@@ -412,10 +412,10 @@ Initial coordinates and velocities (``init_position``)
     The starting state is resolved as follows (and recorded in
     ``<outname>_runinfo.log`` under ``initial_coordinates`` / ``initial_velocities``):
 
-    * ``restart = yes`` **with** the checkpoint present → positions *and* velocities
+    * ``restart = yes`` with the checkpoint present → positions *and* velocities
       come from the checkpoint.
-    * Otherwise (a fresh start, **including** ``restart = yes`` when the checkpoint
-      is missing — which prints a warning) → coordinates come from ``init_position``
+    * Otherwise (a fresh start, including ``restart = yes`` when the checkpoint
+      is missing, which prints a warning) → coordinates come from ``init_position``
       if set, else from ``pdb_file``; velocities are drawn from the Boltzmann
       distribution at ``ref_t``.
 

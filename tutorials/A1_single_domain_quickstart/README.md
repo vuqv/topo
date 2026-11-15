@@ -1,4 +1,4 @@
-# Tutorial A.1 — Single-domain quickstart
+# Tutorial A.1: Single-domain quickstart
 
 **Goal:** run your first TOPO simulation end-to-end and understand the inputs and
 outputs. We use a small single-domain protein (`P0CX28`, 106 residues) and the
@@ -8,7 +8,7 @@ simplest possible configuration.
 
 ![P0CX28 300 K trajectory](img/process.gif)
 
-***The run** — 3 000-step Langevin dynamics at 300 K; the calibrated `nscale`
+*The run: 3 000-step Langevin dynamics at 300 K; the calibrated `nscale`
 keeps the fold stable. CA trace coloured N→C (blue→red).*
 
 ---
@@ -18,32 +18,32 @@ keeps the fold stable. CA trace coloured N→C (blue→red).*
 | File | Role |
 |------|------|
 | `P0CX28_clean.pdb` | Input structure (all-atom PDB; TOPO keeps only the CA atoms). |
-| `domain.yaml` | Defines the single domain and its **calibrated** contact nscale. |
+| `domain.yaml` | Defines the single domain and its calibrated contact nscale. |
 | `md.ini` | Simulation configuration (steps, temperature, I/O, hardware). |
 | `run_simulation.py` | The runner (reads `md.ini`, builds the model, runs MD); a thin shim to `topo.mdrun`, so `topo-mdrun -f md.ini` is equivalent. |
 
 ## Background concepts
 
-- **Coarse-graining.** TOPO reads your all-atom PDB but keeps **one bead per
-  residue** at the alpha-carbon position. A 106-residue protein → 106 particles.
-- **Structure-based force field.** The native contacts in `P0CX28_clean.pdb`
+- Coarse-graining. TOPO reads your all-atom PDB but keeps one bead per
+  residue at the alpha-carbon position. A 106-residue protein → 106 particles.
+- Structure-based force field. The native contacts in `P0CX28_clean.pdb`
   define the attractive interactions.
-- **Contact nscale is a calibration parameter.** Even for a single domain,
-  `domain.yaml` carries a `nscale` — the global scale factor on the
+- Contact nscale is a calibration parameter. Even for a single domain,
+  `domain.yaml` carries a `nscale`: the global scale factor on the
   sidechain–sidechain contact energies. It is tuned so the model reproduces a
   target property (here, realistic stability at 300 K); for `P0CX28` the
-  calibrated value is **2.5044**. The raw, unscaled value (1.0) would leave the
+  calibrated value is 2.5044. The raw, unscaled value (1.0) would leave the
   protein under-stabilized and only marginally folded. Tutorial A.2 generalizes
   this to *different* nscales per domain and across domain interfaces. For the
-  full `domain.yaml` syntax — every key, its type, and the YAML basics — see
+  full `domain.yaml` syntax (every key, its type, and the YAML basics) see
   [Domain definition file](../usage/domain_definition.rst).
-- **STRIDE.** On the first run TOPO calls `stride` on the PDB to find backbone
+- STRIDE. On the first run TOPO calls `stride` on the PDB to find backbone
   hydrogen bonds and writes `P0CX28_clean_stride.dat`. You don't manage this file
   by hand.
 
-> **Want the full theory?** The force field — bonds, the bimodal Gaussian angle,
+> Want the full theory? The force field (bonds, the bimodal Gaussian angle,
 > sequence-dependent periodic torsions, Debye–Hückel electrostatics, and the
-> 12-10-6 structure-based contact potential — is documented term by term, with
+> 12-10-6 structure-based contact potential) is documented term by term, with
 > all constants and parameter sources, in
 > [The TOPO model: theory & force field](../usage/model_theory.rst).
 
@@ -72,7 +72,7 @@ There is no `stride_output_file` line, so STRIDE is run automatically (next step
 
 ### 3. Run it
 
-Use either the installed console command / module, or the in-folder shim — they
+Use either the installed console command / module, or the in-folder shim. They
 are identical:
 ```bash
 topo-mdrun -f md.ini                  # == python -m topo.mdrun -f md.ini
@@ -89,7 +89,7 @@ named `traj.*`:
 | File | What it is |
 |------|------------|
 | `traj/traj.log` | Fixed-width, space-aligned energy/temperature log (one line every `nstlog` steps). |
-| `traj/traj.dcd` | Trajectory (coordinates every `nstxout` steps) — open with VMD/MDAnalysis. |
+| `traj/traj.dcd` | Trajectory (coordinates every `nstxout` steps). Open with VMD or MDAnalysis. |
 | `traj/traj.chk` | Binary checkpoint (positions + velocities) for restarting (Tutorial A.3). |
 | `traj/traj.psf` | Topology of the CA model (for loading the DCD in analysis tools). |
 | `traj/traj_final.pdb` | Last conformation (CA PDB); reuse as `init_position` to seed a follow-up run. |
@@ -110,7 +110,7 @@ a non-exploding potential energy mean the run is healthy.
   `vmd traj/traj.psf traj/traj.dcd`.
 - Raise `ref_t` toward the protein's unfolding temperature and look for the
   potential energy climbing as native contacts break.
-- Move on to **Tutorial A.2** to handle a multidomain protein.
+- Move on to Tutorial A.2 to handle a multidomain protein.
 
 > Tip: each run overwrites the `traj/` folder. To keep a run, copy the folder
 > aside or point `output_dir` at a new folder (e.g. `output_dir = runs/P0CX28_T300`).

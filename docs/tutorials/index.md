@@ -4,7 +4,15 @@
 ```{toctree}
 :maxdepth: 1
 :hidden:
-:caption: Part A — Coarse-grained simulation
+:caption: Start here
+
+A0_start_here
+```
+
+```{toctree}
+:maxdepth: 1
+:hidden:
+:caption: Part A: Coarse-grained simulation
 
 A1_single_domain
 A2_multidomain
@@ -18,7 +26,7 @@ A7_idr_mixed
 ```{toctree}
 :maxdepth: 1
 :hidden:
-:caption: Part B — Protein synthesis
+:caption: Part B: Protein synthesis
 
 B1_translation_cylinder
 B2_ribosome_synthesis

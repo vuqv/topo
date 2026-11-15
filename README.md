@@ -1,27 +1,27 @@
 # TOPO
 
-**A unified coarse-grained model for globular and disordered proteins, built on
-[OpenMM](https://openmm.org/).**
+A unified coarse-grained model for globular and disordered proteins, built on
+[OpenMM](https://openmm.org/).
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21360706.svg)](https://doi.org/10.5281/zenodo.21360706)
 
 From a single structure, TOPO builds a
-**one-bead-per-residue, structure-based (Gō-like) model** — bonds, angles,
+one-bead-per-residue, structure-based (Gō-like) model (bonds, angles,
 sequence-dependent periodic torsions, Debye–Hückel electrostatics, and a
-native-contact potential — and runs Langevin dynamics. One force field spans the
-whole spectrum: **globular (folded) proteins**, **multi-domain proteins with
-intrinsically disordered regions (IDRs)**, and **fully disordered proteins
-(IDPs)** — declare a region disordered and it drops its native contacts for a
+native-contact potential) and runs Langevin dynamics. One force field spans the
+whole spectrum: globular (folded) proteins, multi-domain proteins with
+intrinsically disordered regions (IDRs), and fully disordered proteins
+(IDPs); declare a region disordered and it drops its native contacts for a
 transferable, sequence-dependent potential.
 
-That one model powers **two complementary workflows**:
+That one model powers two complementary workflows:
 
-- **A · Folded & disordered protein simulation** — take a complete structure and
+- A · Folded & disordered protein simulation: take a complete structure and
   study how it moves, unfolds, and comes apart: folding/unfolding, thermal and
   mechanical stability, and multidomain motions. Contact energies can be scaled
   per domain and per interface, and any part of the chain (or all of it) can be
   declared intrinsically disordered.
-- **B · Protein synthesis** — grow the nascent chain N→C, one residue at a time,
+- B · Protein synthesis: grow the nascent chain N→C, one residue at a time,
   with codon-resolved kinetics, so the protein folds *co-translationally* as it
   emerges from the ribosome exit tunnel (analytic-tunnel or explicit CG-ribosome
   variants).
@@ -32,38 +32,38 @@ Part B builds directly on the Part A model, so start with A if you are new here.
 
 ### Python dependencies
 
-- **Python** ≥ 3.9
-- **OpenMM** ≥ 7.7 (the MD engine; install from the `conda-forge` channel)
-- **ParmEd** ≥ 3.4
-- **NumPy** ≥ 1.22, **pandas** ≥ 1.4, **PyYAML** ≥ 6.0
-- **MDAnalysis** ≥ 2.2, **mdtraj** ≥ 1.9.7 (trajectory/structure I/O and analysis)
+- Python ≥ 3.9
+- OpenMM ≥ 7.7 (the MD engine; install from the `conda-forge` channel)
+- ParmEd ≥ 3.4
+- NumPy ≥ 1.22, pandas ≥ 1.4, PyYAML ≥ 6.0
+- MDAnalysis ≥ 2.2, mdtraj ≥ 1.9.7 (trajectory/structure I/O and analysis)
 
 These are the exact runtime dependencies of `import topo`, declared in
 [`pyproject.toml`](pyproject.toml) and mirrored in
 [`requirements.txt`](requirements.txt). Floors are the oldest versions known to
-work; there are no upper caps — the package runs on current releases (e.g.
+work; there are no upper caps: the package runs on current releases (e.g.
 NumPy 2.x, OpenMM 8.x). The standalone tools under `scripts/` need a few extra
 packages (`scipy`, `matplotlib`, `numba`); see the commented section in
 `requirements.txt`.
 
 > OpenMM ships compiled CUDA/OpenCL kernels, so install it (and ideally the rest)
-> with **conda/mamba** from `conda-forge` rather than pip. `mamba` is recommended
+> with conda/mamba from `conda-forge` rather than pip. `mamba` is recommended
 > for faster, more reliable solves.
 
 ### External program (STRIDE)
 
-TOPO also calls a third-party command-line binary, **STRIDE**. It is a compiled C
-program, so it is **not** installed by `pip` and **not** bundled in the wheel —
+TOPO also calls a third-party command-line binary, STRIDE. It is a compiled C
+program, so it is not installed by `pip` and not bundled in the wheel:
 you install it once and TOPO locates it at run time.
 
 | Program     | Needed            | Used for                                                              |
 | ----------- | ----------------- | --------------------------------------------------------------------- |
-| **STRIDE**  | Required          | Secondary-structure / backbone H-bond assignment for the contact map. |
-| **PULCHRA** | Optional (opt-in) | Backmapping a coarse-grained (Cα) structure to all-atom coordinates.  |
+| STRIDE  | Required          | Secondary-structure / backbone H-bond assignment for the contact map. |
+| PULCHRA | Optional (opt-in) | Backmapping a coarse-grained (Cα) structure to all-atom coordinates.  |
 
 STRIDE is only invoked when TOPO has to *build* the contact map; if you supply a
 precomputed STRIDE file (`stride_output_file=...`), it need not be installed for
-that run. PULCHRA is installed only if you ask for it — nothing but backmapping
+that run. PULCHRA is installed only if you ask for it: nothing but backmapping
 uses it, and [cg2all](https://github.com/huhlim/cg2all) is a deep-learning
 alternative for that step (untested here; see the docs). Install with the bundled
 helper:
@@ -160,8 +160,8 @@ topo-optimize -f optimize.ini -o opt_out
 
 See [tutorials/A5_opt_nscal/](tutorials/A5_opt_nscal/) for the optimizer.
 
-Part of a chain (or all of it) can be marked **intrinsically disordered** by adding
-an optional `disordered:` section to the same domain-definition YAML — those
+Part of a chain (or all of it) can be marked intrinsically disordered by adding
+an optional `disordered:` section to the same domain-definition YAML: those
 residues lose their native contacts and instead feel a weak, non-specific
 attraction whose default strength is calibrated against SAXS radii of gyration:
 
@@ -240,15 +240,15 @@ If TOPO contributed to your work, please cite it (and give the repo a ⭐):
 > disordered proteins* (Version 2026.2) [Computer software]. Zenodo.
 > https://doi.org/10.5281/zenodo.21360706
 
-The DOI above is the **concept DOI** — it always resolves to the latest release.
+The DOI above is the concept DOI: it always resolves to the latest release.
 GitHub's "Cite this repository" button reads
 [`CITATION.cff`](CITATION.cff). Please also cite the underlying O'Brien-lab
-models and other methods — see the
+models and other methods: see the
 [citation guide](docs/citation.rst) for the full list.
 
 ## License
 
-TOPO is released under the **GNU General Public License v3.0** — see
+TOPO is released under the GNU General Public License v3.0: see
 [`LICENSE`](LICENSE).
 
 ## Contact

@@ -5,7 +5,7 @@ Two self-contained, interactive diagrams of how TOPO fits together. Each is a
 full-screen SVG with clickable nodes, flow chips that light up and animate a
 sequence, and a light/dark theme toggle. They open in a new tab.
 
-.. rubric:: Architecture — the stack
+.. rubric:: Architecture: the stack
 
 The four runners (``topo-mdrun``, ``topo-optimize``, ``topo-csp``,
 ``topo-cylinder``), the one shared MD engine they all delegate to, the
@@ -14,9 +14,9 @@ coarse-grained force field, and the outputs. Flow chips trace *Equilibrium*,
 
 `Open the architecture diagram → <architecture.html>`_
 
-.. rubric:: Call flow — end to end
+.. rubric:: Call flow: end to end
 
-The end-to-end **function-call sequence** for the two workflows side by side:
+The end-to-end function-call sequence for the two workflows side by side:
 isolated-protein MD (``topo-mdrun``) and protein synthesis
 (``topo-csp``), both funneling into the shared per-segment core
 (``setup_simulation`` → ``attach_reporters`` → ``step`` → ``finalize_simulation``).
@@ -42,11 +42,11 @@ Numbered badges show call order; chips replay *Isolated MD*, *CSP synthesis*, th
    </style>
    <div class="diagram-cards">
      <a class="dcard" href="architecture.html" target="_blank" rel="noopener">
-       <div class="dtitle">Architecture — the stack &#8599;</div>
+       <div class="dtitle">Architecture: the stack &#8599;</div>
        <div class="ddesc">Four runners · one MD engine · one force field. Animated Equilibrium / Optimize / Synthesis / Cylinder / Analysis paths.</div>
      </a>
      <a class="dcard" href="callflow.html" target="_blank" rel="noopener">
-       <div class="dtitle">Call flow — end to end &#8599;</div>
+       <div class="dtitle">Call flow: end to end &#8599;</div>
        <div class="ddesc">Isolated-protein MD and CSP synthesis as an ordered function-call sequence, sharing the engine core.</div>
      </a>
    </div>

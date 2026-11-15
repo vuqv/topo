@@ -2,9 +2,9 @@
 
 A production {doc}`continuous synthesis <continuous_synthesis>` run synthesizes a full
 protein one residue at a time, each as three MD sub-stages, at production step counts
-(~10⁵–10⁶ steps/stage). A full chain is therefore **hours to days** of wall time — longer
-than a typical scheduler slot, and exposed to node failures and pre-emption. **CSP runs
-are resumable:** re-invoking `topo-csp` on an interrupted output directory continues from
+(~10⁵–10⁶ steps/stage). A full chain is therefore hours to days of wall time: longer
+than a typical scheduler slot, and exposed to node failures and pre-emption. CSP runs
+are resumable: re-invoking `topo-csp` on an interrupted output directory continues from
 the last completed residue instead of restarting from `L0`.
 
 This page covers *operating* a long run: how resume works, the on-disk artifacts, the
@@ -12,10 +12,10 @@ config knob, and an HPC requeue pattern. For the physics and the full option ref
 {doc}`continuous_synthesis` and {doc}`synthesis_control`.
 
 ```{note}
-Resume works for **both** synthesis runners: `topo-csp` (explicit ribosome, three
+Resume works for both synthesis runners: `topo-csp` (explicit ribosome, three
 sub-stages per residue) and `topo-cylinder` (analytic tunnel, one MD segment per residue).
 The `resume` knob, `progress.log`, and the up-front cost report are identical; the only
-differences are internal — the cylinder's `dwell_times.dat` carries one step count per
+differences are internal: the cylinder's `dwell_times.dat` carries one step count per
 residue (no `#PTC` header, since its tunnel geometry is cheap and deterministic) and its
 per-residue finals live in a flat `L_<L>/traj_final.pdb` layout. Everything below applies
 to both; examples use `topo-csp` unless noted.
@@ -37,7 +37,7 @@ topo-csp -f csp.ini              # ...re-run the SAME command -> continues where
 topo-csp -f csp.ini --fresh      # ignore any prior run and start over
 ```
 
-A launched run prints its **exact total planned MD-step count before the first MD step**,
+A launched run prints its exact total planned MD-step count before the first MD step,
 so you can size a scheduler wall-clock request:
 
 ```text
@@ -48,36 +48,36 @@ so you can size a scheduler wall-clock request:
 
 ## How it works
 
-The insight is that **almost nothing crosses a residue boundary.** Reading the driver
+The insight is that almost nothing crosses a residue boundary. Reading the driver
 loop `for L in range(L0, L_max+1)`, only two pieces of state carry from one residue to the
 next, and both are already on disk:
 
 | State | Recovery on resume |
 |---|---|
-| the previous residue's final coordinates (the seed for residue `L`) | **reloaded** from `L_<L-1>/traj_final.pdb` |
-| the per-residue kinetic schedule `(steps₁, steps₂, steps₃)` | **re-read** from the persisted schedule (no RNG redraw) |
+| the previous residue's final coordinates (the seed for residue `L`) | reloaded from `L_<L-1>/traj_final.pdb` |
+| the per-residue kinetic schedule `(steps₁, steps₂, steps₃)` | re-read from the persisted schedule (no RNG redraw) |
 
 Everything else the loop consumes (ribosome load, anchors, native contacts + STRIDE, the
-codon kinetic lists) is cheap and **recomputed** from the config at startup. The one
-expensive-but-deterministic quantity — the optimized PTC restraint geometry — is
-**persisted at first launch and re-read on resume** (see below), never re-solved.
+codon kinetic lists) is cheap and recomputed from the config at startup. The one
+expensive-but-deterministic quantity (the optimized PTC restraint geometry) is
+persisted at first launch and re-read on resume (see below), never re-solved.
 
-So there is **no heavyweight simulation checkpoint**. The resume unit is the **residue**,
+So there is no heavyweight simulation checkpoint. The resume unit is the residue,
 and all resume needs to record is *how far the run got*.
 
 ### The two on-disk artifacts
 
 At the output root, alongside the per-residue `L_<L>/` directories:
 
-`dwell_times.dat` — the **immutable plan**
-: The full per-residue 3-stage schedule, drawn **once** from the seeded generator before
+`dwell_times.dat`: the immutable plan
+: The full per-residue 3-stage schedule, drawn once from the seeded generator before
   the main loop, plus a machine-readable `#PTC` header carrying the restraint geometry
   (the A-/P-site target points and the tunnel-wall plane) at full float precision. On
-  resume this file is **re-read, never rewritten** — the schedule is *not* redrawn and the
+  resume this file is re-read, never rewritten: the schedule is *not* redrawn and the
   PTC geometry is *not* re-solved, so both are pinned identical to the residues already on
   disk. It is written once and is the source of truth the loop reads back.
 
-`progress.log` — the **mutable status**
+`progress.log`: the mutable status
 : A human-readable, append-only record of how far the run got:
 
   ```text
@@ -89,19 +89,19 @@ At the output root, alongside the per-residue `L_<L>/` directories:
   L_042 RUNNING       <- crash here: L_042 is the partial unit dropped on resume
   ```
 
-  A residue is marked `RUNNING` when it starts and `DONE` only after **all three stages**
-  finish. The **`DONE` line is the commit point**: a short append is effectively atomic on
-  POSIX, so every crash is recoverable — die before `DONE` and that unit is `RUNNING`
+  A residue is marked `RUNNING` when it starts and `DONE` only after all three stages
+  finish. The `DONE` line is the commit point: a short append is effectively atomic on
+  POSIX, so every crash is recoverable, die before `DONE` and that unit is `RUNNING`
   (dropped and redone); die after `DONE` and resume picks up at the next residue. The
   post-synthesis `ejection` phase appears as its own unit.
 
 On resume, the driver takes the last status per unit, drops the (at most one) `RUNNING`
-unit **and its directory**, reloads the last `DONE` residue's final structure as the seed,
-and continues from `max(DONE) + 1`. Redone work is bounded to a **single residue** (≤ 3
-stages) — negligible against a run measured in hours to days.
+unit and its directory, reloads the last `DONE` residue's final structure as the seed,
+and continues from `max(DONE) + 1`. Redone work is bounded to a single residue (≤ 3
+stages): negligible against a run measured in hours to days.
 
 ```{tip}
-Both files are plain text — `cat progress.log` to see exactly how far a run got, or
+Both files are plain text. Use `cat progress.log` to see exactly how far a run got, or
 `tail -f` it to watch a live run advance.
 ```
 
@@ -113,57 +113,57 @@ Set it in `csp.ini`, or override on the CLI.
 
 | Value | Behavior |
 |---|---|
-| `auto` *(default)* | Resume **iff** a `progress.log` is present under `outdir`; otherwise start fresh. |
-| `yes` | Require a resumable run — **error** if no `progress.log` is found. |
+| `auto` *(default)* | Resume iff a `progress.log` is present under `outdir`; otherwise start fresh. |
+| `yes` | Require a resumable run: error if no `progress.log` is found. |
 | `no` | Always start fresh (the pre-resume behavior). |
 
 ```bash
 topo-csp -f csp.ini --no-resume    # or --fresh; forces resume = no for this invocation
 ```
 
-Because `auto` is the default, **re-running the same command on an existing output
-directory now resumes** rather than silently overwriting it — the intended behavior for a
+Because `auto` is the default, re-running the same command on an existing output
+directory now resumes rather than silently overwriting it: the intended behavior for a
 requeued job.
 
 ---
 
 ## What resume guarantees (and what it does not)
 
-**Guaranteed — the kinetic schedule is identical to an uninterrupted run.** The schedule
+Guaranteed: the kinetic schedule is identical to an uninterrupted run. The schedule
 is materialized once and re-read, so `dwell_times.dat` is byte-identical across the
 interruption, and the resumed conformation continues from the last completed residue's
 final structure (0.001 nm PDB precision, far below the model's thermal noise).
 
-**Not guaranteed — bit-reproducible MD micro-trajectories.** The per-stage dynamics are
+Not guaranteed: bit-reproducible MD micro-trajectories. The per-stage dynamics are
 stochastic and *not* bit-reproducible across a process boundary: the Langevin thermostat
 and velocity initialization draw from OpenMM's own unseeded platform RNG (and stage 1
 re-seeds + re-minimizes every residue regardless). The intended and achievable guarantee
-is the **schedule + conformational continuity**, not a bit-exact trajectory.
+is the schedule + conformational continuity, not a bit-exact trajectory.
 
 Two consequences worth knowing:
 
-- **No config fingerprint.** Because the schedule is *loaded*, not redrawn, a changed
-  `random_seed` or retuned kinetic knob on resume cannot corrupt the tail — the RNG is
+- No config fingerprint. Because the schedule is *loaded*, not redrawn, a changed
+  `random_seed` or retuned kinetic knob on resume cannot corrupt the tail: the RNG is
   never consulted again. (A genuinely different *force* config on resume is a self-inflicted
   footgun the tool does not police; keep the config stable across a requeue.)
-- **Extending the *synthesis* is a fresh run.** The schedule is fixed at first launch to
-  cover exactly `L0..L_max`. Resuming with a **larger `L_max`** is rejected with an actionable
+- Extending the *synthesis* is a fresh run. The schedule is fixed at first launch to
+  cover exactly `L0..L_max`. Resuming with a larger `L_max` is rejected with an actionable
   error (`persisted schedule covers L=1..10 but this run asks for L=1..20 … Extending a run is
-  a fresh run`) — it would need draws past the materialized schedule. Decide the final length
-  before launching. (Extending the post-synthesis **ejection** free run is the opposite — a
+  a fresh run`): it would need draws past the materialized schedule. Decide the final length
+  before launching. (Extending the post-synthesis ejection free run is the opposite: a
   supported, cheap restart; see [Resume vs. restart](#resume-vs-restart).)
 
 ```{warning}
-**Presence guard.** `progress.log` records intent; the disk records reality. Before
-resuming, CSP verifies that **every** length `L0..last_done` still has its
+Presence guard. `progress.log` records intent; the disk records reality. Before
+resuming, CSP verifies that every length `L0..last_done` still has its
 `traj_final.pdb` on disk. If one is missing (a directory deleted, or lost to a scratch
-purge), the resume **aborts** naming the offending length rather than silently
+purge), the resume aborts naming the offending length rather than silently
 continuing from the last `DONE` and leaving a permanent hole in the assembled trajectory.
 Re-run fresh, or restore the missing length.
 ```
 
 ```{note}
-**Concurrent invocations.** Two `topo-csp` processes on the same `outdir` would race
+Concurrent invocations. Two `topo-csp` processes on the same `outdir` would race
 `progress.log`; don't do that. Resume assumes one writer at a time.
 ```
 
@@ -171,51 +171,51 @@ Re-run fresh, or restore the missing length.
 
 ## Resume vs. restart
 
-Two different mechanisms continue a stopped run, at two different levels — and they are easy
-to confuse because the **ejection-extend** workflow uses both. **Resume** (everything above)
-is the driver-level machinery that picks a multi-residue *synthesis* back up. **Restart** is
+Two different mechanisms continue a stopped run, at two different levels, and they are easy
+to confuse because the ejection-extend workflow uses both. Resume (everything above)
+is the driver-level machinery that picks a multi-residue *synthesis* back up. Restart is
 the OpenMM-checkpoint machinery that continues a *single MD run* step-for-step.
 
-| | **Resume** (`resume =` key) | **Restart** (`restart =` key) |
+| | Resume (`resume =` key) | Restart (`restart =` key) |
 |---|---|---|
 | Level | CSP driver (`topo.csp.resume`) | OpenMM engine (`setup_simulation`) |
-| Unit | one **residue** (or a whole post-synthesis phase) | **MD steps** |
-| State carried | positions (`traj_final.pdb`) + schedule + progress | positions **+ velocities + step count** (`traj.chk`) |
-| In-flight work | the interrupted unit is **dropped and redone fresh** | the run **continues exactly**, velocity-continuous |
+| Unit | one residue (or a whole post-synthesis phase) | MD steps |
+| State carried | positions (`traj_final.pdb`) + schedule + progress | positions + velocities + step count (`traj.chk`) |
+| In-flight work | the interrupted unit is dropped and redone fresh | the run continues exactly, velocity-continuous |
 | Trigger | re-run the command on an existing `outdir` (`resume = auto`) | set `restart = yes` and raise `ejection_steps`, on a resumed run |
-| Default | `auto` (on) | `no` (**off** — ejection re-runs fresh) |
-| Used for | surviving a crash/pre-emption of the hours-to-days synthesis | **extending the ejection free run** so the chain finishes leaving the ribosome |
+| Default | `auto` (on) | `no` (off: ejection re-runs fresh) |
+| Used for | surviving a crash/pre-emption of the hours-to-days synthesis | extending the ejection free run so the chain finishes leaving the ribosome |
 
-**When to use which:**
+When to use which:
 
-- **Resume** — you don't really *choose* it: leave `resume = auto`, and re-running a
+- Resume: you don't really *choose* it: leave `resume = auto`, and re-running a
   requeued or interrupted job continues the synthesis. It is residue-granular and reseeds
   each stage from `traj_final.pdb`, so it needs no OpenMM checkpoint.
-- **Restart** — reach for it when the finished chain **has not fully left the ribosome** by
-  the end of the ejection phase. It is **opt-in**: set `restart = yes` (default `no`), raise
+- Restart: reach for it when the finished chain has not fully left the ribosome by
+  the end of the ejection phase. It is opt-in: set `restart = yes` (default `no`), raise
   `ejection_steps`, and re-run on the existing `outdir` (`resume = auto`). The ejection phase
   then reloads its `ejection/traj.chk` (positions + velocities + step count) and appends only
-  the additional steps to reach the new *cumulative* `ejection_steps` — a true continuation of
+  the additional steps to reach the new *cumulative* `ejection_steps`: a true continuation of
   the same free-diffusion trajectory, not a fresh, re-thermalized run. If the checkpoint has
   already reached `ejection_steps`, the phase prints "already met" and steps nothing. With the
-  default `restart = no`, a **completed** ejection is instead **skipped** on resume (like the
-  `stall` phase) — raising `ejection_steps` does not re-run or extend it; use `restart = yes`
+  default `restart = no`, a completed ejection is instead skipped on resume (like the
+  `stall` phase): raising `ejection_steps` does not re-run or extend it; use `restart = yes`
   (or `resume = no` to redo the whole synthesis). Inspect `ejection/traj_final.pdb` yourself and top it
   up until the chain is clear; the nascent-only final is then a ready ribosome-free input for a
   post-translation `topo-mdrun`. See {doc}`continuous_synthesis`.
 
 Why only the ejection phase carries a checkpoint: each elongation *stage* is a short segment
 reseeded from the previous `traj_final.pdb`, so a per-stage `.chk` would be dead weight. The
-ejection free run is the one phase you may want to continue *step-for-step* — to add diffusion
-time without a velocity discontinuity — so it, and only it, writes `traj.chk`.
+ejection free run is the one phase you may want to continue *step-for-step* (to add diffusion
+time without a velocity discontinuity) so it, and only it, writes `traj.chk`.
 
 ```{note}
-The checkpoint-continue applies to the **extend** workflow (`restart = yes`), where the prior
+The checkpoint-continue applies to the extend workflow (`restart = yes`), where the prior
 ejection reached `DONE`. A crash *in the middle* of an ejection run leaves it `RUNNING`, so
 resume's drop-the-in-flight-unit rule removes the `ejection/` directory (checkpoint included)
-and re-ejects fresh — consistent with the residue-granular policy. So: with `restart = yes`,
-`ejection/traj.chk` extends a **completed** ejection; it does not rescue a **half-finished**
-one. With the default `restart = no`, a completed ejection is **skipped** on resume (like
+and re-ejects fresh, consistent with the residue-granular policy. So: with `restart = yes`,
+`ejection/traj.chk` extends a completed ejection; it does not rescue a half-finished
+one. With the default `restart = no`, a completed ejection is skipped on resume (like
 `stall`); only a fresh run or a never-completed ejection runs.
 ```
 
@@ -223,7 +223,7 @@ one. With the default `restart = no`, a completed ejection is **skipped** on res
 
 ## Worked example
 
-A fast, self-contained demonstration (small step clamp, CPU) — synthesize `L = 1..20`,
+A fast, self-contained demonstration (small step clamp, CPU): synthesize `L = 1..20`,
 interrupt after residue 10, and resume to completion:
 
 ```bash
@@ -254,7 +254,7 @@ row, `dwell_times.dat` is unchanged (re-read, not rewritten), and the run reache
 ## HPC requeue pattern
 
 Because a re-run resumes automatically, a self-requeuing SLURM job survives wall-clock
-limits with no bookkeeping — the same `topo-csp` line runs each slot and advances the run:
+limits with no bookkeeping: the same `topo-csp` line runs each slot and advances the run:
 
 ```bash
 #!/bin/bash
@@ -279,9 +279,9 @@ persistent (not node-local) storage so the partial output survives between slots
 
 ## See also
 
-- {doc}`synthesis_visualization` — once the run finishes, stitch the segments into a movie
+- {doc}`synthesis_visualization`: once the run finishes, stitch the segments into a movie
   (cylinder tunnel or CG ribosome; interactive or headless).
-- {doc}`continuous_synthesis` — the CSP runner, physics, and full output layout.
-- {doc}`synthesis_control` — the canonical per-key `csp.ini` reference (incl. `resume`).
-- `topo.csp.resume` — the module implementing the schedule/progress persistence and the
+- {doc}`continuous_synthesis`: the CSP runner, physics, and full output layout.
+- {doc}`synthesis_control`: the canonical per-key `csp.ini` reference (incl. `resume`).
+- `topo.csp.resume`: the module implementing the schedule/progress persistence and the
   resume actions.

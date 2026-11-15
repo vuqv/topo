@@ -80,18 +80,18 @@ Key arguments (full reference in :class:`topo.core.models.models`):
 
 Useful attributes and methods of the returned object:
 
-* ``cg.system`` / ``cg.topology`` / ``cg.positions`` — the OpenMM objects to feed
+* ``cg.system`` / ``cg.topology`` / ``cg.positions``: the OpenMM objects to feed
   into a ``Simulation``.
 * ``cg.n_atoms`` / ``cg.n_chains`` / ``cg.n_bonds`` / ``cg.n_angles`` /
-  ``cg.n_torsions`` — geometry counts.
-* ``cg.rmin_matrix`` / ``cg.energy_matrix`` — the contact :math:`R_{ij}` and
+  ``cg.n_torsions``: geometry counts.
+* ``cg.rmin_matrix`` / ``cg.energy_matrix``: the contact :math:`R_{ij}` and
   :math:`\varepsilon_{ij}` matrices (nm, kJ/mol).
-* ``cg.forceGroups`` — ordered map of force name → force object (one per log
+* ``cg.forceGroups``: ordered map of force name → force object (one per log
   column).
-* ``cg.dumpTopology("model.psf")`` — write the CA topology as PSF.
-* ``cg.dumpStructure("model.pdb")`` — write the current CA coordinates as PDB.
-* ``cg.dumpForceFieldData("ff.txt")`` — dump all force-field parameters to text.
-* ``cg.reportEnergy(simulation, header=...)`` — print the total and per-force-group
+* ``cg.dumpTopology("model.psf")``: write the CA topology as PSF.
+* ``cg.dumpStructure("model.pdb")``: write the current CA coordinates as PDB.
+* ``cg.dumpForceFieldData("ff.txt")``: dump all force-field parameters to text.
+* ``cg.reportEnergy(simulation, header=...)``: print the total and per-force-group
   energy of a simulation's current state.
 
 
@@ -126,7 +126,7 @@ Passing ``sbmObject=cg`` to :class:`~topo.reporter.topo_reporter.topoReporter`
 adds one energy column per force group, so you can watch the contact energy,
 angle energy, etc., separately.
 
-In practice you usually don't need this — :func:`topo.read_simulation_config`
+In practice you usually don't need this: :func:`topo.read_simulation_config`
 plus the :mod:`topo.engine` / :mod:`topo.mdrun` helpers already wrap build →
 set-up → protocol → finalize. Reach for the manual route only for a non-standard
 protocol the config file can't express.
@@ -178,7 +178,7 @@ Read a control file
 
 :func:`topo.read_simulation_config` parses an ``md.ini`` into a
 :class:`~topo.utils.config.SimulationConfig` dataclass with OpenMM units already
-applied — handy for scripting parameter sweeps:
+applied: handy for scripting parameter sweeps:
 
 .. code-block:: python
 
@@ -247,7 +247,7 @@ into a ``{column: [values]}`` dict (see :doc:`outputs`):
 See also
 --------
 
-* :doc:`model_theory` — the physics behind every force the builder adds.
-* :doc:`simulation_control` — the ``md.ini`` options each argument mirrors.
+* :doc:`model_theory`: the physics behind every force the builder adds.
+* :doc:`simulation_control`: the ``md.ini`` options each argument mirrors.
 * The API reference pages: :doc:`../modules/models`, :doc:`../modules/system`,
   :doc:`../modules/parameters`.

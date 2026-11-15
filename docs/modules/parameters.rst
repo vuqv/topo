@@ -4,15 +4,15 @@ Parameters
 The TOPO force-field constants are defined in
 :mod:`topo.parameters.model_parameters`. The ``"topo"`` model provides:
 
-- **Per-residue properties** — ``mass`` (amu), ``radii`` (excluded-volume radius,
+- Per-residue properties: ``mass`` (amu), ``radii`` (excluded-volume radius,
   nm), and ``charge`` (e) for each residue type. Only ASP/GLU (−1) and ARG/LYS
   (+1) are charged; all others are neutral. The full table is in
   :doc:`../usage/model_theory`.
-- **Bonded constants** — ``bond_length_protein`` = 0.381 nm,
+- Bonded constants: ``bond_length_protein`` = 0.381 nm,
   ``bond_force_constant`` = 20920 kJ mol\ :sup:`-1` nm\ :sup:`-2`, and the
-  ``bonded_exclusions_index`` = 2 rule (pairs **two or fewer bonds apart** — i.e.
-  1–2 bonded and 1–3 angle neighbours — are excluded from the non-bonded forces).
-- **Sequence-dependent dihedral parameters** — periodic-torsion phases and force
+  ``bonded_exclusions_index`` = 2 rule (pairs two or fewer bonds apart, i.e.
+  1–2 bonded and 1–3 angle neighbours, are excluded from the non-bonded forces).
+- Sequence-dependent dihedral parameters: periodic-torsion phases and force
   constants keyed by the two central residues of each dihedral, loaded from
   ``topo/parameters/data/dihedral_params.csv`` by
   :func:`topo.parameters.dihedral.load_dihedral_params` (Karanicolas–Brooks-style

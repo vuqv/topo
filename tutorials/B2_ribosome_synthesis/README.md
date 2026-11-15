@@ -1,18 +1,18 @@
-# Tutorial B.2 — Protein synthesis on a coarse-grained ribosome
+# Tutorial B.2: Protein synthesis on a coarse-grained ribosome
 
-**Goal:** synthesize a protein **residue by residue on TOPO's own coarse-grained
-ribosome**, using codon-resolved kinetics with `topo-csp`. This is the
+**Goal:** synthesize a protein residue by residue on TOPO's own coarse-grained
+ribosome, using codon-resolved kinetics with `topo-csp`. This is the
 ribosome-based counterpart to [Tutorial B.1](B1_translation_cylinder.md),
 which replaces the physical ribosome with an analytic cylindrical tunnel.
 
-Everything here is **standalone TOPO**: the ribosome is a truncated CG bead model
-(`ribosome_trunc.pdb`, loaded by `topo.csp.ribosome.load_ribosome`) — no external
+Everything here is standalone TOPO: the ribosome is a truncated CG bead model
+(`ribosome_trunc.pdb`, loaded by `topo.csp.ribosome.load_ribosome`), with no external
 `.cor`/`.psf`/`.prm` files. The nascent chain grows N→C through the exit region
 and is ejected once complete.
 
 ![residue-by-residue synthesis of 4c5c](4c5c/img/process.gif)
 
-***Synthesis on the ribosome** — the chain (coloured beads) grows through TOPO's coarse-grained ribosome (translucent grey); already-emerged N-terminal residues fold while the C-terminus is still being added inside.*
+*Synthesis on the ribosome: the chain (coloured beads) grows through TOPO's coarse-grained ribosome (translucent grey); already-emerged N-terminal residues fold while the C-terminus is still being added inside.*
 
 > The GIF is for the `4c5c/` system. After a run, view your own synthesis in VMD:
 > stitch the per-length frames into one movie (adding the ribosome as scenery),
@@ -58,22 +58,22 @@ From a system folder (e.g. `4c5c/`):
 topo-csp -f csp_val.ini        # -> synth_out/
 ```
 
-The runner uses **codon-resolved kinetics** (each elongation cycle split into
-three kinetic sub-stages) with a per-stage **dt-halving stability guard**, rigid
-`AllBonds` (the default), and **always-on equilibrium-PTC seeding** — each new
+The runner uses codon-resolved kinetics (each elongation cycle split into
+three kinetic sub-stages) with a per-stage dt-halving stability guard, rigid
+`AllBonds` (the default), and always-on equilibrium-PTC seeding: each new
 residue is placed one peptide bond from the previous C-terminus, clear of the
-ribosome, so rigid bonds seed cleanly. A successful full-length run shows **no
-`[stability]` lines** in the log.
+ribosome, so rigid bonds seed cleanly. A successful full-length run shows no
+`[stability]` lines in the log.
 
 ## What it produces
 
-- `synth_out/L_001/ … L_<L_max>/` — one folder per chain length, each with the
+- `synth_out/L_001/ … L_<L_max>/`: one folder per chain length, each with the
   MD trajectory and the nascent structure at that length.
-- `synth_out/ejection/` — the post-synthesis release: `traj_final.pdb`, the
+- `synth_out/ejection/`: the post-synthesis release: `traj_final.pdb`, the
   built-once native-contact PDB, and run metadata.
 
 ## Validating the run
 
-A successful run leaves **no `[stability]` lines** in the log (per-stage potential
+A successful run leaves no `[stability]` lines in the log (per-stage potential
 energy stayed finite throughout), and `synth_out/ejection/traj_final.pdb` shows the
-released chain clear of the tunnel — not penetrating the ribosome.
+released chain clear of the tunnel, not penetrating the ribosome.

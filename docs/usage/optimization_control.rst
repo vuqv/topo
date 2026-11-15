@@ -16,26 +16,26 @@ tutorial :doc:`../tutorials/A5_opt_nscal`.
 
 .. important::
 
-   **How this file differs from** ``md.ini``. The optimizer is not a simulation
-   engine — it *drives* :mod:`topo.mdrun` in a loop. So ``optimize.ini`` is one
-   flat key list that is **split two ways** when it is read:
+   How this file differs from ``md.ini``. The optimizer is not a simulation
+   engine: it *drives* :mod:`topo.mdrun` in a loop. So ``optimize.ini`` is one
+   flat key list that is split two ways when it is read:
 
-   * the six **optimizer controls** (``ntraj``, ``q_threshold``,
+   * the six optimizer controls (``ntraj``, ``q_threshold``,
      ``frame_fraction``, ``max_rounds``, ``min_contacts``, ``outdir``) are
-     consumed by the optimizer and *removed* — they never reach ``md.ini``;
-   * **every other key** is treated as a simulation parameter and passed through
+     consumed by the optimizer and *removed*: they never reach ``md.ini``;
+   * every other key is treated as a simulation parameter and passed through
      verbatim into each round's generated ``round_N/md.ini``.
 
    There is no list of "allowed" simulation keys: the pass-through is
    open-ended, so any option from :doc:`simulation_control` may appear here and
-   will reach the MD run. The flip side is that a **misspelled control key is
-   not an error** — it is silently forwarded to ``md.ini`` as an unknown
+   will reach the MD run. The flip side is that a misspelled control key is
+   not an error: it is silently forwarded to ``md.ini`` as an unknown
    simulation parameter, and the control keeps its default. Check the header of
    ``optimization.log``, which echoes the controls actually in force.
 
    Two further consequences are covered below: the pass-through defaults are
-   **not** the ``md.ini`` defaults (:ref:`Options <opt-options>`), and a few keys
-   are **overridden every round** (:ref:`opt-overridden`).
+   not the ``md.ini`` defaults (:ref:`Options <opt-options>`), and a few keys
+   are overridden every round (:ref:`opt-overridden`).
 
 Running the optimizer
 ---------------------
@@ -51,8 +51,8 @@ installed (``pip install -e .`` from the repo root) either of these works:
 ``-f``/``--config`` is the only required argument: it names the ``optimize.ini``
 below, and is the one setting that cannot live *inside* that file. Every other
 setting is a key in :ref:`Options <opt-options>`. Three of those keys also have a
-command-line flag for overriding the file without editing it — ``-o``/``--outdir``,
-``--device`` and ``--md-steps`` — each documented on its own row in that table.
+command-line flag for overriding the file without editing it (``-o``/``--outdir``,
+``--device`` and ``--md-steps``) each documented on its own row in that table.
 
 A bare ``topo-optimize`` with no arguments prints help and exits.
 
@@ -89,8 +89,8 @@ Example ``optimize.ini``:
 
 .. note::
 
-   **Set** ``md_steps`` **explicitly.** Its implicit default is only **10 000
-   steps** (150 ps at ``dt = 0.015``) — a smoke-test length, far too short to
+   Set ``md_steps`` explicitly. Its implicit default is only 10 000
+   steps (150 ps at ``dt = 0.015``): a smoke-test length, far too short to
    distinguish a folded domain from an unfolded one, and the optimizer will
    happily report "converged" on meaningless trajectories. The published
    protocol uses ~1 µs per trajectory (≈ ``6.7e7`` steps at ``dt = 0.015``).
@@ -103,8 +103,8 @@ The seed ``domain_def`` file
 ----------------------------
 
 ``domain_def`` is one of the two required inputs, and it is an ordinary
-:doc:`domain definition YAML <domain_definition>` — same ``n_residues`` and
-``intra_domains`` syntax. The optimizer, however, reads it as a **seed** for the
+:doc:`domain definition YAML <domain_definition>`: same ``n_residues`` and
+``intra_domains`` syntax. The optimizer, however, reads it as a seed for the
 calibration it is about to run, not as a finished model, so several fields are
 treated differently from a plain :mod:`topo.mdrun`:
 
@@ -115,24 +115,24 @@ treated differently from a plain :mod:`topo.mdrun`:
    * - Field
      - Role in the optimizer
    * - ``intra_domains.<name>.residues``
-     - **Read and kept.** The residue ranges define the *scoring units*: each
+     - Read and kept. The residue ranges define the *scoring units*: each
        named domain is one unit that climbs its own nscale ladder. Assign every
-       residue you want calibrated — unlike the runner, the optimizer does
-       **not** collect leftover residues into an auto-``X`` domain. Unassigned
+       residue you want calibrated: unlike the runner, the optimizer does
+       not collect leftover residues into an auto-``X`` domain. Unassigned
        residues only emit a warning, contribute to the whole-chain Q, and are
        never a scoring unit (so they are never tuned).
    * - ``intra_domains.<name>.class``
-     - **Required here** (the runner ignores it). It selects *which* nscale
-       ladder the domain climbs — ``alpha``, ``beta`` or ``alpha-beta`` (``a`` /
+     - Required here (the runner ignores it). It selects *which* nscale
+       ladder the domain climbs: ``alpha``, ``beta`` or ``alpha-beta`` (``a`` /
        ``b`` / ``c`` accepted). A domain with no ``class`` aborts the run. See
        :doc:`stability_optimization` for the per-class ladders.
    * - ``intra_domains.<name>.nscale``
-     - **Ignored and overwritten** every round — this is the quantity being
+     - Ignored and overwritten every round: this is the quantity being
        optimized. Any placeholder (or the seed value) is fine; round 1 resets it
        to ladder level 1.
    * - ``inter_domains``
-     - **Not needed and ignored.** The optimizer builds an interface unit for
-       **every pair** of domains automatically and calibrates each on the shared
+     - Not needed and ignored. The optimizer builds an interface unit for
+       every pair of domains automatically and calibrates each on the shared
        ``interface`` ladder, so you do not list interfaces yourself; an
        ``inter_domains`` block in the seed is disregarded.
    * - ``disordered``
@@ -140,7 +140,7 @@ treated differently from a plain :mod:`topo.mdrun`:
        and dropped from Q so the stability score measures only the foldable core.
        See :doc:`disordered_regions`.
 
-A three-domain seed then looks like this — every domain carries ``residues``
+A three-domain seed then looks like this: every domain carries ``residues``
 and ``class``, ``nscale`` is a placeholder, there is deliberately no
 ``inter_domains`` block, and an optional ``disordered:`` block marks a
 C-terminal tail as intrinsically disordered:
@@ -169,8 +169,8 @@ C-terminal tail as intrinsically disordered:
       # eps_ev_kj: 0.8368      # OPTIONAL, IDR repulsive core, kJ/mol (default 0.8368)
 
 The ``disordered:`` block is honored exactly as in the runner. Its residues are
-**subtracted from every domain** before scoring — here residues 385–400 leave
-domain ``C``, so ``C`` is calibrated on residues 261–384 only — and every native
+subtracted from every domain before scoring (here residues 385–400 leave
+domain ``C``, so ``C`` is calibrated on residues 261–384 only) and every native
 contact touching a disordered residue is dropped from Q, so each unit's stability
 verdict reflects only its foldable core. Disorder wins over domain membership: if
 a ``disordered:`` range overlaps an ``intra_domains`` range, the overlapping
@@ -186,7 +186,7 @@ calibrated file is ``domain_optimized.yaml`` in the optimization root (see
 .. tip::
 
    The minimal seed for the optimizer is therefore ``n_residues`` plus an
-   ``intra_domains`` block in which every domain carries ``residues`` **and**
+   ``intra_domains`` block in which every domain carries ``residues`` and
    ``class``; ``nscale`` may be any placeholder and no ``inter_domains`` block is
    required. See the :doc:`domain_definition` scenarios for the YAML syntax.
 
@@ -197,16 +197,16 @@ Options
 
 The keys fall into four categories:
 
-* **System input & force field** (``pdb_file``, ``domain_def``,
-  ``stride_output_file``) — the structure and domains the model is built from.
+* System input & force field (``pdb_file``, ``domain_def``,
+  ``stride_output_file``): the structure and domains the model is built from.
   The first two are the only required keys in the file.
-* **Per-trajectory production** (``md_steps``, ``nstxout``) — passed through to
+* Per-trajectory production (``md_steps``, ``nstxout``): passed through to
   each round's ``md.ini``. These are the two you should set yourself, since
   their defaults only describe a smoke test.
-* **Optimizer controls** (``ntraj``, ``q_threshold``, ``frame_fraction``,
-  ``max_rounds``, ``min_contacts``, ``outdir``) — consumed by the optimizer
-  itself, and the only keys that do **not** reach the per-round ``md.ini``.
-* **Protocol & hardware** (``device``, ``ref_t``, ``minimize``) — also passed
+* Optimizer controls (``ntraj``, ``q_threshold``, ``frame_fraction``,
+  ``max_rounds``, ``min_contacts``, ``outdir``): consumed by the optimizer
+  itself, and the only keys that do not reach the per-round ``md.ini``.
+* Protocol & hardware (``device``, ``ref_t``, ``minimize``): also passed
   through, but filled in from the optimizer's own protocol defaults. ``device``
   and ``minimize`` deliberately differ from what the same key would default to
   in a plain :doc:`simulation_control` run.
@@ -219,42 +219,42 @@ The keys fall into four categories:
      - Type (default)
      - Required
      - Description
-   * - **System input & force field**
+   * - System input & force field
      -
      -
      -
    * - ``pdb_file``
      - str (``—``)
-     - **yes**
+     - yes
      - All-atom reference structure. Defines both the native contacts used for Q scoring and the geometry the model is built from. Resolved relative to the ``.ini`` file.
    * - ``domain_def``
      - str (``—``)
-     - **yes**
-     - Seed domain YAML. Its ``residues`` and ``class`` fields are read and kept; its ``nscale`` values are **ignored and overwritten** each round (they are what is being optimized). Resolved relative to the ``.ini`` file. See :doc:`domain_definition`.
+     - yes
+     - Seed domain YAML. Its ``residues`` and ``class`` fields are read and kept; its ``nscale`` values are ignored and overwritten each round (they are what is being optimized). Resolved relative to the ``.ini`` file. See :doc:`domain_definition`.
    * - ``stride_output_file``
      - str (``—``)
      - no
      - Precomputed STRIDE output. If omitted, STRIDE runs once up front, is written to the optimization root, and every round reuses that file (STRIDE depends only on the fixed structure, so it never changes). Resolved to an absolute path, since each round's ``md.ini`` lives in a different directory.
-   * - **Per-trajectory production** — passed through to each round's ``md.ini``
+   * - Per-trajectory production: passed through to each round's ``md.ini``
      -
      -
      -
    * - ``md_steps``
      - int (``10_000``)
      - no
-     - **Set this explicitly** (see the note above). Steps per trajectory, passed through to ``md.ini``. **Recommended: ~1 µs per trajectory** (≈ ``6.7e7`` steps at ``dt = 0.015``), the published protocol length. The ``10_000`` default is a smoke-test length — far too short to tell a folded domain from an unfolded one. ``--md-steps`` on the command line overrides it for every round, handy for a smoke test before committing to a production run.
+     - Set this explicitly (see the note above). Steps per trajectory, passed through to ``md.ini``. Recommended: ~1 µs per trajectory (≈ ``6.7e7`` steps at ``dt = 0.015``), the published protocol length. The ``10_000`` default is a smoke-test length: far too short to tell a folded domain from an unfolded one. ``--md-steps`` on the command line overrides it for every round, handy for a smoke test before committing to a production run.
    * - ``nstxout``
      - int (``5000``)
      - no
-     - Steps between trajectory (DCD) writes, passed through to ``md.ini``. These frames are what Q is computed from, so this sets the sampling resolution of the stability decision — lower it alongside ``md_steps``. ``nstlog`` and ``nstchk`` default to ``5000`` the same way.
-   * - **Optimizer controls** — consumed here; never reach ``md.ini``
+     - Steps between trajectory (DCD) writes, passed through to ``md.ini``. These frames are what Q is computed from, so this sets the sampling resolution of the stability decision: lower it alongside ``md_steps``. ``nstlog`` and ``nstchk`` default to ``5000`` the same way.
+   * - Optimizer controls: consumed here; never reach ``md.ini``
      -
      -
      -
    * - ``ntraj``
      - int (``10``)
      - no
-     - Independent trajectories per round. **Recommended: 10 trajectories**, which is the default. Produced as a single **multi-copy** MD run (``n_copies = ntraj``) that is then split into per-copy DCDs, so this scales the cost of every round roughly linearly.
+     - Independent trajectories per round. Recommended: 10 trajectories, which is the default. Produced as a single multi-copy MD run (``n_copies = ntraj``) that is then split into per-copy DCDs, so this scales the cost of every round roughly linearly.
    * - ``q_threshold``
      - float (``0.6688``)
      - no
@@ -262,7 +262,7 @@ The keys fall into four categories:
    * - ``frame_fraction``
      - float (``0.98``)
      - no
-     - A trajectory is *stable* for a unit if at least this fraction of its frames are folded. A unit is stable only when **all** ``ntraj`` trajectories pass — one unstable trajectory is enough to promote the unit.
+     - A trajectory is *stable* for a unit if at least this fraction of its frames are folded. A unit is stable only when all ``ntraj`` trajectories pass: one unstable trajectory is enough to promote the unit.
    * - ``max_rounds``
      - int (``6``)
      - no
@@ -270,12 +270,12 @@ The keys fall into four categories:
    * - ``min_contacts``
      - int (``0``)
      - no
-     - A domain or interface with fewer than this many native contacts is considered too weakly structured to fold: it is **pinned at the first ladder level, frozen, and never optimized** (it cannot otherwise stabilize, so it would drag every round to the fallback). ``0`` disables the check.
+     - A domain or interface with fewer than this many native contacts is considered too weakly structured to fold: it is pinned at the first ladder level, frozen, and never optimized (it cannot otherwise stabilize, so it would drag every round to the fallback). ``0`` disables the check.
    * - ``outdir``
      - str (``opt_out``)
      - no
-     - Optimization root directory — the ``round_N/`` subdirectories and the final model are written here. A relative path is resolved **against this** ``.ini`` **file** (like ``pdb_file`` and ``domain_def``), so the file gives the same layout from any working directory. ``-o``/``--outdir`` on the command line overrides it; when neither is set, ``opt_out`` is created in the *current* directory. Not to be confused with ``output_dir``, a per-round ``md.ini`` key the optimizer :ref:`overrides every round <opt-overridden>`.
-   * - **Protocol & hardware**
+     - Optimization root directory: the ``round_N/`` subdirectories and the final model are written here. A relative path is resolved against this ``.ini`` file (like ``pdb_file`` and ``domain_def``), so the file gives the same layout from any working directory. ``-o``/``--outdir`` on the command line overrides it; when neither is set, ``opt_out`` is created in the *current* directory. Not to be confused with ``output_dir``, a per-round ``md.ini`` key the optimizer :ref:`overrides every round <opt-overridden>`.
+   * - Protocol & hardware
      -
      -
      -
@@ -296,19 +296,19 @@ The table covers the keys you are likely to set. The remaining implicit defaults
 fix the stability protocol's ensemble and the model's standard parameterization,
 and are rarely touched.
 
-**The ensemble.** Every round samples constant-temperature dynamics: a Langevin
+The ensemble. Every round samples constant-temperature dynamics: a Langevin
 integrator at ``ref_t = 300`` K with friction ``tau_t = 0.05`` ps⁻¹
 (``tcoupl = yes``), no pressure coupling (``pcoupl = no``), and no periodic box
 (``pbc = no``). Nscale is therefore calibrated at fixed particle number and
-temperature — this is canonical, constant-*T* sampling rather than a strict NVT
+temperature: this is canonical, constant-*T* sampling rather than a strict NVT
 box run, since with ``pbc = no`` the chain is unbounded and there is no
 simulation volume being held fixed. The thermostat is what makes the stability
 verdict meaningful: Q is scored on thermal fluctuations at 300 K, so a unit
 counts as stable only if it resists unfolding at the protocol temperature.
 
-**Parameterization and bookkeeping.** ``dt = 0.015`` (ps), ``model = topo``,
+Parameterization and bookkeeping. ``dt = 0.015`` (ps), ``model = topo``,
 ``restart = no`` (every round starts fresh), ``ppn = 4``, ``nstlog = 5000``,
-``nstchk = 5000``. Setting any of these — or any ensemble key above — in
+``nstchk = 5000``. Setting any of these (or any ensemble key above) in
 ``optimize.ini`` overrides the implicit value. The full set is
 :data:`topo.optimize.IMPLICIT_DEFAULTS`. Beyond these, any other key from
 :doc:`simulation_control` may appear and is passed through verbatim.
@@ -319,8 +319,8 @@ Keys the optimizer overrides every round
 ----------------------------------------
 
 The optimizer owns the round layout and the multi-copy fan-out, so it rewrites
-these keys when it expands ``optimize.ini`` into ``round_N/md.ini``. **Setting
-them in** ``optimize.ini`` **has no effect** — your value is silently replaced:
+these keys when it expands ``optimize.ini`` into ``round_N/md.ini``. Setting
+them in ``optimize.ini`` has no effect: your value is silently replaced:
 
 .. list-table::
    :header-rows: 1
@@ -329,7 +329,7 @@ them in** ``optimize.ini`` **has no effect** — your value is silently replaced
    * - Key
      - Value forced by the optimizer
    * - ``n_copies``
-     - ``ntraj`` — the round's trajectories are one multi-copy run.
+     - ``ntraj``: the round's trajectories are one multi-copy run.
    * - ``output_dir``
      - ``<outdir>/round_N/traj``
    * - ``outname``
@@ -345,7 +345,7 @@ corresponding command-line flag; otherwise your ``.ini`` value stands.
 What the optimizer writes
 -------------------------
 
-Everything lands under the optimization root — ``--outdir``, else ``outdir`` in
+Everything lands under the optimization root: ``--outdir``, else ``outdir`` in
 the ``.ini``, else ``opt_out/``:
 
 .. code-block:: text
@@ -364,19 +364,19 @@ the ``.ini``, else ``opt_out/``:
 
 ``optimization.log`` is line-buffered and flushed per line, so ``tail -f`` works
 during a long run. The per-round ``Q_<k>.csv`` files hold the Q time series
-behind every stability decision — read them when a unit refuses to stabilize.
+behind every stability decision: read them when a unit refuses to stabilize.
 
 .. warning::
 
-   **A non-converged run still writes** ``domain_optimized.yaml``. If a protein
+   A non-converged run still writes ``domain_optimized.yaml``. If a protein
    does not stabilize within ``max_rounds``, the optimizer leaves the unstable
    units at their highest level (or the median fallback), writes the file
    anyway, and flags the run with a boxed ``WARNING`` naming the unstable units.
-   The file's presence is therefore **not** evidence of a calibrated model —
+   The file's presence is therefore not evidence of a calibrated model:
    check the log for ``CONVERGED`` before using it.
 
 Limitations
 -----------
 
-The optimization is **not resumable**: each invocation starts from ladder level
+The optimization is not resumable: each invocation starts from ladder level
 1 and re-runs every round. A long run that is interrupted must start over.

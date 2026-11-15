@@ -4,7 +4,7 @@ How to install
 TOPO is a Python package built on `OpenMM <https://openmm.org/>`_. It depends on
 OpenMM plus NumPy, ParmEd, MDAnalysis, mdtraj, pandas, and PyYAML, which are best
 installed from ``conda-forge``. It also calls one external command-line program,
-**STRIDE**, that is installed separately (plus **PULCHRA**, an opt-in extra only
+STRIDE, that is installed separately (plus PULCHRA, an opt-in extra only
 needed for all-atom backmapping). The steps below target Linux.
 
 Requirements
@@ -13,14 +13,14 @@ Requirements
 Python dependencies
 ~~~~~~~~~~~~~~~~~~~~~
 
-* **Python** >= 3.9
-* **OpenMM** >= 7.7 (the MD engine; install from the ``conda-forge`` channel, and
+* Python >= 3.9
+* OpenMM >= 7.7 (the MD engine; install from the ``conda-forge`` channel, and
   choose a CUDA toolkit compatible with your NVIDIA driver). ``getStepCount()`` is
   unreliable before 7.7 and is required to restart simulations; OpenMM 8.2 is
   recommended for better performance.
-* **ParmEd** >= 3.4
-* **NumPy** >= 1.22, **pandas** >= 1.4, **PyYAML** >= 6.0
-* **MDAnalysis** >= 2.2, **mdtraj** >= 1.9.7 (trajectory/structure I/O)
+* ParmEd >= 3.4
+* NumPy >= 1.22, pandas >= 1.4, PyYAML >= 6.0
+* MDAnalysis >= 2.2, mdtraj >= 1.9.7 (trajectory/structure I/O)
 
 These are the exact runtime dependencies of ``import topo``, declared in
 ``pyproject.toml`` and mirrored in ``requirements.txt``. Floors are the oldest
@@ -32,10 +32,10 @@ External program (STRIDE)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 TOPO calls one third-party command-line binary. It is a compiled C program, so it
-is **not** installed by ``pip`` and **not** bundled in the wheel — you install it
+is not installed by ``pip`` and not bundled in the wheel: you install it
 once and TOPO locates it at run time.
 
-* **STRIDE** (required) — secondary-structure / backbone H-bond assignment for the
+* STRIDE (required): secondary-structure / backbone H-bond assignment for the
   contact map. Only invoked when TOPO has to *build* the contact map; if you supply
   a precomputed STRIDE file (``stride_output_file=...``) it need not be installed
   for that run.
@@ -44,7 +44,7 @@ Install it with the bundled helper::
 
     scripts/install_deps.sh              # STRIDE, into $HOME/.local/bin
 
-A second program, **PULCHRA**, is *optional* and installed only on request
+A second program, PULCHRA, is *optional* and installed only on request
 (``scripts/install_deps.sh pulchra``). It backmaps a coarse-grained (Cα) structure
 to all-atom coordinates; if you never do that, you do not need it.
 
@@ -56,14 +56,14 @@ backmapping tools (PULCHRA and the cg2all alternative), and details.
 Steps
 -----
 
-1. **Create and activate a fresh conda/mamba environment** with the binary
+1. Create and activate a fresh conda/mamba environment with the binary
    dependencies (``mamba`` is recommended for faster, more reliable solves)::
 
        mamba create -n topo -c conda-forge python">=3.9" openmm parmed \
            mdanalysis mdtraj numpy pandas pyyaml
        mamba activate topo
 
-2. **Get the source code.** TOPO is not on PyPI, so clone (or download) the
+2. Get the source code. TOPO is not on PyPI, so clone (or download) the
    repository from GitHub to a target path, for example ``/path/to/topo``::
 
        git clone https://github.com/vuqv/topo.git /path/to/topo
@@ -73,12 +73,12 @@ Steps
    `github.com/vuqv/topo <https://github.com/vuqv/topo>`_ ("Code" → "Download
    ZIP") and unpack it; the rest of the steps are the same.
 
-3. **Install STRIDE**, e.g. with the bundled helper, run from the repository
+3. Install STRIDE, e.g. with the bundled helper, run from the repository
    root (add ``pulchra`` as an argument only if you need backmapping)::
 
        scripts/install_deps.sh
 
-4. **Install TOPO.** There are two main ways.
+4. Install TOPO. There are two main ways.
 
 Two ways to install
 -------------------

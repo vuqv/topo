@@ -1,22 +1,22 @@
 What TOPO does
 ==============
 
-TOPO builds a single **one-bead-per-residue, structure-based (Gō-like) model**
+TOPO builds a single one-bead-per-residue, structure-based (Gō-like) model
 from a protein structure and runs Langevin dynamics on
-`OpenMM <https://openmm.org/>`_. One force field spans the whole spectrum —
-**globular (folded) proteins**, **multi-domain proteins with intrinsically
-disordered regions (IDRs)**, and **fully disordered proteins (IDPs)**: residues
+`OpenMM <https://openmm.org/>`_. One force field spans the whole spectrum:
+globular (folded) proteins, multi-domain proteins with intrinsically
+disordered regions (IDRs), and fully disordered proteins (IDPs): residues
 you declare disordered lose their native contacts and switch to a transferable,
 sequence-dependent potential, so ordered and disordered parts coexist in one
 chain (:doc:`usage/disordered_regions`).
 
-That one model powers **two complementary workflows**, each with its own set of
+That one model powers two complementary workflows, each with its own set of
 tutorials:
 
-* :ref:`A. Coarse-grained simulation of folded proteins <overview-simulation>`
-  — take a fully-formed structure and study how it moves, unfolds, and comes
+* :ref:`A. Coarse-grained simulation of folded proteins <overview-simulation>`:
+  take a fully-formed structure and study how it moves, unfolds, and comes
   apart.
-* :ref:`B. Protein synthesis <overview-synthesis>` — grow the chain residue by
+* :ref:`B. Protein synthesis <overview-synthesis>`: grow the chain residue by
   residue on the ribosome and watch it fold *as it is made*.
 
 Part B builds directly on the Part A model, so start with A if you are new here.
@@ -32,26 +32,26 @@ unfolding, thermal and mechanical stability, and multidomain motions. Contact
 energies can be scaled per domain and per interface, so different parts of a
 protein can be made more or less stable. Disorder is declared in the same file:
 mark tails, linkers, or whole chains as disordered to simulate a multi-domain
-protein with IDRs — or, with every residue marked, an IDP.
+protein with IDRs, or, with every residue marked, an IDP.
 
 .. rubric:: Tutorials
 
-* :doc:`A.1 · Single-domain quickstart <tutorials/A1_single_domain>` — build and
+* :doc:`A.1 · Single-domain quickstart <tutorials/A1_single_domain>`: build and
   run your first simulation of a small single-domain protein, then read its
   outputs.
-* :doc:`A.2 · Multidomain & per-domain contact scaling <tutorials/A2_multidomain>`
-  — control contact-energy stability **within** each domain and **across**
+* :doc:`A.2 · Multidomain & per-domain contact scaling <tutorials/A2_multidomain>`:
+  control contact-energy stability within each domain and across
   interfaces with a ``domain.yaml``.
-* :doc:`A.3 · Restart & outputs <tutorials/A3_restart>` — checkpoint and resume a
+* :doc:`A.3 · Restart & outputs <tutorials/A3_restart>`: checkpoint and resume a
   run, and understand every file it writes.
-* :doc:`A.4 · Many independent copies <tutorials/A4_multicopy>` — replicate one
+* :doc:`A.4 · Many independent copies <tutorials/A4_multicopy>`: replicate one
   protein into many non-interacting copies in a single job.
-* :doc:`A.5 · Optimizing the contact scale (nscale) <tutorials/A5_opt_nscal>` —
+* :doc:`A.5 · Optimizing the contact scale (nscale) <tutorials/A5_opt_nscal>`:
   automatically calibrate the per-domain and per-interface ``nscale`` so every
   unit stays folded.
-* :doc:`A.6 · Anneal & quench <tutorials/A6_anneal>` — drive temperature ramps to
+* :doc:`A.6 · Anneal & quench <tutorials/A6_anneal>`: drive temperature ramps to
   melt, quench, and observe (un)folding.
-* :doc:`A.7 · Disordered / IDR regions <tutorials/A7_idr_mixed>` — mark part of a
+* :doc:`A.7 · Disordered / IDR regions <tutorials/A7_idr_mixed>`: mark part of a
   chain intrinsically disordered with a ``disordered:`` section; the folded core
   keeps its shape while the tails and loops stay flexible.
 
@@ -70,20 +70,20 @@ protein with IDRs — or, with every residue marked, an IDP.
 B. Protein synthesis
 --------------------
 
-Grow the nascent chain **N→C, one residue at a time**, so the protein can fold
+Grow the nascent chain N→C, one residue at a time, so the protein can fold
 co-translationally as it emerges from the exit tunnel. Both tutorials layer
 codon-resolved kinetics on the Part A model but differ in how the ribosome exit
-tunnel is represented — and so in which runner they use: Tutorial B.1 uses
+tunnel is represented, and so in which runner they use: Tutorial B.1 uses
 ``topo-cylinder`` (an analytic tunnel), Tutorial B.2 uses ``topo-csp`` (an explicit
 coarse-grained ribosome).
 
 .. rubric:: Tutorials
 
-* :doc:`B.1 · Synthesis through an analytic tunnel <tutorials/B1_translation_cylinder>`
-  — the exit tunnel is a cylindrical bore through a wall (no explicit ribosome
+* :doc:`B.1 · Synthesis through an analytic tunnel <tutorials/B1_translation_cylinder>`:
+  the exit tunnel is a cylindrical bore through a wall (no explicit ribosome
   beads); fast, never jams, and the chain folds co-translationally on egress.
-* :doc:`B.2 · Synthesis on a coarse-grained ribosome <tutorials/B2_ribosome_synthesis>`
-  — the ribosome-based counterpart: grow the chain through TOPO's own truncated
+* :doc:`B.2 · Synthesis on a coarse-grained ribosome <tutorials/B2_ribosome_synthesis>`:
+  the ribosome-based counterpart: grow the chain through TOPO's own truncated
   CG ribosome, then eject the completed protein (worked on 4c5c and P0CX28).
 
 .. rubric:: Reference

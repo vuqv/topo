@@ -1,12 +1,12 @@
 Native-contact analysis (the *Q* score)
 =======================================
 
-The standard observable for a structure-based model is **Q, the fraction of
-native contacts formed** — a number between 0 (fully unfolded) and 1 (fully
+The standard observable for a structure-based model is Q, the fraction of
+native contacts formed: a number between 0 (fully unfolded) and 1 (fully
 folded) that tells you, frame by frame, how native-like a conformation is.
 TOPO ships a ready-made *Q* calculator,
-:mod:`topo.analysis.native_contacts`, that reports *Q* for the **whole protein**
-and for **every domain and domain–domain interface** declared in your
+:mod:`topo.analysis.native_contacts`, that reports *Q* for the whole protein
+and for every domain and domain–domain interface declared in your
 ``domain.yaml``.
 
 It is the same scorer the nscale optimizer uses internally
@@ -17,8 +17,8 @@ Python API.
 What *Q* measures
 -----------------
 
-A **native contact** is a pair of residues that are close together in the
-**folded reference structure**. *Q* is the fraction of those pairs that are still
+A native contact is a pair of residues that are close together in the
+folded reference structure. *Q* is the fraction of those pairs that are still
 close in a given simulation frame:
 
 .. math::
@@ -34,17 +34,17 @@ tolerance factor allowing some stretch.
 
 The method has two stages:
 
-1. **Define native contacts once, from the all-atom reference.** Residues *i* and
+1. Define native contacts once, from the all-atom reference. Residues *i* and
    *j* form a native contact when
 
    * they are more than ``local_separation`` residues apart in sequence
-     (:math:`|i-j| >` ``local_separation``, default **3**), **and**
-   * at least one **heavy-atom** pair (one atom per residue) lies within
-     ``cutoff`` (default **4.5 Å**).
+     (:math:`|i-j| >` ``local_separation``, default **3**), and
+   * at least one heavy-atom pair (one atom per residue) lies within
+     ``cutoff`` (default 4.5 Å).
 
    The reference Cα–Cα distance :math:`d^\mathrm{native}_{ij}` is stored for each.
 
-2. **Score each CG frame.** A native contact is counted as *formed* when
+2. Score each CG frame. A native contact is counted as *formed* when
 
    .. math::
 
@@ -54,29 +54,29 @@ The method has two stages:
    i.e. the Cα–Cα distance is within 20 % of its native value. *Q* is the
    fraction of that group's native contacts that are formed.
 
-Contacts are then **grouped by domain**: an *intra-domain* group holds contacts
+Contacts are then grouped by domain: an *intra-domain* group holds contacts
 with both residues in the same domain; an *interface* group holds contacts with
 one residue in each of two domains. A group with no native contacts (e.g. two
 domains that never touch) yields ``Q = NaN``.
 
 .. note::
 
-   **This native-contact set is defined more simply than the force field's.**
+   This native-contact set is defined more simply than the force field's.
    The *Q* scorer calls a contact "any heavy-atom pair within 4.5 Å"
    (with :math:`|i-j| > 3`). The model's *energy* contacts (:ref:`theory
    <theory-contacts>`) are built from hydrogen bonds + backbone–sidechain +
    sidechain–sidechain terms with :math:`|i-j| > 2`. The two sets overlap heavily
-   but are **not identical** — *Q* is a geometric folding metric, not a readout of
+   but are not identical: *Q* is a geometric folding metric, not a readout of
    the exact pairs that carry energy.
 
-   The sequence-separation cutoffs also differ **by design**: :math:`|i-j| > 2`
-   (i.e. :math:`\ge 3`) is part of the **model parameterization** — the separation
-   at which native pairs are given energy (``LOCAL_SEPARATION = 2``) — whereas the
-   *Q* default :math:`|i-j| > 3` (i.e. :math:`\ge 4`) is our **analysis convention**
-   for the folding metric. Consequently *Q*'s default does **not** score the
+   The sequence-separation cutoffs also differ by design: :math:`|i-j| > 2`
+   (i.e. :math:`\ge 3`) is part of the model parameterization, the separation
+   at which native pairs are given energy (``LOCAL_SEPARATION = 2``), whereas the
+   *Q* default :math:`|i-j| > 3` (i.e. :math:`\ge 4`) is our analysis convention
+   for the folding metric. Consequently *Q*'s default does not score the
    :math:`|i-j| = 3` pairs the model does carry energetically; pass
    ``--local-separation 2`` if you want *Q* to use the model's separation instead.
-   Both are reasonable definitions of "native"; just don't expect the *Q* contact
+   Both are reasonable definitions of "native"; do not expect the *Q* contact
    count to equal the ``native contacts:`` number printed when the model is built.
 
 
@@ -106,7 +106,7 @@ Arguments:
      - ``domain.yaml`` whose domains/interfaces define the *Q* groups.
    * - ``-r``, ``--reference``
      - str (*required*)
-     - **All-atom** reference structure that defines the native contacts (typically the same PDB you simulated).
+     - All-atom reference structure that defines the native contacts (typically the same PDB you simulated).
    * - ``-p``, ``--psf``
      - str (*required*)
      - CG (Cα) topology, e.g. ``traj/traj.psf``.
@@ -134,8 +134,8 @@ Arguments:
 
 .. important::
 
-   The ``--reference`` must be the **all-atom** structure (it needs sidechain
-   heavy atoms to define contacts), while ``--psf``/``--dcd`` are the **CG**
+   The ``--reference`` must be the all-atom structure (it needs sidechain
+   heavy atoms to define contacts), while ``--psf``/``--dcd`` are the CG
    topology and trajectory (one Cα bead per residue). The CG model must have
    exactly one bead per reference residue, or the tool errors out.
 
@@ -152,10 +152,10 @@ One row per scored frame, one column per *Q* group:
    1,0.978,0.990,0.961,0.880
    ...
 
-* ``Frame`` — 0-based frame index (respects ``--start-frame``).
-* ``Q_protein`` — whole-protein *Q* (all native contacts).
-* ``Q_<domain>`` — one column per domain (intra-domain *Q*).
-* ``Q_<a>-<b>`` — one column per domain pair (interface *Q*; ``NaN`` if the pair
+* ``Frame``: 0-based frame index (respects ``--start-frame``).
+* ``Q_protein``: whole-protein *Q* (all native contacts).
+* ``Q_<domain>``: one column per domain (intra-domain *Q*).
+* ``Q_<a>-<b>``: one column per domain pair (interface *Q*; ``NaN`` if the pair
   shares no native contacts).
 
 The tool also prints the native-contact count of each group and the mean *Q* per
@@ -206,19 +206,19 @@ uses):
 Typical workflow
 ----------------
 
-1. **Run a simulation** (:doc:`../tutorials/A1_single_domain`) producing
+1. Run a simulation (:doc:`../tutorials/A1_single_domain`) producing
    ``traj/traj.psf`` and ``traj/traj.dcd``.
-2. **Score it** against the structure you built from::
+2. Score it against the structure you built from::
 
       python -m topo.analysis.native_contacts -d domain.yaml \
           -r P0CX28_clean.pdb -p traj/traj.psf -f traj/traj.dcd -o Q.csv
 
-3. **Plot / interpret.** A stable folded run sits near ``Q ≈ 1``; raising
+3. Plot / interpret. A stable folded run sits near ``Q ≈ 1``; raising
    ``ref_t`` toward the melting temperature drives *Q* down as native contacts
    break. In an annealing run (:doc:`../tutorials/A6_anneal`), score the
    ``_quench`` trajectory to confirm *Q* → 0 (the protein really unfolded) and
    the production trajectory to watch *Q* climb back as it refolds.
 
 For multi-copy runs, split the combined trajectory first
-(:func:`topo.split_chains`) and score each per-copy DCD independently — exactly
+(:func:`topo.split_chains`) and score each per-copy DCD independently: exactly
 what the optimizer does to gather statistics over many trajectories.

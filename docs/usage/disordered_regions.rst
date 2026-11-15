@@ -1,8 +1,8 @@
 Disordered regions and intrinsically disordered proteins
 ========================================================
 
-TOPO can treat part of a chain as an **intrinsically disordered region (IDR)** or
-an entire chain as an **intrinsically disordered protein (IDP)**. An IDR is
+TOPO can treat part of a chain as an intrinsically disordered region (IDR) or
+an entire chain as an intrinsically disordered protein (IDP). An IDR is
 declared in the optional ``disordered:`` section of the same domain-definition
 YAML file supplied through ``domain_def``. No separate file, argument, or INI key
 is required.
@@ -17,7 +17,7 @@ This page explains:
   continuous synthesis.
 
 .. note::
-   **Scope.** This treatment applies only to TOPO's Cα model. It is implemented by
+   Scope. This treatment applies only to TOPO's Cα model. It is implemented by
    :func:`topo.utils.nonbonded.apply_disorder` at the end of the
    nonbonded build. The same ``disordered:`` declaration is used automatically by
    isolated-protein simulations, native-contact (Q) analysis, the ``nscale``
@@ -66,9 +66,9 @@ Physical picture
 
 An IDR model must represent two distinct physical properties:
 
-1. **Excluded volume:** every residue has a finite size, so two beads cannot
+1. Excluded volume: every residue has a finite size, so two beads cannot
    occupy the same space.
-2. **Residue-dependent attraction:** different residue pairs can have different
+2. Residue-dependent attraction: different residue pairs can have different
    weak tendencies to associate.
 
 A useful analogy is a solid ball with an adjustable sticky surface. The hardness
@@ -177,7 +177,7 @@ The three quantities have separate roles:
 
 - :math:`R_{ij}` sets the geometric length scale and the minimum-energy separation;
 - :math:`\varepsilon_{\mathrm{EV}}` (``eps_ev_kj``) controls the energetic hardness of
-  the repulsive core—that is, the energy penalty for bead overlap;
+  the repulsive core: that is, the energy penalty for bead overlap;
 - :math:`\varepsilon_{ij}` controls the residue-pair-specific attractive well depth,
   or bead “stickiness.”
 
@@ -203,8 +203,8 @@ discontinuous. The force is also continuous: :math:`R_{ij}` is the minimum of
 :math:`L(r)`, so :math:`\mathrm{d}L/\mathrm{d}r=0` there, and the additive constant has
 zero derivative.
 
-This construction **largely decouples bead size and hardness from bead
-attraction**. :math:`R_{ij}` sets where the core is located,
+This construction largely decouples bead size and hardness from bead
+attraction. :math:`R_{ij}` sets where the core is located,
 :math:`\varepsilon_{\mathrm{EV}}` sets how energetically difficult it is to push two
 beads into that core, and :math:`\varepsilon_{ij}` sets how strongly the beads attract
 outside the minimum. Thus, residue-pair attraction can be tuned without using
@@ -243,7 +243,7 @@ Two useful limits follow:
 In the actual TOPO parameterization, the non-native energy floor means that
 ``idr_scale: 0`` leaves a very small residual well rather than producing the exact
 :math:`\varepsilon_{ij}=0` mathematical limit. It is therefore best described as an
-**approximately self-avoiding or WCA-like reference**, not a strictly pure WCA
+approximately self-avoiding or WCA-like reference, not a strictly pure WCA
 chain.
 
 Under this split, varying :math:`\varepsilon_{ij}` from 0 to 2 kJ/mol moves the
@@ -311,7 +311,7 @@ shell of space than the short-range contact well. It can therefore strongly
 affect the net balance between attraction and repulsion, as described below
 using the second virial coefficient.
 
-   **The name “12–10–6” does not itself guarantee a barrier.**
+   The name “12–10–6” does not itself guarantee a barrier.
 
    The barrier arises from the particular signs and coefficients used by TOPO.
    Other potentials described as 12–10–6 may have different shapes.
@@ -361,7 +361,7 @@ separation is especially useful for IDRs because their sequence-dependent
 interactions must vary among residue pairs while their beads should retain a
 comparable excluded-volume core.
 
-The separation is best described as **practical or approximate decoupling**:
+The separation is best described as practical or approximate decoupling:
 :math:`R_{ij}` fixes the geometric contact scale, but an energy-defined effective core
 can still move slightly when :math:`\varepsilon_{ij}` changes. As shown above, that
 movement is small for the parameter range used here.
@@ -388,7 +388,7 @@ Thermodynamic interpretation: the second virial coefficient
 
 Well depth alone does not tell us whether a potential is effectively attractive
 or repulsive. The width and position of every attractive or repulsive region
-also matter. The **second virial coefficient**, :math:`B_2`, summarizes this net
+also matter. The second virial coefficient, :math:`B_2`, summarizes this net
 pairwise effect.
 
 At low concentration, the osmotic pressure can be expanded as
@@ -472,8 +472,8 @@ Therefore:
 The non-interacting and theta cases both have :math:`B_2=0`, but they are not
 microscopically identical:
 
-- In a **non-interacting system**, :math:`U(r)=0` and every distance contributes zero.
-- At the **theta condition**, repulsive regions contribute positively and
+- In a non-interacting system, :math:`U(r)=0` and every distance contributes zero.
+- At the theta condition, repulsive regions contribute positively and
   attractive regions contribute negatively, but their total contributions cancel.
 
 The theta chain therefore looks ideal at sufficiently large length scales even
@@ -517,7 +517,7 @@ only; Debye–Hückel electrostatics are not included.
 | reference,      |                          |                |               | interaction       |
 | :math:`U(r)=0`  |                          |                |               |                   |
 +-----------------+--------------------------+----------------+---------------+-------------------+
-| **CYS–CYS**     | **0.81170**              | 0.60613        | **−0.01890**  | Slight net        |
+| CYS–CYS         | 0.81170                  | 0.60613        | −0.01890      | Slight net        |
 |                 |                          |                |               | attraction        |
 +-----------------+--------------------------+----------------+---------------+-------------------+
 | PHE–MET         | 0.62342                  | 0.69593        | +0.09878      | Repulsion still   |
@@ -531,7 +531,7 @@ only; Debye–Hückel electrostatics are not included.
 |                 |                          |                |               | excluded volume   |
 |                 |                          |                |               | dominates         |
 +-----------------+--------------------------+----------------+---------------+-------------------+
-| ARG–LYS         | 0.04184                  | 0.72399        | **+0.49337**  | Largest positive  |
+| ARG–LYS         | 0.04184                  | 0.72399        | +0.49337      | Largest positive  |
 |                 |                          |                |               | non-electrostatic |
 |                 |                          |                |               | :math:`B_2`       |
 +-----------------+--------------------------+----------------+---------------+-------------------+
@@ -555,7 +555,7 @@ and therefore
    =0.811696\ \mathrm{kJ/mol}.
 
 .. note::
-   **Pairwise behavior at the current default parameters.**
+   Pairwise behavior at the current default parameters.
 
    With
    :math:`\varepsilon_{ij}=\max(\varepsilon_{\mathrm{NN}},
@@ -617,9 +617,9 @@ an absolute magnitude, and converted from kcal/mol to kJ/mol.
 
 The interaction is:
 
-- **nonspecific in coverage**, because it acts on every eligible nonlocal pair
+- nonspecific in coverage, because it acts on every eligible nonlocal pair
   rather than only native contacts;
-- **chemically heterogeneous in depth**, because the BT energy depends on the
+- chemically heterogeneous in depth, because the BT energy depends on the
   two residue types.
 
 Thus, the model can favor hydrophobic contacts more strongly without assigning
@@ -684,8 +684,8 @@ channels consistent during continuous synthesis.
 Configuration reference
 -----------------------
 
-All three top-level sections—``intra_domains``, ``inter_domains``, and
-``disordered``—are optional. Only ``n_residues`` is required.
+All three top-level sections (``intra_domains``, ``inter_domains``, and
+``disordered``) are optional. Only ``n_residues`` is required.
 
 +--------------------------+-----------------+-----------------+--------------------+
 | Key                      | Required?       | Type and        | Meaning            |
@@ -826,8 +826,8 @@ over the remaining 75 ns.
    :width: 100%
    :alt: TOPO and HPS-Urry radii of gyration versus SAXS measurements for 18 intrinsically disordered proteins
 
-   **Left:** TOPO's Cα IDR model at the calibrated defaults
-   ``idr_scale = 0.10`` and ``eps_ev_kj = 0.8368`` kJ/mol. **Right:** the
+   Left: TOPO's Cα IDR model at the calibrated defaults
+   ``idr_scale = 0.10`` and ``eps_ev_kj = 0.8368`` kJ/mol. Right: the
    HPS-Urry force field evaluated for the same 18 proteins as an external
    reference. The dashed line is :math:`y=x`, the green line is the
    ordinary-least-squares fit, and point color represents fractional deviation.
@@ -841,7 +841,7 @@ For the 18-IDP calibration set:
 |            |             |             | fractional | :math:`r` |           |
 |            |             |             | error      |           |           |
 +============+=============+=============+============+===========+===========+
-| **TOPO Cα  | **0.566**   | **0.223**   | **12.0%**  | **0.89**  | **0.81**  |
+| **TOPO Cα  | 0.566       | 0.223       | 12.0%      | 0.89      | 0.81      |
 | IDR**      |             |             |            |           |           |
 +------------+-------------+-------------+------------+-----------+-----------+
 | HPS-Urry   | 0.490       | 0.301       | 19.7%      | 0.70      | 0.68      |
@@ -994,20 +994,20 @@ or barrier crossing is plausible.
 Common pitfalls
 ---------------
 
-- ``idr_scale: 0`` **does not remove excluded volume.** It retains the core set by
+- ``idr_scale: 0`` does not remove excluded volume. It retains the core set by
   ``eps_ev_kj`` and also retains TOPO’s minute non-native attraction floor.
-- ``eps_ev_kj: 0`` **removes the intended repulsive core.** Do not use it to define
+- ``eps_ev_kj: 0`` removes the intended repulsive core. Do not use it to define
   a self-avoiding reference.
-- **Numbering must match the input structure.** Residue numbering is one-based;
+- Numbering must match the input structure. Residue numbering is one-based;
   an incorrect number disorders the wrong residue.
-- **Domain overlap is legal.** If a residue appears in both a domain and the
+- Domain overlap is legal. If a residue appears in both a domain and the
   disorder mask, disorder wins and TOPO prints an informational message.
-- **The current disorder mask is system-wide.** It is a flat residue set and has
+- The current disorder mask is system-wide. It is a flat residue set and has
   no per-chain qualifier.
-- **Declaring an IDR weakens the original Gō network.** Every native contact with
+- Declaring an IDR weakens the original Gō network. Every native contact with
   at least one disordered endpoint is deleted. Re-optimize folded-domain
   stability with the IDR declaration already present.
-- **Use spaces in YAML.** Do not use tab indentation, and include a space after
+- Use spaces in YAML. Do not use tab indentation, and include a space after
   each colon.
 
 Reference
