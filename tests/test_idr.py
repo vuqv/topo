@@ -51,6 +51,31 @@ def _mask(end=MASK_END, n=N_RES):
 # --------------------------------------------------------------------------- #
 # Range-compression helper for the IDR overlap log line
 # --------------------------------------------------------------------------- #
+def test_rmin_2_exclude_skips_disordered_partners():
+    """``exclude`` removes residues from the nearest-non-contact search only.
+
+    Toy chain on a line: residue 0's nearest eligible partner (|i-j| > 2, no contact)
+    is residue 3 at 4 A; residue 4 sits at 6 A. Excluding residue 3 must move residue
+    0's radius to the 6 A partner, and must not change residues whose nearest partner
+    was never excluded.
+    """
+    from topo.utils.nonbonded import calculate_rmin_2_values, RMIN_SCALE_FACTOR
+
+    x = np.array([0.0, 1.0, 2.0, 4.0, 6.0, 20.0])
+    D = np.abs(x[:, None] - x[None, :])
+    C = np.zeros_like(D, dtype=int)
+    exclude = np.array([False, False, False, True, False, False])
+
+    base = calculate_rmin_2_values(C, D, len(x))
+    ex = calculate_rmin_2_values(C, D, len(x), exclude=exclude)
+    half = 0.5 * RMIN_SCALE_FACTOR
+    assert base[0] == pytest.approx(half * 4.0)
+    assert ex[0] == pytest.approx(half * 6.0)          # skipped the excluded bead
+    assert ex[1] == pytest.approx(half * 5.0)          # 1 -> 4 (3 excluded, |1-3| = 2 local)
+    assert ex[5] == base[5]                            # nearest partner was never excluded
+    assert calculate_rmin_2_values(C, D, len(x), exclude=None) == base
+
+
 def test_format_residue_ranges():
     """Consecutive residues collapse to a-b so the overlap log stays short."""
     from topo.utils.nonbonded import format_residue_ranges as f
@@ -90,17 +115,24 @@ def test_contact_removal_self_avoiding(tmp_path, monkeypatch):
 
     # Every masked pair -> exactly the excluded-volume floor (idr_scale=0, floor guard).
     assert np.allclose(eps_m[involves], NON_NATIVE_KJ)
-    # Folded-folded pairs are byte-identical to the folded-only run.
+    # Folded-folded well depths are byte-identical to the folded-only run.
     assert np.allclose(eps_m[ff], eps_f[ff])
-    assert np.allclose(rmin_m[ff], rmin_f[ff])
 
     # IDR residues' radius -> the per-AA table Rmin/2 *directly* (no 2^(1/6) sigma
-    # conversion: both bead classes carry an Rmin/2); folded residues' K-B Rmin/2
-    # unchanged.
+    # conversion: both bead classes carry an Rmin/2).
     resname = _resnames()
     for i in range(MASK_END):
         assert r2_m[i] == pytest.approx(IDR_RMIN_2_NM[resname[i]])
-    assert np.allclose(r2_m[MASK_END:], r2_f[MASK_END:])
+
+    # Folded K-B Rmin/2 is derived from the folded residues alone, so IDR beads drop
+    # out of the nearest-non-contact search: a folded radius can only grow, and only
+    # where an IDR bead was the nearest partner. Everything else is untouched.
+    changed = (r2_m != r2_f) & ~m
+    assert np.all(r2_m[~m] >= r2_f[~m])
+    assert changed.any()                               # the fixture exercises the rule
+    assert r2_m[~m].max() <= r2_f[~m].max()            # no radius inflated past the fold's own range
+    keep = ff & ~(changed[:, None] | changed[None, :])
+    assert np.array_equal(rmin_m[keep], rmin_f[keep])
     # No native contact survives that touches a masked residue.
     assert not np.any(eps_m[involves] > 0.01)
 

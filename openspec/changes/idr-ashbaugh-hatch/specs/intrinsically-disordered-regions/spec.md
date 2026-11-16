@@ -35,9 +35,13 @@ no interaction group, taking the pre-existing code path unchanged.
 
 #### Scenario: Folded–folded pairs are bit-identical
 - **WHEN** a model is built with a `disordered:` section
-- **THEN** every folded–folded well position and well depth SHALL equal those from an
-  otherwise identical build without that section, to floating-point equality
-- **AND** every folded residue's `Rmin/2` SHALL be unchanged
+- **THEN** every folded–folded well depth SHALL equal that from an otherwise identical
+  build without that section, to floating-point equality
+- **AND** every folded residue's `Rmin/2` SHALL be computed from the folded residues
+  alone (disordered residues are not candidates for the nearest non-contact partner),
+  so it is greater than or equal to its folded-only value
+- **AND** every folded–folded well position not involving a residue whose `Rmin/2`
+  changed SHALL equal its folded-only value
 
 #### Scenario: The two forces partition the pairs
 - **WHEN** a model with disordered residues is built

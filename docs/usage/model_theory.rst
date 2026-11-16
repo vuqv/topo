@@ -713,6 +713,13 @@ different, and the distinction is the single most common source of confusion:
   pair, cross pairs included, combines by the plain sum rule
   :math:`R_{ij} = (R_\mathrm{min}/2)_i + (R_\mathrm{min}/2)_j`.
 
+  The folded K-B radii are computed from the folded residues alone: disordered
+  residues are not candidates for the nearest non-contact partner. Their input
+  coordinates (often low-confidence AlphaFold placements) therefore cannot set a
+  folded residue's radius. A folded residue that the input structure packs against
+  an IDR gets a slightly larger radius than it would in a folded-only build of the
+  same chain.
+
 The transferable values are also used by the inter-chain
 ribosome–nascent-chain excluded-volume term in protein synthesis
 (:mod:`topo.csp.ribosome`), which reproduces O'Brien's 12-10-6 form (the

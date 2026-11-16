@@ -925,7 +925,8 @@ def _scaling_matrix_from_config(domain_to_residues: Dict, intra_nscales: Dict,
     return matrix
 
 def calculate_rmin_2_values(binary_contact_matrix: np.ndarray, ca_distances: np.ndarray,
-                           n_residues: int) -> List[float]:
+                           n_residues: int,
+                           exclude: Optional[np.ndarray] = None) -> List[float]:
     """
     Compute per-residue collision radius Rmin/2 for non-native contacts.
 
@@ -945,6 +946,12 @@ def calculate_rmin_2_values(binary_contact_matrix: np.ndarray, ca_distances: np.
         CA–CA distances (same units as used later; typically Angstrom).
     n_residues : int
         Number of residues.
+    exclude : np.ndarray of bool, shape (n_residues,), optional
+        Residues that may not act as the nearest non-contact partner j. Used for the
+        disordered residues: their input coordinates (typically low-confidence
+        AlphaFold placements) must not set a folded residue's radius, so a folded
+        residue's Rmin/2 is computed from the folded residues alone. ``None`` (default)
+        leaves every residue eligible -- the folded-only behaviour.
 
     Returns
     -------
@@ -955,8 +962,9 @@ def calculate_rmin_2_values(binary_contact_matrix: np.ndarray, ca_distances: np.
     rmin_2 = []
     for i in range(n_residues):
         not_in_contact_with_i = [
-            j for j in range(n_residues) 
+            j for j in range(n_residues)
             if abs(i - j) > LOCAL_SEPARATION and binary_contact_matrix[i, j] == 0
+            and (exclude is None or not exclude[j])
         ]
         if not_in_contact_with_i:
             distance_to_i = ca_distances[i, not_in_contact_with_i]
@@ -973,8 +981,11 @@ def apply_disorder(rmin_matrix: np.ndarray, eps_ij: np.ndarray, rmin_2_nm: np.nd
 
     Runs at the very end of :func:`build_nonbonded_interaction`, after the folded
     build is complete and everything is in nm. It overwrites -- **in place** -- only
-    the entries that touch a disordered residue, leaving folded-folded pairs and every
-    folded residue's Karanicolas-Brooks radius byte-identical to a folded-only run.
+    the entries that touch a disordered residue; folded-folded pairs and folded
+    residues' Karanicolas-Brooks radii are left as built. (Those radii were already
+    computed from the folded residues alone -- see the ``exclude`` argument of
+    :func:`calculate_rmin_2_values` -- so they can differ slightly from a folded-only
+    run where the input structure packs a folded residue against an IDR.)
 
     Two pair classes result: folded-folded (untouched, Go) and IDR-involving. Every
     pair touching a disordered residue -- IDR-IDR and IDR-folded alike -- loses its
@@ -1202,7 +1213,16 @@ def build_nonbonded_interaction(
     rmin_matrix[contact_mask] = ca_distances[contact_mask]
 
     # Non-native pairs: per-residue Rmin/2 (structure-derived), combined by the SUM rule.
-    rmin_2 = calculate_rmin_2_values(binary_contact_matrix, ca_distances, n_residues)
+    # With a `disordered:` section, folded radii are derived from the folded residues
+    # alone: disordered beads can neither set a folded residue's nearest non-contact
+    # distance nor be skipped because of a native contact that apply_disorder deletes.
+    # (The disordered residues' own radii are replaced by the per-AA table there.)
+    dis_mask = None
+    if disorder is not None:
+        dis_mask = np.zeros(n_residues, dtype=bool)
+        dis_mask[np.asarray(disorder['residues'], dtype=int) - 1] = True
+    rmin_2 = calculate_rmin_2_values(binary_contact_matrix, ca_distances, n_residues,
+                                     exclude=dis_mask)
     for i in range(n_residues):
         for j in range(n_residues):
             if binary_contact_matrix[i, j] == 0:

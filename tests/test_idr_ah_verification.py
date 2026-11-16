@@ -296,12 +296,14 @@ def test_idr_force_matches_lambda_form_oracle(builds, build, config):
 def _regen():
     with tempfile.TemporaryDirectory() as td:
         snap = _snapshot(_build_all(td))
-    commit = subprocess.run(["git", "-C", str(REPO_ROOT), "rev-parse", "HEAD"],
+    # "-dirty" marks a snapshot taken from uncommitted changes on top of that commit.
+    commit = subprocess.run(["git", "-C", str(REPO_ROOT), "describe", "--always",
+                             "--dirty", "--abbrev=40"],
                             capture_output=True, text=True).stdout.strip()
     snap["meta|commit"] = np.array(commit)
     REF.parent.mkdir(exist_ok=True)
     np.savez_compressed(REF, **snap)
-    print(f"wrote {REF} ({len(snap)} arrays, commit {commit[:8]})")
+    print(f"wrote {REF} ({len(snap)} arrays, {commit})")
 
 
 if __name__ == "__main__":

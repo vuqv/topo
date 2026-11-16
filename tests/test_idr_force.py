@@ -302,7 +302,9 @@ def test_eps_ev_reaches_the_force(tmp_path, monkeypatch):
 
 
 def test_folded_folded_energy_is_unchanged_by_declaring_an_idr(tmp_path, monkeypatch):
-    """Folded–folded well positions and depths survive a ``disordered:`` section intact.
+    """Folded–folded well depths survive a ``disordered:`` section intact; well
+    positions too, except for the few folded residues whose nearest non-contact
+    partner was an IDR bead (folded radii are derived from the folded residues alone).
 
     Note this is about the *parameters*, not the total energy: declaring an IDR also
     deletes every native contact that crosses the boundary (a disordered residue's
@@ -318,9 +320,15 @@ def test_folded_folded_energy_is_unchanged_by_declaring_an_idr(tmp_path, monkeyp
     mask = np.zeros(N_RES, dtype=bool)
     mask[list(idr["idx"])] = True
     ff = ~(mask[:, None] | mask[None, :])
-    assert np.array_equal(rm[ff], rf[ff])          # exact, not approximate
-    assert np.array_equal(em[ff], ef[ff])
-    assert np.array_equal(r2m[~mask], r2f[~mask])
+    assert np.array_equal(em[ff], ef[ff])          # exact, not approximate
+    changed = (r2m != r2f) & ~mask
+    assert np.all(r2m[~mask] >= r2f[~mask])        # removing candidates only grows a radius
+    assert changed.any()                           # the fixture exercises the rule
+    keep = ff & ~(changed[:, None] | changed[None, :])
+    assert np.array_equal(rm[keep], rf[keep])
+    # Changed folded radii still enter non-native wells by the plain sum rule.
+    cf = ff & (changed[:, None] | changed[None, :]) & (ef < 0.01)
+    assert np.allclose(rm[cf], (r2m[:, None] + r2m[None, :])[cf])
 
 
 def test_fully_disordered_chain_builds(tmp_path, monkeypatch):
