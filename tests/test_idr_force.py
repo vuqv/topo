@@ -355,7 +355,7 @@ def _energy(system, positions):
         unit.kilojoule_per_mole)
 
 
-@pytest.mark.parametrize("domain", ["idr", "none"])
+@pytest.mark.parametrize("domain", ["idr", "hps_urry", "none"])
 def test_replicated_energy_is_exactly_n_times_one_copy(tmp_path, monkeypatch, domain):
     """N non-interacting copies have exactly N x the single-copy energy.
 
@@ -367,7 +367,9 @@ def test_replicated_energy_is_exactly_n_times_one_copy(tmp_path, monkeypatch, do
     from topo.utils.multichain import make_noninteracting_copies
 
     monkeypatch.chdir(tmp_path)
-    dm = _idr_yaml(tmp_path) if domain == "idr" else None
+    dm = {"idr": lambda: _idr_yaml(tmp_path),
+          "hps_urry": lambda: _idr_yaml(tmp_path, model="hps_urry"),
+          "none": lambda: None}[domain]()
     m = _build(PDB, dm)
 
     n_copies = 3
@@ -481,8 +483,10 @@ def _toy_ribosome(m_beads=6, x0=5.0):
                     segids=["RB"] * m_beads)
 
 
+@pytest.mark.parametrize("model", ["bt", "hps_urry"])
 @pytest.mark.parametrize("regime,idr_end", [("fully-disordered", 12), ("mixed", 6)])
-def test_append_ribosome_preserves_the_partition(tmp_path, monkeypatch, regime, idr_end):
+def test_append_ribosome_preserves_the_partition(tmp_path, monkeypatch, regime, idr_end,
+                                                 model):
     """A ribosome append must not widen the contact force it did not create.
 
     ``append_ribosome`` used to assert ``{nascent} x {nascent}`` on the contact force
@@ -498,7 +502,7 @@ def test_append_ribosome_preserves_the_partition(tmp_path, monkeypatch, regime, 
 
     monkeypatch.chdir(tmp_path)
     L = 12                                     # emerged nascent length
-    dm = _idr_yaml(tmp_path, f"{regime}.yaml", end=idr_end)
+    dm = _idr_yaml(tmp_path, f"{regime}.yaml", end=idr_end, model=model)
     R_full, eps_full, _r2, idr_full = build_nonbonded_interaction(
         str(PDB), dm, return_rmin_2=True, return_idr=True)
 

@@ -388,6 +388,52 @@ def test_idr_force_matches_lambda_form_oracle(builds, build, config):
     assert e_omm["IDR Non-Bonded Energy"] == pytest.approx(e_ref, rel=1e-9, abs=1e-8)
 
 
+@pytest.mark.parametrize("config", CONFIGS)
+def test_idr_force_matches_lambda_form_oracle_under_hps_urry(tmp_path_factory, config):
+    """The same oracle for the second model, built on the A.7 system. Not part of the
+    snapshot: the oracle is the reference. Covers the negative GLU-GLU lambda."""
+    import topo
+    from topo.utils.nonbonded import build_nonbonded_interaction
+
+    workdir = tmp_path_factory.mktemp("idr_ah_urry")
+    cfg = yaml.safe_load(DOMAIN_YAML.read_text())
+    cfg["disordered"]["model"] = "hps_urry"
+    dd = str(workdir / "hps_urry.yaml")
+    with open(dd, "w") as fh:
+        yaml.safe_dump(cfg, fh)
+    cwd = os.getcwd()
+    os.chdir(workdir)
+    try:
+        m = topo.models.buildCoarseGrainModel(str(PDB), domain_def=dd, check_forces=False)
+        rmin, eps, idr = build_nonbonded_interaction(str(PDB), dd, return_idr=True)
+    finally:
+        os.chdir(cwd)
+    assert idr["model"] == "hps_urry"
+    f = m.idr_non_bonded_force
+    excluded = {tuple(sorted(f.getExclusionParticles(k))) for k in range(f.getNumExclusions())}
+    pos = _positions(m, config)
+    e_omm, _ = _evaluate(m, pos)
+    e_ref = _oracle_idr_energy(pos, rmin, eps, idr["epsilon_kj"], idr["idx"], excluded)
+    assert e_omm["IDR Non-Bonded Energy"] == pytest.approx(e_ref, rel=1e-9, abs=1e-8)
+
+
+@pytest.mark.parametrize("length", CSP_LENGTHS)
+def test_idr_force_ignores_ribosome_beads(builds, length):
+    """Moving the ribosome with the nascent chain fixed leaves the IDR force energy
+    unchanged, while the NC<->ribosome terms do change."""
+    d = builds["csp"][length]
+    system = d["model"].system
+    idr_i = next(i for i, f in enumerate(system.getForces())
+                 if f.this == d["model"].idr_non_bonded_force.this)
+    pos = _csp_positions(d, "native")
+    moved = pos.copy()
+    moved[length:] += np.array([0.0, 0.0, 0.15])
+    e0, e1 = _evaluate_system(system, pos), _evaluate_system(system, moved)
+    key = next(k for k in e0 if k.startswith(f"{idr_i:02d}:"))
+    assert e1[key] == e0[key]
+    assert any(abs(e1[k] - e0[k]) > 1e-6 for k in e0 if k != key)
+
+
 # --------------------------------------------------------------------------- #
 # Snapshot regeneration
 # --------------------------------------------------------------------------- #
