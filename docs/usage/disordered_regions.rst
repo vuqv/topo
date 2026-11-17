@@ -12,7 +12,7 @@ This page explains:
 - how to declare an IDR;
 - what changes in the coarse-grained model;
 - why TOPO uses an Ashbaugh–Hatch 12–6 interaction for IDR-involving pairs;
-- how ``idr_scale`` and ``eps_ev_kj`` affect the ensemble;
+- how the ``model:`` key selects the IDR parameter set (``bt`` or ``hps_urry``);
 - how IDRs affect native-contact analysis, stability optimization, and
   continuous synthesis.
 
@@ -40,18 +40,16 @@ Add a ``disordered:`` block to the domain-definition file:
 
    disordered:
      residues: [1-24, 150-165]
-     idr_scale: 0.10
-     eps_ev_kj: 0.8368
+     model: bt            # bt (default) | hps_urry
 
-The defaults are:
+``model`` names the IDR parameter set. It is optional and defaults to ``bt``, the
+SAXS-calibrated set, so listing only ``residues`` gives the same result. The other
+shipped set is ``hps_urry``; see :ref:`idr-models` before using it.
 
-.. code:: yaml
-
-   idr_scale: 0.10
-   eps_ev_kj: 0.8368
-
-Use these defaults unless you have experimental information that supports
-recalibration for your system.
+The former ``idr_scale`` and ``eps_ev_kj`` keys have been removed. The well
+depths and the energy scale are fixed by the model and cannot be set in the YAML
+file. A file that still contains either key is rejected with an error that names
+the key and points to ``model:``.
 
 Declaring a residue disordered has one central consequence:
 
@@ -116,13 +114,16 @@ Every nonlocal residue pair belongs to one of three classes:
 |               |                |             | floor                       | Karanicolas–Brooks |
 |               |                |             |                             | sum rule           |
 +---------------+----------------+-------------+-----------------------------+--------------------+
-| IDR–IDR       | Ashbaugh–Hatch | Removed     | ``sIDR εBT(i,j)``           | Sum of the two     |
-|               | 12–6           |             |                             | residue radii      |
+| IDR–IDR       | Ashbaugh–Hatch | Removed     | ``λij ε``, with ``λij``     | Sum of the two     |
+|               | 12–6           |             | from the model's table      | residue radii      |
 +---------------+----------------+-------------+-----------------------------+--------------------+
-| Folded–IDR    | Ashbaugh–Hatch | Removed     | Same rule as IDR–IDR        | Sum of the folded  |
-|               | 12–6           |             |                             | and IDR residue    |
-|               |                |             |                             | radii              |
+| Folded–IDR    | Ashbaugh–Hatch | Removed     | Same rule as IDR–IDR; the   | Sum of the folded  |
+|               | 12–6           |             | folded residue takes ``λ``  | and IDR residue    |
+|               |                |             | by its residue type         | radii              |
 +---------------+----------------+-------------+-----------------------------+--------------------+
+
+The non-native energy floor of the folded model is not applied to IDR-involving
+pairs: their well depth is exactly :math:`\lambda_{ij}\varepsilon`.
 
 The two potentials act on disjoint OpenMM interaction groups:
 
@@ -137,8 +138,8 @@ error.
 
 .. _idr-ashbaugh-hatch:
 
-How IDR-involving pairs interact: the current AH–LJ form
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+How IDR-involving pairs interact: the AH lambda form
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Define the dimensionless Lennard–Jones shape
 
@@ -166,23 +167,31 @@ The minimum of :math:`L(r)` is therefore at :math:`r=R_{ij}`, where
 
    U_{ij}(r)=
    \begin{cases}
-   \varepsilon_{\mathrm{EV}}L(r)
-   +\left(\varepsilon_{\mathrm{EV}}-\varepsilon_{ij}\right),
+   \varepsilon L(r)
+   +\left(1-\lambda_{ij}\right)\varepsilon,
    & r\le R_{ij},\\[4pt]
-   \varepsilon_{ij}L(r),
+   \lambda_{ij}\,\varepsilon L(r),
    & r>R_{ij}.
    \end{cases}
 
-The three quantities have separate roles:
+This is the :math:`\lambda` form of the Ashbaugh–Hatch potential, as used by the
+HPS family of IDP models. The three quantities have separate roles:
 
 - :math:`R_{ij}` sets the geometric length scale and the minimum-energy separation;
-- :math:`\varepsilon_{\mathrm{EV}}` (``eps_ev_kj``) controls the energetic hardness of
-  the repulsive core: that is, the energy penalty for bead overlap;
-- :math:`\varepsilon_{ij}` controls the residue-pair-specific attractive well depth,
-  or bead “stickiness.”
+- :math:`\varepsilon` is the energy scale of the model. It controls the energetic
+  hardness of the repulsive core: that is, the energy penalty for bead overlap.
+  Both shipped models use :math:`\varepsilon=0.8368` kJ/mol (0.2 kcal/mol);
+- :math:`\lambda_{ij}` is a dimensionless residue-pair value read from the
+  model's 20 × 20 table. The product :math:`\lambda_{ij}\varepsilon` is the
+  attractive well depth of the pair, or bead “stickiness.”
+
+Neither :math:`\varepsilon` nor :math:`\lambda_{ij}` is a user setting. Both are
+fixed by the parameter set selected with ``model:`` (see :ref:`idr-models`). For
+the default ``bt`` model,
+:math:`\lambda_{ij}\varepsilon=0.10\,\varepsilon_{\mathrm{BT}}(i,j)`.
 
 The additive term
-:math:`\left(\varepsilon_{\mathrm{EV}}-\varepsilon_{ij}\right)` in the repulsive
+:math:`\left(1-\lambda_{ij}\right)\varepsilon` in the repulsive
 branch makes the potential continuous at :math:`R_{ij}`. Because :math:`L(R_{ij})=-1`,
 
 .. math::
@@ -190,25 +199,26 @@ branch makes the potential continuous at :math:`R_{ij}`. Because :math:`L(R_{ij}
 
    \begin{aligned}
    U_{ij}(R_{ij}^{-})
-   &=-\varepsilon_{\mathrm{EV}}
-     +\left(\varepsilon_{\mathrm{EV}}-\varepsilon_{ij}\right)
-     =-\varepsilon_{ij},\\
+   &=-\varepsilon
+     +\left(1-\lambda_{ij}\right)\varepsilon
+     =-\lambda_{ij}\varepsilon,\\
    U_{ij}(R_{ij}^{+})
-   &=-\varepsilon_{ij}.
+   &=-\lambda_{ij}\varepsilon.
    \end{aligned}
 
 Without this additive term, the two branches would meet at
-:math:`-\varepsilon_{\mathrm{EV}}` and :math:`-\varepsilon_{ij}` and would generally be
+:math:`-\varepsilon` and :math:`-\lambda_{ij}\varepsilon` and would generally be
 discontinuous. The force is also continuous: :math:`R_{ij}` is the minimum of
 :math:`L(r)`, so :math:`\mathrm{d}L/\mathrm{d}r=0` there, and the additive constant has
-zero derivative.
+zero derivative. For :math:`\lambda_{ij}>0`, the minimum of :math:`U_{ij}` is at
+:math:`r=R_{ij}` with depth :math:`-\lambda_{ij}\varepsilon`.
 
 This construction largely decouples bead size and hardness from bead
 attraction. :math:`R_{ij}` sets where the core is located,
-:math:`\varepsilon_{\mathrm{EV}}` sets how energetically difficult it is to push two
-beads into that core, and :math:`\varepsilon_{ij}` sets how strongly the beads attract
-outside the minimum. Thus, residue-pair attraction can be tuned without using
-the same parameter to rescale the repulsive wall. The decoupling is not
+:math:`\varepsilon` sets how energetically difficult it is to push two
+beads into that core, and :math:`\lambda_{ij}` sets how strongly the beads attract
+outside the minimum. Thus, residue-pair attraction can differ between pairs
+without using the same parameter to rescale the repulsive wall. The decoupling is not
 mathematically perfect if bead size is defined through an energy-dependent
 effective-core criterion, but it is the main practical advantage of the AH
 split.
@@ -221,29 +231,27 @@ Why Ashbaugh–Hatch LJ is appropriate for IDRs
 ---------------------------------------------
 
 The AH construction splits the potential at its minimum. The repulsive branch
-uses :math:`\varepsilon_{\mathrm{EV}}`, whereas the attractive branch uses the
-pair-specific :math:`\varepsilon_{ij}`. Consequently, TOPO can change residue
-stickiness without using the same parameter to rescale the repulsive wall.
+uses :math:`\varepsilon`, whereas the attractive branch uses the
+pair-specific :math:`\lambda_{ij}\varepsilon`. Consequently, residue
+stickiness can vary between pairs without using the same parameter to rescale
+the repulsive wall.
 
-In conventional Ashbaugh–Hatch notation, the pair stickiness can be written as
+The pair stickiness :math:`\lambda_{ij}` is the ratio of the pair well depth to
+the energy scale of the core. Three cases follow:
 
-.. math::
-
-
-   \lambda_{ij}=\frac{\varepsilon_{ij}}
-   {\varepsilon_{\mathrm{EV}}}.
-
-Two useful limits follow:
-
-- If :math:`\varepsilon_{ij}=0`, the mathematical expression becomes a WCA-like
+- If :math:`\lambda_{ij}=0`, the expression becomes a WCA-like
   repulsive core with zero energy for :math:`r>R_{ij}`.
-- If :math:`\varepsilon_{ij}=\varepsilon_{\mathrm{EV}}`, it becomes ordinary LJ
-  12–6.
+- If :math:`\lambda_{ij}=1`, it becomes ordinary LJ 12–6.
+- If :math:`\lambda_{ij}<0`, the outer branch is positive, so the pair has no
+  well and is repulsive at every distance. This occurs for exactly one pair
+  type in the shipped tables, GLU–GLU in ``hps_urry``.
 
-``idr_scale: 0`` gives exactly this :math:`\varepsilon_{ij}=0` limit for every
-IDR-involving pair. A negative ``idr_scale`` is rejected.
+Every pair in the ``bt`` table has :math:`0<\lambda_{ij}<1`. The
+:math:`\lambda_{ij}=0` limit is not available as a user setting, so a pure
+self-avoiding (WCA) reference chain can no longer be requested.
 
-Under this split, varying :math:`\varepsilon_{ij}` from 0 to 2 kJ/mol moves the
+Under this split, varying the well depth :math:`\lambda_{ij}\varepsilon` from 0 to
+2 kJ/mol moves the
 :math:`U(r)=k_BT` core only from approximately :math:`0.846R` to :math:`0.819R`. The attraction
 changes strongly while the effective bead size changes by only about 3.2%.
 
@@ -348,11 +356,11 @@ as :math:`k_BT` changes. Ordinary LJ therefore does not provide an independent
 “stickiness” parameter at fixed energetic core hardness.
 
 AH-LJ supplies this missing control by using two energy scales. The inner branch
-is governed primarily by :math:`\varepsilon_{\mathrm{EV}}`, whereas the attractive
-well depth is :math:`\varepsilon_{ij}`. Consequently, the residue-specific
-:math:`\varepsilon_{ij}` values can tune solvent quality and sequence-dependent
+is governed primarily by :math:`\varepsilon`, whereas the attractive
+well depth is :math:`\lambda_{ij}\varepsilon`. Consequently, the residue-specific
+:math:`\lambda_{ij}` values can set solvent quality and sequence-dependent
 attraction without proportionally rescaling the repulsive wall. Conversely,
-:math:`\varepsilon_{\mathrm{EV}}` can be chosen to prevent excessive bead overlap
+:math:`\varepsilon` can be chosen to prevent excessive bead overlap
 without forcing every residue pair to have the same attraction strength. This
 separation is especially useful for IDRs because their sequence-dependent
 interactions must vary among residue pairs while their beads should retain a
@@ -360,7 +368,7 @@ comparable excluded-volume core.
 
 The separation is best described as practical or approximate decoupling:
 :math:`R_{ij}` fixes the geometric contact scale, but an energy-defined effective core
-can still move slightly when :math:`\varepsilon_{ij}` changes. As shown above, that
+can still move slightly when :math:`\lambda_{ij}` changes. As shown above, that
 movement is small for the parameter range used here.
 
 The progression is therefore:
@@ -482,29 +490,33 @@ contribute strongly. Likewise, two potentials with the same minimum depth need
 not have the same :math:`B_2`: a broad shallow attractive well can contribute more
 than a narrow deep well.
 
-For TOPO’s current AH 12–6 parameterization, the attractive energy in this
-calculation is the already defined pair well depth :math:`\varepsilon_{ij}`:
+For the default ``bt`` model, the attractive energy in this
+calculation is the already defined pair well depth:
 
 .. math::
 
 
-   \varepsilon_{ij}
+   \lambda_{ij}\varepsilon
    =
-   s_{\mathrm{IDR}}\varepsilon_{\mathrm{BT}}(i,j).
+   0.10\,\varepsilon_{\mathrm{BT}}(i,j).
 
 It is the depth of the AH minimum,
-:math:`U_{ij}(R_{ij})=-\varepsilon_{ij}`; it is not an additional model parameter.
+:math:`U_{ij}(R_{ij})=-\lambda_{ij}\varepsilon`; it is not an additional model parameter.
 
-The following values were calculated for actual residue pairs from
-``bt_potential.csv``, using ``idr_scale = 0.10``,
-:math:`\varepsilon_{\mathrm{EV}}=0.8368` kJ/mol, and :math:`T=300` K. The pair distance is
+The following values were calculated for actual residue pairs of the ``bt``
+model, with well depths :math:`0.10\,\varepsilon_{\mathrm{BT}}(i,j)` from
+``bt_potential.csv``,
+:math:`\varepsilon=0.8368` kJ/mol, and :math:`T=300` K. The shipped table stores
+:math:`\lambda_{ij}` to four decimals, which does not change these values at the
+precision shown. No corresponding calculation has been made for ``hps_urry``.
+The pair distance is
 :math:`R_{ij}=R_{\min/2,i}+R_{\min/2,j}`, and the integral includes TOPO’s switching
 region from 1.8 to 2.0 nm. These values describe the AH non-electrostatic term
 only; Debye–Hückel electrostatics are not included.
 
 +-----------------+--------------------------+----------------+---------------+-------------------+
 | System or pair  | Pair well depth          | :math:`R_{ij}` | :math:`B_2`   | Interpretation    |
-|                 | :math:`\varepsilon_{ij}` | (nm)           | (nm³)         |                   |
+|                 | ``λij ε``                | (nm)           | (nm³)         |                   |
 |                 | (kJ/mol)                 |                |               |                   |
 +=================+==========================+================+===============+===================+
 | Non-interacting | —                        | —              | 0             | No pair           |
@@ -544,16 +556,19 @@ and therefore
 .. math::
 
 
-   \varepsilon_{\mathrm{CYS,CYS}}
+   \lambda_{\mathrm{CYS,CYS}}\,\varepsilon
    =0.10\times8.11696
-   =0.811696\ \mathrm{kJ/mol}.
+   =0.811696\ \mathrm{kJ/mol},
+
+which corresponds to :math:`\lambda_{\mathrm{CYS,CYS}}=0.97`, the largest value
+in the ``bt`` table.
 
 .. note::
-   Pairwise behavior at the current default parameters.
+   Pairwise behavior of the default ``bt`` model.
 
    With
-   :math:`\varepsilon_{ij}=0.10\,\varepsilon_{\mathrm{BT}}(i,j)` and
-   :math:`\varepsilon_{\mathrm{EV}}=0.8368` kJ/mol, 209 of the 210 unique amino-acid
+   :math:`\lambda_{ij}\varepsilon=0.10\,\varepsilon_{\mathrm{BT}}(i,j)` and
+   :math:`\varepsilon=0.8368` kJ/mol, 209 of the 210 unique amino-acid
    pair types have positive second virial coefficients. Their values range from
    :math:`+0.09878` nm³ for PHE–MET to :math:`+0.49337` nm³ for ARG–LYS. CYS–CYS is the only
    negative pair, with :math:`B_2=-0.01890` nm³.
@@ -567,27 +582,73 @@ collective conformational sampling.
 As the AH attraction increases, :math:`B_2` decreases. The interaction therefore moves
 in the expected thermodynamic direction: from excluded-volume-dominated behavior,
 through the theta condition, and then toward net attraction.
-The simulated chain dimensions follow the same trend: :math:`\nu` decreases from 0.637
-at ``idr_scale: 0`` to 0.276 at ``idr_scale: 0.30``, passing through experimentally
-relevant IDP dimensions before reaching the collapsed regime.
+The simulated chain dimensions followed the same trend when the ``bt`` table was
+calibrated. In that sweep the factor multiplying
+:math:`\varepsilon_{\mathrm{BT}}` was varied, and :math:`\nu` decreased from 0.637
+at a factor of 0 to 0.276 at a factor of 0.30, passing through experimentally
+relevant IDP dimensions before reaching the collapsed regime. The shipped table
+fixes the factor at 0.10; it is not a user setting.
 
-Sequence-dependent well depth
------------------------------
+.. _idr-models:
 
-Every nonlocal pair touching a disordered residue receives
+Sequence-dependent well depth: the ``bt`` and ``hps_urry`` models
+-----------------------------------------------------------------
+
+Every nonlocal pair touching a disordered residue receives the well depth
 
 .. math::
 
 
-   \varepsilon_{ij}^{\mathrm{IDR}}
+   \lambda_{ij}\,\varepsilon,
+
+where :math:`\lambda_{ij}` is looked up by the two residue types in the table of
+the selected model and :math:`\varepsilon` is that model's energy scale.
+
+A model is a shipped, precomputed parameter set: a symmetric 20 × 20 table of
+:math:`\lambda_{ij}` stored to four decimals, together with
+:math:`\varepsilon`. The files are
+``topo/parameters/data/idr/bt.yaml`` and
+``topo/parameters/data/idr/hps_urry.yaml``. They are generated by
+``scripts/make_idr_lambda_tables.py`` and are derived data: do not edit them by
+hand. Both models use :math:`\varepsilon=0.8368` kJ/mol (0.2 kcal/mol).
+
++--------------+-------------------------------------------+---------------------------+
+| ``model``    | :math:`\lambda_{ij}`                      | Status in TOPO            |
++==============+===========================================+===========================+
+| ``bt``       | ``0.10 εBT(i,j) / 0.8368``                | Default. Calibrated       |
+|              |                                           | against SAXS radii of     |
+|              |                                           | gyration for 18 IDPs (see |
+|              |                                           | :ref:`idr-validation`).   |
++--------------+-------------------------------------------+---------------------------+
+| ``hps_urry`` | ``(λi + λj) / 2`` from the per-residue    | Not benchmarked in TOPO.  |
+|              | Urry hydropathy scale [2]                 |                           |
++--------------+-------------------------------------------+---------------------------+
+
+A model supplies only :math:`\lambda_{ij}` and :math:`\varepsilon`. Under both
+models, everything else is TOPO's: the bead sizes (see
+:ref:`idr-radius-convention`), bonds, angles, torsions, the exclusion of 1–2 and
+1–3 pairs, the Debye–Hückel (Yukawa) electrostatics, and the switched cutoff from
+1.8 to 2.0 nm.
+
+The ``bt`` model (default)
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+For ``bt``,
+
+.. math::
+
+
+   \lambda_{ij}
    =
-   s_{\mathrm{IDR}}\varepsilon_{\mathrm{BT}}(i,j),
+   \frac{0.10\,\varepsilon_{\mathrm{BT}}(i,j)}{0.8368\ \mathrm{kJ/mol}},
+   \qquad\text{so that}\qquad
+   \lambda_{ij}\,\varepsilon=0.10\,\varepsilon_{\mathrm{BT}}(i,j),
 
-where:
-
-- :math:`s_{\mathrm{IDR}}` is ``idr_scale``;
-- :math:`\varepsilon_{\mathrm{BT}}(i,j)` is the sidechain–sidechain BT energy for
-  residue types :math:`i` and :math:`j`.
+where :math:`\varepsilon_{\mathrm{BT}}(i,j)` is the sidechain–sidechain BT energy
+for residue types :math:`i` and :math:`j`. This is numerically the model that
+earlier versions selected with ``idr_scale: 0.10`` and ``eps_ev_kj: 0.8368``, so
+the calibration and benchmark results on this page apply to ``bt`` unchanged.
+The table values range from 0.01 (LEU–ASP, MET–ASP) to 0.97 (CYS–CYS).
 
 The BT energy is
 
@@ -614,15 +675,50 @@ The interaction is:
 Thus, the model can favor hydrophobic contacts more strongly without assigning
 the IDR a predetermined fold.
 
+The ``hps_urry`` model
+~~~~~~~~~~~~~~~~~~~~~~
+
+For ``hps_urry``,
+
+.. math::
+
+
+   \lambda_{ij}=\frac{\lambda_i+\lambda_j}{2},
+
+where :math:`\lambda_i` is the per-residue Urry hydropathy value of Regy,
+Thompson, Kim and Mittal [2]. The table values range from −0.08 to 0.92
+(TRP–TRP). GLU has :math:`\lambda=-0.08`, so exactly one pair type, GLU–GLU, has
+a negative :math:`\lambda_{ij}`. That pair has no attractive well and is purely
+repulsive. This is intended; it follows from the published scale.
+
+.. warning::
+   ``hps_urry`` is the HPS-Urry :math:`\lambda` scale within TOPO's chain model.
+   It is not the published HPS-Urry force field.
+
+   Only :math:`\lambda_{ij}` and :math:`\varepsilon` come from HPS-Urry. The
+   published force field has bonds as its only bonded term, excludes only
+   directly bonded neighbours from the nonbonded interaction, and has its own
+   bead sizes, electrostatics and cutoff. Under ``model: hps_urry``, TOPO keeps
+   its own per-residue :math:`R_{\min}/2`, its angle and torsion terms, its
+   exclusion of 1–2 and 1–3 pairs, its Yukawa electrostatics and its
+   1.8–2.0 nm switched cutoff.
+
+   No :math:`R_g` benchmark of ``hps_urry`` in TOPO has been run. The validation
+   on this page applies to ``bt`` only, and the “HPS-Urry reference” in
+   :ref:`idr-validation` is the published force field, not this model. Results
+   from ``model: hps_urry`` should not be reported as HPS-Urry results.
+
 Folded–IDR cross interactions
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The same depth rule is used for IDR–IDR and folded–IDR pairs. A disordered tail
+The same depth rule is used for IDR–IDR and folded–IDR pairs, under both models:
+a folded residue facing an IDR residue takes :math:`\lambda` by its residue type
+from the same table. A disordered tail
 can therefore form transient, sequence-weighted contacts with its folded domain
 and may adsorb onto its surface.
 
 This is a modeling choice rather than a result established by the calibration.
-The default ``idr_scale = 0.10`` was fitted using fully disordered proteins, for
+The ``bt`` table was fitted using fully disordered proteins, for
 which every relevant pair was IDR–IDR. Folded–IDR pairs were not represented in
 that benchmark. Excessive adsorption of an IDR onto its folded domain should
 therefore be treated as a model-sensitivity question.
@@ -630,18 +726,25 @@ therefore be treated as a model-sensitivity question.
 No ``nscale`` factor is applied
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The IDR well depth uses the unscaled BT energy matrix. It does not inherit a
+The IDR well depth comes from the model's :math:`\lambda` table alone. It does
+not inherit a
 folded domain’s ``nscale`` because ``nscale`` is a folding-stability parameter and an
 IDR has no native fold to stabilize.
 
-At ``idr_scale: 1.0``, the IDR attraction equals the unscaled sidechain–sidechain
-BT energy for the same residue-type pair. The mean BT energy is approximately
-2.36 kJ/mol, which is well beyond the AH theta point. The calibrated default
-``idr_scale: 0.10`` is therefore approximately 10% of an unscaled native
-sidechain-contact energy.
+For ``bt``, the table is built from the BT energy matrix before any ``nscale``
+is applied. The mean BT energy is approximately
+2.36 kJ/mol, which is well beyond the AH theta point if used unscaled. The
+``bt`` well depth is 10% of the
+sidechain-contact energy that the same residue-type pair would have at
+``nscale: 1``.
+
+.. _idr-radius-convention:
 
 Pair distance and radius convention
 -----------------------------------
+
+Bead sizes are not part of a model. They are the same under ``bt`` and
+``hps_urry``.
 
 For an IDR-involving pair,
 
@@ -691,23 +794,26 @@ All three top-level sections (``intra_domains``, ``inter_domains``, and
 |                          |                 |                 | residues are       |
 |                          |                 |                 | removed.           |
 +--------------------------+-----------------+-----------------+--------------------+
-| ``disordered.idr_scale`` | No              | Float; ``0.10`` | Scales the         |
-|                          |                 |                 | sequence-dependent |
-|                          |                 |                 | BT attraction for  |
-|                          |                 |                 | IDR–IDR and        |
+| ``disordered.model``     | No              | String; ``bt``  | IDR parameter set: |
+|                          |                 |                 | ``bt`` or          |
+|                          |                 |                 | ``hps_urry``. It   |
+|                          |                 |                 | fixes the          |
+|                          |                 |                 | residue-pair table |
+|                          |                 |                 | ``λij`` and the    |
+|                          |                 |                 | energy scale ``ε`` |
+|                          |                 |                 | for IDR–IDR and    |
 |                          |                 |                 | folded–IDR pairs.  |
-|                          |                 |                 | Increase to favor  |
-|                          |                 |                 | compaction;        |
-|                          |                 |                 | decrease to favor  |
-|                          |                 |                 | expansion.         |
 +--------------------------+-----------------+-----------------+--------------------+
-| ``disordered.eps_ev_kj`` | No              | Float;          | Sets the AH        |
-|                          |                 | ``0.8368``      | repulsive-core     |
-|                          |                 |                 | energy in kJ/mol,  |
-|                          |                 |                 | independently of   |
-|                          |                 |                 | the pair well      |
-|                          |                 |                 | depth.             |
-+--------------------------+-----------------+-----------------+--------------------+
+
+The reader rejects the following with a ``ValueError``:
+
+- ``idr_scale`` or ``eps_ev_kj``. Both keys were removed. The message names the
+  key and points to ``model:``. Delete the key; ``model: bt`` reproduces the
+  former defaults (``idr_scale: 0.10``, ``eps_ev_kj: 0.8368``).
+- a non-zero ``eps_gen_kj``. A legacy ``eps_gen_kj: 0.0`` is still accepted and
+  has no effect.
+- a ``model:`` value other than ``bt`` or ``hps_urry``. The message lists the
+  supported models.
 
 Residue numbering is one-based and must match the input PDB. Lists may contain
 inclusive ranges, individual integers, or both:
@@ -747,39 +853,37 @@ remaining portions of domain A still belong to one domain. The reader prints an
 informational message listing overlapping residues so accidental overlap remains
 visible.
 
-Choosing and tuning ``idr_scale``
----------------------------------
+Choosing a model
+----------------
 
 The calibrated default is
 
 .. code:: yaml
 
-   idr_scale: 0.10
+   model: bt
 
-Use it unless system-specific experimental data support another value.
+Use it unless you have a specific reason to compare against the HPS-Urry
+:math:`\lambda` scale.
 
-- Increasing ``idr_scale`` strengthens the sequence-dependent attractive well and
-  generally lowers :math:`\nu`, favoring compaction.
-- Decreasing ``idr_scale`` favors expansion.
-- ``idr_scale: 0`` removes the attraction entirely and retains the
-  excluded-volume core. It is a self-avoiding (WCA) reference, not a
-  noninteracting ghost chain.
-- ``eps_ev_kj`` is primarily a repulsive-core parameter, not the preferred solvent-
-  quality dial.
+- ``bt`` is the only model whose chain dimensions have been validated in TOPO
+  (see :ref:`idr-validation`).
+- ``hps_urry`` changes only the :math:`\lambda` table. It is useful for testing
+  how sensitive a result is to the choice of residue-pair attraction. It has not
+  been benchmarked in TOPO and is not the published HPS-Urry force field (see
+  :ref:`idr-models`).
+- The well depths and the energy scale cannot be adjusted in the YAML file. There
+  is no scale factor to sweep, and no setting that removes the attraction to give
+  a pure self-avoiding (WCA) reference chain.
 
-The benchmark theta point occurs near ``idr_scale ≈ 0.32``. Values much above 0.3
-therefore enter the collapsed regime for that benchmark and should be justified
-for the system being studied.
-
-A self-avoiding reference may be appropriate for:
-
-- an entropic linker whose reach is more important than its compaction;
-- a strongly charged, highly expanded sequence;
-- a deliberately minimal reference ensemble.
+For reference, the calibration sweep behind ``bt`` placed the theta point near a
+BT factor of 0.32, about three times the shipped factor of 0.10. The ``bt``
+model is therefore on the good-solvent side of the theta point for the benchmark
+set.
 
 If SAXS, smFRET, or other ensemble measurements are available for the system of
-interest, treat ``idr_scale`` as a parameter to recalibrate rather than assuming
-that the global default is optimal.
+interest, compare the simulated ensemble with them rather than assuming that the
+default is optimal for that system. A disagreement cannot be removed by tuning a
+YAML key; report it as a limitation of the model.
 
 Electrostatics must be interpreted separately. TOPO’s Debye–Hückel term can
 favor expansion or compaction depending on charge composition and sequence
@@ -790,7 +894,7 @@ patterning; it is not universally repulsive.
 Validation against SAXS radii of gyration
 -----------------------------------------
 
-The default was evaluated on 24 proteins of 24–273 residues with published SAXS
+The default ``bt`` model was evaluated on 24 proteins of 24–273 residues with published SAXS
 radii of gyration. Eighteen IDPs were used for calibration, and six foldable
 globular proteins were reported separately as controls.
 
@@ -815,10 +919,9 @@ over the remaining 75 ns.
    :width: 100%
    :alt: TOPO and HPS-Urry radii of gyration versus SAXS measurements for 18 intrinsically disordered proteins
 
-   Left: TOPO's Cα IDR model at the calibrated defaults
-   ``idr_scale = 0.10`` and ``eps_ev_kj = 0.8368`` kJ/mol. Right: the
-   HPS-Urry force field evaluated for the same 18 proteins as an external
-   reference. The dashed line is :math:`y=x`, the green line is the
+   Left: TOPO's Cα IDR model with the default ``bt`` parameter set. Right: the
+   published HPS-Urry force field evaluated for the same 18 proteins as an
+   external reference; it is not TOPO's ``model: hps_urry``. The dashed line is :math:`y=x`, the green line is the
    ordinary-least-squares fit, and point color represents fractional deviation.
    TOPO follows :math:`y=x` more closely across the measured range; its fitted
    slope is 0.81, compared with 0.68 for HPS-Urry.
@@ -832,6 +935,7 @@ For the 18-IDP calibration set:
 +============+=============+=============+============+===========+===========+
 | **TOPO Cα  | 0.566       | 0.223       | 12.0%      | 0.89      | 0.81      |
 | IDR**      |             |             |            |           |           |
+| (``bt``)   |             |             |            |           |           |
 +------------+-------------+-------------+------------+-----------+-----------+
 | HPS-Urry   | 0.490       | 0.301       | 19.7%      | 0.70      | 0.68      |
 | reference  |             |             |            |           |           |
@@ -860,8 +964,13 @@ The RMS value is the root-mean-square fractional deviation:
    \right)^2
    }.
 
-At ``idr_scale: 0.10``, TOPO gave :math:`\nu=0.566`. A three-seed check at
-``idr_scale: 0.12`` gave :math:`\nu=0.559\pm0.009`.
+The ``bt`` model (BT factor 0.10) gave :math:`\nu=0.566`. A three-seed check
+during calibration at a BT factor of 0.12 gave :math:`\nu=0.559\pm0.009`.
+
+The “HPS-Urry reference” row is the published HPS-Urry force field. It is not
+TOPO's ``model: hps_urry``, which keeps TOPO's bonded terms, exclusions, bead
+sizes, electrostatics and cutoff, and for which no :math:`R_g` benchmark has been
+run.
 
 Important limitation
 ~~~~~~~~~~~~~~~~~~~~
@@ -932,7 +1041,9 @@ that have emerged.
 
 The separate nascent-chain–ribosome interaction remains the existing 12–10–6
 form at ``RIBO_NC_EPS_KJ`` for every nascent bead, including disordered beads. This
-preserves the O’Brien ribosome-interaction parameterization. It also means that
+preserves the O’Brien ribosome-interaction parameterization. The nascent-chain–ribosome
+channels (this excluded-volume term and the Yukawa electrostatics) do not use
+:math:`\lambda`, so they are identical under ``bt`` and ``hps_urry``. It also means that
 an IDR bead uses different effective interactions toward the ribosome and toward
 the protein chain; users should keep this distinction in mind when interpreting
 nascent-chain behavior.
@@ -948,24 +1059,16 @@ For a fully disordered protein, list every residue and omit ``intra_domains``:
    disordered:
      residues: [1-92]
 
-This is the configuration used to calibrate the defaults. All native contacts
+This is the configuration used to calibrate the ``bt`` model. All native contacts
 are removed, and all eligible nonlocal pairs use the AH interaction.
 
 The Q analysis returns an empty contact list and Q is ``NaN``. The ``nscale``
 optimizer detects that no foldable native contacts remain and exits with a
 “nothing to optimize” message.
 
-Do not set both ``idr_scale`` and ``eps_ev_kj`` to zero as a way to create a
-self-avoiding chain. Setting ``eps_ev_kj: 0`` removes the intended AH repulsive
-core. To obtain the approximately self-avoiding reference while retaining
-physical bead size, use:
-
-.. code:: yaml
-
-   disordered:
-     residues: [1-92]
-     idr_scale: 0
-     eps_ev_kj: 0.8368
+A pure self-avoiding (WCA) reference chain can no longer be requested from the
+YAML file. Earlier versions offered it through ``idr_scale: 0``; that key has
+been removed and is now rejected.
 
 Starting structures and equilibration
 -------------------------------------
@@ -983,10 +1086,15 @@ or barrier crossing is plausible.
 Common pitfalls
 ---------------
 
-- ``idr_scale: 0`` does not remove excluded volume. It retains the core set by
-  ``eps_ev_kj``; only the attractive well is removed.
-- ``eps_ev_kj: 0`` removes the intended repulsive core. Do not use it to define
-  a self-avoiding reference.
+- ``idr_scale`` and ``eps_ev_kj`` are no longer accepted. A domain file written
+  for an earlier version stops with an error until both keys are deleted.
+  ``model: bt``, the default, reproduces their former default values.
+- The IDR attraction cannot be scaled or switched off. It is fixed by the
+  model's :math:`\lambda` table.
+- ``model: hps_urry`` is not the published HPS-Urry force field. Only the
+  :math:`\lambda` scale is taken from it, and it has not been benchmarked in
+  TOPO.
+- Under ``hps_urry``, GLU–GLU pairs are purely repulsive. This is intended.
 - Numbering must match the input structure. Residue numbering is one-based;
   an incorrect number disorders the wrong residue.
 - Domain overlap is legal. If a residue appears in both a domain and the
@@ -1005,3 +1113,7 @@ Reference
 1. Tesei G. *et al.* Conformational ensembles of the human intrinsically
    disordered proteome. *Nature*. 2024;626:897–904.
    https://doi.org/10.1038/s41586-023-07004-5
+2. Regy R. M., Thompson J., Kim Y. C., Mittal J. Improved coarse-grained model
+   for studying sequence dependent phase separation of disordered proteins.
+   *Protein Sci.* 2021;30:1371–1379.
+   https://doi.org/10.1002/pro.4094

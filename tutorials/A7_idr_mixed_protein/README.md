@@ -50,28 +50,34 @@ intra_domains:
     nscale: 2.5044
 disordered:
   residues: [1-18, 218-281]     # N-terminal tail + long intracellular loop
-  idr_scale: 0.10               # IDR-IDR well depth, x eps_BT (default)
-  eps_ev_kj: 0.8368             # IDR repulsive core, kJ/mol (default)
+  model: bt                     # IDR parameter set: bt (default) | hps_urry
 ```
 
 - `residues`: the residues to treat as disordered. Their native contacts
   (H-bond, backbone–sidechain, and sidechain–sidechain) are removed.
-- `idr_scale`: the scale on the sequence-dependent BT energy, which varies by
-  residue-pair type (optional, default `0.10`, calibrated against SAXS radii of
-  gyration for 18 disordered proteins). This is the compaction knob: raising it
-  lowers the scaling exponent ν, as attraction physically should. Set it to `0` for
-  a pure self-avoiding chain. The θ point is at ≈ `0.32`, so treat anything much
-  above ~0.3 as suspect.
-- `eps_ev_kj`: the repulsive-core strength in kJ/mol of the Ashbaugh–Hatch
-  potential used for IDR-involving pairs (optional, default `0.8368`, the HPS
-  value). It sets bead size, independently of the well depth, which is the
-  point of that functional form, and why `idr_scale: 0` now gives a self-avoiding
-  chain of *physical* thickness rather than a near-phantom one.
+- `model`: the IDR parameter set (optional, default `bt`). A model is a shipped
+  20×20 residue-pair table λ<sub>ij</sub> plus an energy scale ε = 0.8368 kJ/mol
+  (0.2 kcal/mol). Every pair that involves a disordered residue interacts through
+  an Ashbaugh–Hatch 12-6 potential whose well depth is λ<sub>ij</sub>·ε. The
+  repulsive core is set by ε alone, so bead size does not depend on the well
+  depth.
+  - `bt`: λ<sub>ij</sub>·ε = 0.10 × the Betancourt–Thirumalai sidechain energy of
+    the two residue types. The factor 0.10 was calibrated against SAXS radii of
+    gyration for 18 disordered proteins.
+  - `hps_urry`: λ<sub>ij</sub> is the mean of the two residues' HPS-Urry
+    hydropathy values (Regy *et al.*, Protein Sci. 2021). Only λ is taken from
+    HPS-Urry. Bead sizes, bonds, angles, torsions, exclusions, electrostatics and
+    the cutoff remain TOPO's, so this is not the published HPS-Urry force field,
+    and it has not been benchmarked against radii of gyration in TOPO.
+
+  The well depths and ε are fixed by the model. The former `idr_scale` and
+  `eps_ev_kj` keys were removed; a `domain.yaml` that still contains either one
+  stops with an error.
 
   Disordered↔folded pairs take the same depth rule as disordered↔disordered
   pairs (the interaction depends on the two residue types, not on which region each
   one is in) so an IDR can transiently associate with the domain surface. What it
-  never regains is a native (fold-encoding) contact. Note `idr_scale` was calibrated
+  never regains is a native (fold-encoding) contact. Note `bt` was calibrated
   on fully-disordered chains, so the cross-pair depth is an extrapolation.
 
 > You choose the disordered residues. TOPO applies exactly the set you list.
@@ -123,9 +129,11 @@ vmd traj/traj.psf traj/traj.dcd
 
 ## Try next
 
-- Self-avoiding vs collapsing. Set `idr_scale: 0` in `domain.yaml` and rerun;
-  the IDRs expand further. Compare the radius of gyration of a disordered region
-  against the default run.
+- Compare the two parameter sets. Set `model: hps_urry` in `domain.yaml` and
+  rerun into a different output directory. Compare the radius of gyration and the
+  RMSF of each disordered region against the `bt` run. The difference shows how
+  sensitive the result is to the choice of λ table; `hps_urry` has not been
+  validated in TOPO, so it does not tell you which run is closer to experiment.
 - A fully disordered protein. Drop `intra_domains` and list every residue under
   `disordered:` for a whole-IDP run (see the *fully-IDP* note in the
   [Disordered / IDR regions](../usage/disordered_regions.rst) page).

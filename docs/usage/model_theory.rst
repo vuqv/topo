@@ -30,8 +30,11 @@ regime is decided entirely by the *parameter values* it receives:
 * Multi-domain proteins with intrinsically disordered regions (IDRs):
   ordered and disordered residues coexist in one chain. Residues listed in a
   ``disordered:`` block get no native contacts; instead they interact through a
-  transferable, sequence-dependent well (a scaled Betancourt–Thirumalai term) on an
-  Ashbaugh–Hatch 12-6, which decouples the attraction from the excluded volume.
+  transferable, sequence-dependent well on an Ashbaugh–Hatch 12-6 written in the
+  :math:`\lambda` form, which decouples the attraction from the excluded volume.
+  The residue-pair table :math:`\lambda_{ij}` comes from the parameter set named by
+  ``model:`` (``bt``, the default, is a scaled Betancourt–Thirumalai term;
+  ``hps_urry`` uses the HPS-Urry hydropathy scale).
   The folded domains keep their structure-based 12-10-6 energetics untouched.
   Folded–IDR pairs take the same sequence-dependent well as IDR–IDR pairs (the
   depth is a property of the two residue types, not of the regions they sit in) so
@@ -39,7 +42,7 @@ regime is decided entirely by the *parameter values* it receives:
   native (fold-encoding) contact.
 * Fully disordered proteins (IDPs): the limiting case where *every* residue
   is disordered. No Gō contacts remain and the model reduces to a transferable
-  Cα polymer; the ``idr_scale``/``eps_ev_kj`` defaults are calibrated against
+  Cα polymer; the default ``bt`` parameter set is calibrated against
   SAXS :math:`R_g` for an 18-IDP benchmark.
 
 This page describes the shared force field: every term below applies in all
@@ -350,12 +353,12 @@ disordered residue forms a third and fourth class, imposed afterwards by
           the ordered bead keeps its K–B radius, the IDR bead brings the
           transferable per-AA one; both are :math:`R_\mathrm{min}/2` values, so
           this is the plain sum rule
-        - :math:`\max\big(1.32\times10^{-4}\ \text{kcal/mol},\;
-          s_\mathrm{IDR}\,\varepsilon_\mathrm{BT}\big)`
+        - :math:`\lambda_{ij}\,\varepsilon`, with :math:`\lambda_{ij}` read from the
+          selected model's residue-pair table by the two residue types and
+          :math:`\varepsilon = 0.8368` kJ/mol; the non-native floor is not applied
       * - IDR–IDR
         - :math:`(R_\mathrm{min}/2)_i + (R_\mathrm{min}/2)_j`, both transferable
-        - :math:`\max\big(1.32\times10^{-4}\ \text{kcal/mol},\;
-          s_\mathrm{IDR}\,\varepsilon_\mathrm{BT}\big)`: the same rule
+        - :math:`\lambda_{ij}\,\varepsilon`: the same rule
 
    The disordered radius is the transferable per-amino-acid
    :math:`R_\mathrm{min}/2` read straight from the parameter table, because a
@@ -367,9 +370,26 @@ disordered residue forms a third and fourth class, imposed afterwards by
    :math:`\sigma = 2^{-1/6}R_{ij}` lives inside the IDR force's expression.
 
    So a disordered residue always loses its native contact, and what it regains
-   is the sequence-dependent :math:`s_\mathrm{IDR}\varepsilon_\mathrm{BT}` term:
+   is the sequence-dependent :math:`\lambda_{ij}\varepsilon` term:
    with any partner, ordered or disordered alike, since the depth depends on the
-   two residue *types* and not on which region each sits in.
+   two residue *types* and not on which region each sits in. These two classes
+   are evaluated as
+
+   .. math::
+
+      U_{ij}(r)=
+      \begin{cases}
+      4\varepsilon\left[\left(\dfrac{\sigma_{ij}}{r}\right)^{12}
+      -\left(\dfrac{\sigma_{ij}}{r}\right)^{6}\right]
+      +\left(1-\lambda_{ij}\right)\varepsilon, & r\le R_{ij},\\[6pt]
+      4\lambda_{ij}\varepsilon\left[\left(\dfrac{\sigma_{ij}}{r}\right)^{12}
+      -\left(\dfrac{\sigma_{ij}}{r}\right)^{6}\right], & r>R_{ij},
+      \end{cases}
+      \qquad \sigma_{ij}=2^{-1/6}R_{ij}.
+
+   For the default ``bt`` model,
+   :math:`\lambda_{ij}\varepsilon = 0.10\,\varepsilon_\mathrm{BT}(i,j)`. The
+   models are described in :ref:`idr-models`.
 
    .. note::
 
