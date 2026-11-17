@@ -194,7 +194,8 @@ class models:
                   f'(eps_ev = {idr["eps_ev_kj"]} kJ/mol)')
             topo_model.addCustomNonBondedForce(rmin_matrix, energy_matrix, use_pbc,
                                                interaction_group=(folded_idx, folded_idx))
-            topo_model.addIDRNonBondedForce(rmin_matrix, energy_matrix, use_pbc,
+            topo_model.addIDRNonBondedForce(rmin_matrix,
+                                            energy_matrix / idr['eps_ev_kj'], use_pbc,
                                             idr_idx, folded_idx, idr['eps_ev_kj'])
 
         # Generate the system object and add previously generated forces. The

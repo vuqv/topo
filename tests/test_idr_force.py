@@ -114,9 +114,9 @@ def _shipped_idr_expression():
 def _ah_context(expr, R, eps, eps_ev):
     """A 2-particle OpenMM context evaluating ``expr`` for one pair."""
     f = mm.CustomNonbondedForce(expr)
-    f.addGlobalParameter("epsEV", eps_ev)
+    f.addGlobalParameter("epsilon", eps_ev)
     f.addGlobalParameter("rmin_scale", 2.0 ** (1.0 / 6.0))
-    f.addTabulatedFunction("eps_table", mm.Discrete2DFunction(2, 2, [eps] * 4))
+    f.addTabulatedFunction("lambda_table", mm.Discrete2DFunction(2, 2, [eps / eps_ev] * 4))
     f.addTabulatedFunction("R_table", mm.Discrete2DFunction(2, 2, [R] * 4))
     f.addPerParticleParameter("id")
     f.addParticle((0,))
@@ -295,7 +295,7 @@ def test_eps_ev_reaches_the_force(tmp_path, monkeypatch):
     def eps_ev_of(model):
         f = model.idr_non_bonded_force
         names = [f.getGlobalParameterName(i) for i in range(f.getNumGlobalParameters())]
-        return f.getGlobalParameterDefaultValue(names.index("epsEV"))
+        return f.getGlobalParameterDefaultValue(names.index("epsilon"))
 
     assert eps_ev_of(_build(PDB, _idr_yaml(tmp_path, "d.yaml"))) == DEFAULT_EPS_EV_KJ
     assert eps_ev_of(_build(PDB, _idr_yaml(tmp_path, "e.yaml", eps_ev_kj=2.5))) == 2.5

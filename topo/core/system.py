@@ -780,8 +780,8 @@ class system:
             self.custom_non_bonded_force.addInteractionGroup(list(set1), list(set2))
 
 
-    def addIDRNonBondedForce(self, rmin_matrix, energy_matrix, use_pbc,
-                             idr_idx, folded_idx, eps_ev_kj):
+    def addIDRNonBondedForce(self, rmin_matrix, lambda_matrix, use_pbc,
+                             idr_idx, folded_idx, epsilon_kj):
         r"""
         Add the Ashbaugh-Hatch contact force for every pair touching a disordered bead.
 
@@ -794,21 +794,23 @@ class system:
         .. math::
 
             U_{ij}(r) = \begin{cases}
-                \varepsilon_\mathrm{EV}\, L(r) +
-                    (\varepsilon_\mathrm{EV} - \varepsilon_{ij}), & r \le R_{ij} \\
-                \varepsilon_{ij}\, L(r), & r > R_{ij}
+                \varepsilon\, L(r) + (1 - \lambda_{ij})\,\varepsilon, & r \le R_{ij} \\
+                \lambda_{ij}\,\varepsilon\, L(r), & r > R_{ij}
             \end{cases}
 
-        The minimum is at :math:`r = R_{ij}` with depth exactly
-        :math:`-\varepsilon_{ij}` for any :math:`\varepsilon_\mathrm{EV}`, and the
-        join is :math:`C^1`. Two properties follow, and both are the point of the form:
+        This is the :math:`\lambda` form used by the HPS family of IDP force fields.
+        For :math:`\lambda_{ij} > 0` the minimum is at :math:`r = R_{ij}` with depth
+        exactly :math:`-\lambda_{ij}\varepsilon`, and the join is :math:`C^1`. Two
+        properties follow, and both are the point of the form:
 
-        * :math:`\varepsilon_{ij} = 0` gives :math:`U \equiv 0` beyond
+        * :math:`\lambda_{ij} = 0` gives :math:`U \equiv 0` beyond
           :math:`R_{ij}` -- a clean WCA core of *physical* size, so "no attraction"
           and "no excluded volume" are finally independent statements;
-        * the core (where :math:`U = kT`) is set by :math:`\varepsilon_\mathrm{EV}`
-          alone, moving only ~3% as :math:`\varepsilon_{ij}` runs 0 -> 2 kJ/mol,
+        * the core (where :math:`U = kT`) is set by :math:`\varepsilon` alone, moving
+          only ~3% as the well depth :math:`\lambda_{ij}\varepsilon` runs 0 -> 2 kJ/mol,
           against 56% for the coupled 12-10-6.
+
+        The force knows nothing about where :math:`\lambda` comes from.
 
         **Why not the 12-10-6 here.** Two independent defects, both fatal:
 
@@ -832,10 +834,9 @@ class system:
             The same (n_atoms x n_atoms) well-position matrix (nm) the 12-10-6 gets;
             IDR-involving entries are the sum rule ``Rmin/2_i + Rmin/2_j``. The
             :math:`2^{-1/6}` conversion to sigma happens inside the expression.
-        energy_matrix : numpy.ndarray
-            The same (n_atoms x n_atoms) well-depth matrix (kJ/mol). Every
-            IDR-involving entry -- IDR-IDR and IDR-folded alike -- is
-            ``idr_scale * eps_BT``.
+        lambda_matrix : numpy.ndarray
+            (n_atoms x n_atoms) dimensionless :math:`\lambda_{ij}`; the well depth of
+            a pair is ``lambda_ij * epsilon_kj``. Only IDR-involving entries are read.
         use_pbc : bool
             If True, use ``CutoffPeriodic``; otherwise ``CutoffNonPeriodic``.
         idr_idx : sequence of int
@@ -843,9 +844,9 @@ class system:
         folded_idx : sequence of int
             0-based indices of the folded beads. May be empty (a fully disordered
             chain), in which case only the ``{idr} x {idr}`` group is added.
-        eps_ev_kj : float
-            Repulsive-core strength :math:`\varepsilon_\mathrm{EV}` (kJ/mol),
-            exposed as the ``epsEV`` global parameter.
+        epsilon_kj : float
+            The energy scale :math:`\varepsilon` (kJ/mol), exposed as the ``epsilon``
+            global parameter. It sets the repulsive core.
 
         Returns
         -------
@@ -854,26 +855,26 @@ class system:
         idr_idx = [int(i) for i in idr_idx]
         folded_idx = [int(i) for i in folded_idx]
         table_R_ravel = rmin_matrix.ravel().tolist()
-        table_eps_ravel = energy_matrix.ravel().tolist()
+        table_lam_ravel = np.asarray(lambda_matrix).ravel().tolist()
         n_atoms = rmin_matrix.shape[0]
 
-        # Written as one branch-free expression rather than two step() terms: at
-        # r = R the LJ term is exactly -1, so (LJ + 1) vanishes and the shift term
-        # drops out from either side -- no double-count at the join, and C1 there.
-        #   r <= R:  eps*LJ + (epsEV - eps)*(LJ + 1) = epsEV*LJ + (epsEV - eps)
-        #   r >  R:  eps*LJ
-        energy_function = 'eps*LJ + step(R - r)*(epsEV - eps)*(LJ + 1);'
+        # The piecewise definition, written as it reads. step(r - R) is 1 for r >= R,
+        # and at r = R the LJ term is exactly -1, so both branches give -lam there:
+        # no double count at the join, and C1.
+        #   r <  R:  epsilon*(LJ + 1 - lam)
+        #   r >= R:  epsilon*lam*LJ
+        energy_function = 'epsilon*select(step(r - R), lam*LJ, LJ + 1 - lam);'
         energy_function += 'LJ = 4*(sr6^2 - sr6);'
         energy_function += 'sr6 = (sigma/r)^6;'
         energy_function += 'sigma = R/rmin_scale;'        # sigma = 2^(-1/6) R
-        energy_function += 'eps = eps_table(id1, id2);'
+        energy_function += 'lam = lambda_table(id1, id2);'
         energy_function += 'R = R_table(id1, id2);'
 
         self.idr_non_bonded_force = mm.CustomNonbondedForce(energy_function)
-        self.idr_non_bonded_force.addGlobalParameter('epsEV', eps_ev_kj)
+        self.idr_non_bonded_force.addGlobalParameter('epsilon', epsilon_kj)
         self.idr_non_bonded_force.addGlobalParameter('rmin_scale', 2.0 ** (1.0 / 6.0))
         self.idr_non_bonded_force.addTabulatedFunction(
-            'eps_table', mm.Discrete2DFunction(n_atoms, n_atoms, table_eps_ravel))
+            'lambda_table', mm.Discrete2DFunction(n_atoms, n_atoms, table_lam_ravel))
         self.idr_non_bonded_force.addTabulatedFunction(
             'R_table', mm.Discrete2DFunction(n_atoms, n_atoms, table_R_ravel))
         self.idr_non_bonded_force.addPerParticleParameter('id')

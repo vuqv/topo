@@ -566,8 +566,8 @@ def build_length_model(sub_pdb: str, R_L: np.ndarray, eps_L: np.ndarray,
         _vprint(f"  disorder: {len(idr_idx)} IDR bead(s), {len(folded_idx)} folded")
         topo_model.addCustomNonBondedForce(R_L, eps_L, use_pbc=False,
                                            interaction_group=(folded_idx, folded_idx))
-        topo_model.addIDRNonBondedForce(R_L, eps_L, False, idr_idx, folded_idx,
-                                        idr['eps_ev_kj'])
+        topo_model.addIDRNonBondedForce(R_L, eps_L / idr['eps_ev_kj'], False,
+                                        idr_idx, folded_idx, idr['eps_ev_kj'])
 
     # Assemble the OpenMM System. Skip the large-force check (native-structure
     # energy is irrelevant; the seeded structure is minimized explicitly later).
