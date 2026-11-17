@@ -154,6 +154,26 @@ def test_negative_idr_scale_rejected(tmp_path, monkeypatch):
         build_nonbonded_interaction(str(PDB), dm)
 
 
+def test_legacy_eps_gen_kj(tmp_path, monkeypatch):
+    """The removed ``eps_gen_kj``: 0.0 was a no-op and is accepted; a non-zero value
+    is refused with the ``idr_scale`` equivalent in the message."""
+    from topo.utils.nonbonded import build_nonbonded_interaction
+
+    monkeypatch.chdir(tmp_path)
+
+    def yaml_with(value):
+        return _write_yaml(tmp_path / f"gen_{value}.yaml", f"""
+            n_residues: {N_RES}
+            disordered:
+              residues: [1-{MASK_END}]
+              eps_gen_kj: {value}
+            """)
+
+    build_nonbonded_interaction(str(PDB), yaml_with(0.0))
+    with pytest.raises(ValueError, match="eps_gen_kj.*idr_scale"):
+        build_nonbonded_interaction(str(PDB), yaml_with(2.25))
+
+
 def test_idr_folded_same_depth_rule_as_idr_idr(tmp_path, monkeypatch):
     """IDR-folded pairs (exactly one masked) take the SAME well depth rule as IDR-IDR:
     ``idr_scale * eps_BT``. The interaction is a property of the two

@@ -837,6 +837,15 @@ def read_yaml_config(filepath: str) -> Tuple[Dict, Dict, Dict, Optional[Dict]]:
         # Ashbaugh-Hatch tail repulsive, which is not a supported model.
         if idr_scale < 0:
             raise ValueError(f"disordered: idr_scale must be >= 0, got {idr_scale}")
+        # eps_gen_kj was removed (it was degenerate with idr_scale). A legacy 0.0 was
+        # a no-op and is accepted; anything else would silently change the model.
+        eps_gen_kj = float(dis_cfg.get('eps_gen_kj', 0.0))
+        if eps_gen_kj != 0.0:
+            raise ValueError(
+                f"disordered: eps_gen_kj was removed and {eps_gen_kj} cannot be honoured. "
+                f"The nearest equivalent is idr_scale = "
+                f"{idr_scale + eps_gen_kj / 2.36:.3f} (idr_scale + eps_gen_kj / <eps_BT>, "
+                f"<eps_BT> ~ 2.36 kJ/mol); remove eps_gen_kj from the YAML.")
         # Repulsive-core strength of the Ashbaugh-Hatch IDR force (kJ/mol), independent
         # of the well depth.
         eps_ev_kj = float(dis_cfg.get('eps_ev_kj', DEFAULT_EPS_EV_KJ))
