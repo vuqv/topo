@@ -74,6 +74,12 @@ BUILDS = ("folded", "mixed", "full")
 CONFIGS = ("native", "compressed", "perturbed")
 CONTACT_FORCES = ("Custom Non-Bonded Energy", "IDR Non-Bonded Energy")
 
+# Co-translational case: the A.7 chain at two nascent lengths with a toy ribosome.
+# The IDR is N-terminal (1-18), so L=12 is the fully-disordered regime and L=40 the
+# mixed one (IDR 1-18 + folded 19-40).
+CSP_LENGTHS = (12, 40)
+CSP_CONFIGS = ("native", "perturbed")
+
 # Reference platform is double precision and deterministic.
 E_RTOL, E_ATOL = 1e-9, 1e-8          # kJ/mol
 F_RTOL, F_ATOL = 1e-9, 1e-6          # kJ/mol/nm
@@ -119,9 +125,74 @@ def _build_all(workdir):
             rmin, eps, r2, idr = build_nonbonded_interaction(
                 str(PDB), dd, return_rmin_2=True, return_idr=True)
             out[b] = dict(model=model, rmin=rmin, eps=eps, r2=r2, idr=idr)
+        out["csp"] = _build_csp(workdir, out["mixed"])
         return out
     finally:
         os.chdir(cwd)
+
+
+def _toy_ribosome(nascent_pos):
+    """Six rigid, charged scenery beads 0.7 nm off every other nascent bead, so the
+    NC<->ribosome excluded-volume and Yukawa terms are both non-zero."""
+    from topo.csp.ribosome import Ribosome
+    m = 6
+    coords = nascent_pos[:2 * m:2] + np.array([0.0, 0.0, 0.7])
+    return Ribosome(coords_nm=coords,
+                    Rmin_2_nm=[0.3] * m,
+                    charges=[1.0, -1.0] * (m // 2),
+                    names=["CA"] * m,
+                    resnames=["ALA"] * m,
+                    resids=list(range(1, m + 1)),
+                    segids=["RB"] * m)
+
+
+def _build_csp(workdir, mixed):
+    """Nascent-chain + toy-ribosome systems at ``CSP_LENGTHS``, built the way
+    ``topo.csp`` does: full-chain matrices sliced to L, IDR index sliced to L."""
+    from topo.csp.core import build_length_model, write_subset_structure
+    from topo.csp.ribosome import append_ribosome
+
+    cwd = os.getcwd()
+    os.chdir(workdir)
+    try:
+        out = {}
+        for L in CSP_LENGTHS:
+            idx = np.asarray(mixed["idr"]["idx"], dtype=int)
+            idr_L = dict(mixed["idr"], idx=idx[idx < L])
+            sub_pdb = str(Path(workdir) / f"native_1_{L}.pdb")
+            write_subset_structure(str(PDB), L, sub_pdb)
+            model = build_length_model(
+                sub_pdb, np.ascontiguousarray(mixed["rmin"][:L, :L]),
+                np.ascontiguousarray(mixed["eps"][:L, :L]), idr=idr_L)
+            nascent = np.asarray(model.positions.value_in_unit(unit.nanometer))[:L]
+            ribo = _toy_ribosome(nascent)
+            append_ribosome(model, ribo, nascent_rmin_2=mixed["r2"][:L])
+            out[L] = dict(model=model, nascent=nascent, ribo=ribo.coords_nm)
+        return out
+    finally:
+        os.chdir(cwd)
+
+
+def _csp_positions(d, config):
+    """Ribosome beads stay fixed; only the nascent chain is perturbed."""
+    x = d["nascent"]
+    if config == "perturbed":
+        x = x + np.random.default_rng(20261117).normal(0.0, 0.05, size=x.shape)
+    return np.vstack([x, d["ribo"]])
+
+
+def _evaluate_system(system, pos):
+    """Energy (kJ/mol) of every force in ``system``, keyed by index and class, so a
+    force that is not in ``model.forceGroups`` (NC<->ribosome terms) is pinned too."""
+    for i, f in enumerate(system.getForces()):
+        f.setForceGroup(i)
+    ctx = mm.Context(system, mm.VerletIntegrator(0.001),
+                     mm.Platform.getPlatform("Reference"))
+    ctx.setPositions(pos * unit.nanometer)
+    return {f"{i:02d}:{type(f).__name__}":
+            ctx.getState(getEnergy=True, groups={i}).getPotentialEnergy()
+               .value_in_unit(unit.kilojoule_per_mole)
+            for i, f in enumerate(system.getForces())}
 
 
 def _positions(model, config):
@@ -157,7 +228,14 @@ def _key(*parts):
 def _snapshot(builds):
     """Flatten everything this bundle pins into an npz-able dict."""
     snap = {}
+    for L, d in builds["csp"].items():
+        for c in CSP_CONFIGS:
+            e = _evaluate_system(d["model"].system, _csp_positions(d, c))
+            for name in e:
+                snap[_key(f"csp{L}", c, "E", name)] = np.array(e[name])
     for b, d in builds.items():
+        if b == "csp":
+            continue
         snap[_key(b, "rmin")] = d["rmin"]
         snap[_key(b, "eps")] = d["eps"]
         snap[_key(b, "r2")] = d["r2"]
@@ -254,6 +332,26 @@ def test_contact_forces_unchanged(ref, current, build, config):
     assert keys
     for k in keys:
         np.testing.assert_allclose(current[k], ref[k], rtol=F_RTOL, atol=F_ATOL, err_msg=k)
+
+
+@pytest.mark.parametrize("config", CSP_CONFIGS)
+@pytest.mark.parametrize("length", CSP_LENGTHS)
+def test_csp_every_force_energy_unchanged(ref, current, length, config):
+    """Co-translational build: every force, NC<->ribosome terms included."""
+    keys = [k for k in ref if k.startswith(_key(f"csp{length}", config, "E", ""))]
+    assert keys
+    for k in keys:
+        assert float(current[k]) == pytest.approx(float(ref[k]), rel=E_RTOL, abs=E_ATOL), k
+
+
+def test_csp_bundle_exercises_the_ribosome_terms(current):
+    """Guard on the bundle itself: the IDR force and at least two further non-bonded
+    forces (NC<->ribosome excluded volume, Yukawa) must be non-zero at each length."""
+    for L in CSP_LENGTHS:
+        e = {k.split("|")[-1]: float(v) for k, v in current.items()
+             if k.startswith(_key(f"csp{L}", "perturbed", "E", ""))}
+        nonzero = [k for k, v in e.items() if "Nonbonded" in k and abs(v) > 1e-6]
+        assert len(nonzero) >= 3, (L, e)
 
 
 def test_bundle_exercises_both_branches(builds):
