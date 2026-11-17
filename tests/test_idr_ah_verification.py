@@ -383,7 +383,7 @@ def test_idr_force_matches_lambda_form_oracle(builds, build, config):
     excluded = {tuple(sorted(f.getExclusionParticles(k))) for k in range(f.getNumExclusions())}
     pos = _positions(m, config)
     e_omm, _ = _evaluate(m, pos)
-    e_ref = _oracle_idr_energy(pos, d["rmin"], d["eps"], d["idr"]["eps_ev_kj"],
+    e_ref = _oracle_idr_energy(pos, d["rmin"], d["eps"], d["idr"]["epsilon_kj"],
                                d["idr"]["idx"], excluded)
     assert e_omm["IDR Non-Bonded Energy"] == pytest.approx(e_ref, rel=1e-9, abs=1e-8)
 

@@ -191,12 +191,12 @@ class models:
             idr_idx = [int(i) for i in idr['idx']]
             folded_idx = sorted(set(range(topo_model.n_atoms)) - set(idr_idx))
             print(f'  disorder: {len(idr_idx)} IDR bead(s), {len(folded_idx)} folded '
-                  f'(eps_ev = {idr["eps_ev_kj"]} kJ/mol)')
+                  f'(epsilon = {idr["epsilon_kj"]} kJ/mol)')
             topo_model.addCustomNonBondedForce(rmin_matrix, energy_matrix, use_pbc,
                                                interaction_group=(folded_idx, folded_idx))
             topo_model.addIDRNonBondedForce(rmin_matrix,
-                                            energy_matrix / idr['eps_ev_kj'], use_pbc,
-                                            idr_idx, folded_idx, idr['eps_ev_kj'])
+                                            energy_matrix / idr['epsilon_kj'], use_pbc,
+                                            idr_idx, folded_idx, idr['epsilon_kj'])
 
         # Generate the system object and add previously generated forces. The
         # bond-distance check always runs (it validates the built geometry); the

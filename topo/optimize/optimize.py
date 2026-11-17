@@ -493,7 +493,7 @@ def _optimize_loop(log, pdb, domain_path, raw_cfg, sim_options, out_root,
     level = {k: 0 for k in scorer.unit_keys()}   # per-unit ladder index
 
     # Fully-IDP (or every foldable contact masked): there is genuinely no nscale to
-    # tune (all residues use idr_scale, spec §2.7/§2.8). Exit cleanly with an explicit
+    # tune (all residues use the IDR model, spec §2.7/§2.8). Exit cleanly with an explicit
     # message rather than a vacuous "converged in round 1 having changed nothing".
     if sum(scorer.n_contacts(k) for k in scorer.unit_keys()) == 0:
         log(f"# Nscale optimization for {Path(pdb).name}")

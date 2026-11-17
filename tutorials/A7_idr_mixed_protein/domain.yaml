@@ -9,10 +9,11 @@
 #                       default; for quantitative work calibrate it with the
 #                       nscale optimizer (Tutorial A.5).
 #   disordered       -- residues whose native contacts are REMOVED and replaced by a
-#                       weak, non-specific attraction: the sequence-dependent BT
-#                       energy scaled by idr_scale (default 0.10, SAXS-calibrated),
-#                       evaluated on an Ashbaugh-Hatch 12-6 whose repulsive core is
-#                       set independently by eps_ev_kj (default 0.8368 kJ/mol).
+#                       weak, non-specific attraction from a named parameter set
+#                       (`model:`), evaluated on an Ashbaugh-Hatch 12-6. `bt`, the
+#                       default, is the SAXS-calibrated BT-derived set; `hps_urry`
+#                       uses the HPS-Urry hydropathy scale. The well depths and the
+#                       energy scale are fixed by the model and cannot be set here.
 #                       These regions relax to a disordered ensemble instead of
 #                       holding the AlphaFold conformation.
 #
@@ -29,7 +30,4 @@ intra_domains:
     nscale: 2.5044
 disordered:
   residues: [1-18, 218-281]     # N-terminal tail + long intracellular loop
-  idr_scale: 0.10               # IDR-IDR well depth, x eps_BT (default)
-                                # set to 0 for a pure self-avoiding chain;
-                                # the theta point is at ~0.32
-  eps_ev_kj: 0.8368             # IDR repulsive core, kJ/mol (default)
+  model: bt                     # IDR parameter set: bt (default) | hps_urry

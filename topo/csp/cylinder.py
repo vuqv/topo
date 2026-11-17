@@ -207,7 +207,7 @@ def run_length(L: int, *, full_pdb: str, R_full: np.ndarray, eps_full: np.ndarra
         idx = np.asarray(idr_full['idx'], dtype=int)
         idx = idx[idx < L]
         if idx.size:
-            idr_L = {'idx': idx, 'eps_ev_kj': idr_full['eps_ev_kj']}
+            idr_L = {'idx': idx, 'epsilon_kj': idr_full['epsilon_kj']}
     cgModel = build_length_model(sub_pdb, R_L, eps_L, constraints=params.constraints,
                                  idr=idr_L)
 

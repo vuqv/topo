@@ -286,19 +286,16 @@ def test_forces_share_particles_and_exclusions(tmp_path, monkeypatch):
     assert _exclusions(cf) == _exclusions(idf)
 
 
-def test_eps_ev_reaches_the_force(tmp_path, monkeypatch):
-    """``eps_ev_kj`` is honoured, and defaults to the calibrated value when omitted."""
-    from topo.utils.nonbonded import DEFAULT_EPS_EV_KJ
+@pytest.mark.parametrize("model", ["bt", "hps_urry"])
+def test_model_epsilon_reaches_the_force(tmp_path, monkeypatch, model):
+    """The force's ``epsilon`` global is the selected model's energy scale."""
+    from topo.utils.nonbonded import load_idr_model
 
     monkeypatch.chdir(tmp_path)
-
-    def eps_ev_of(model):
-        f = model.idr_non_bonded_force
-        names = [f.getGlobalParameterName(i) for i in range(f.getNumGlobalParameters())]
-        return f.getGlobalParameterDefaultValue(names.index("epsilon"))
-
-    assert eps_ev_of(_build(PDB, _idr_yaml(tmp_path, "d.yaml"))) == DEFAULT_EPS_EV_KJ
-    assert eps_ev_of(_build(PDB, _idr_yaml(tmp_path, "e.yaml", eps_ev_kj=2.5))) == 2.5
+    cg = _build(PDB, _idr_yaml(tmp_path, f"{model}.yaml", model=model))
+    f = cg.idr_non_bonded_force          # owned by cg's System: keep cg alive
+    names = [f.getGlobalParameterName(i) for i in range(f.getNumGlobalParameters())]
+    assert f.getGlobalParameterDefaultValue(names.index("epsilon")) == load_idr_model(model)[1]
 
 
 def test_folded_folded_energy_is_unchanged_by_declaring_an_idr(tmp_path, monkeypatch):
@@ -432,8 +429,7 @@ def test_fully_idr_build_pinned(tmp_path, monkeypatch):
     a real change to the disordered physics and worth reviewing.
     """
     from topo.utils.nonbonded import (
-        build_nonbonded_interaction, IDR_RMIN_2_NM, DEFAULT_IDR_SCALE,
-        DEFAULT_EPS_EV_KJ, get_residue_mapping,
+        build_nonbonded_interaction, IDR_RMIN_2_NM, get_residue_mapping,
     )
     import MDAnalysis as mda
     import warnings
@@ -445,8 +441,7 @@ def test_fully_idr_build_pinned(tmp_path, monkeypatch):
 
     assert rmin.shape == (N_RES, N_RES) and eps.shape == (N_RES, N_RES)
     assert np.array_equal(idr["idx"], np.arange(N_RES))
-    assert idr["eps_ev_kj"] == DEFAULT_EPS_EV_KJ
-    assert DEFAULT_IDR_SCALE == 0.10
+    assert idr["epsilon_kj"] == 0.8368
 
     # Every radius is the per-AA table value, so the sum is a pure sequence property,
     # and every well sits at the plain sum rule.
@@ -509,7 +504,7 @@ def test_append_ribosome_preserves_the_partition(tmp_path, monkeypatch, regime, 
 
     idx = np.asarray(idr_full["idx"], dtype=int)
     idx = idx[idx < L]
-    idr_L = {"idx": idx, "eps_ev_kj": idr_full["eps_ev_kj"]}
+    idr_L = {"idx": idx, "epsilon_kj": idr_full["epsilon_kj"]}
 
     sub_pdb = str(tmp_path / f"native_1_{L}.pdb")
     from topo.csp.core import write_subset_structure

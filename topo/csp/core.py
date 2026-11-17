@@ -380,7 +380,7 @@ def precompute_contacts(full_pdb: str,
     well-position (nm) and well-depth (kJ/mol) matrices, the per-residue
     Karanicolas-Brooks collision radius ``Rmin/2`` (nm, shape ``(N_full,)``) that
     O'Brien uses as the nascent excluded-volume radius (the structure-derived ``A_i``
-    values), and the disorder handle ``{'idx', 'eps_ev_kj'}`` (``None`` when the
+    values), and the disorder handle ``{'idx', 'epsilon_kj'}`` (``None`` when the
     domain_def has no ``disordered:`` section). STRIDE is run at most once here (and
     cached by :func:`build_nonbonded_interaction`); each length later reuses the
     top-left ``L x L`` block (and ``rmin_2_full[:L]``), so neither STRIDE nor the
@@ -403,7 +403,7 @@ def precompute_contacts(full_pdb: str,
           f"Rmin/2 range {rmin_2_full.min():.3f}-{rmin_2_full.max():.3f} nm")
     if idr_full is not None:
         print(f"  disorder: {len(idr_full['idx'])} of {R_full.shape[0]} residues "
-              f"(eps_ev = {idr_full['eps_ev_kj']} kJ/mol)")
+              f"(epsilon = {idr_full['epsilon_kj']} kJ/mol)")
     return R_full, eps_full, rmin_2_full, idr_full
 
 
@@ -485,7 +485,7 @@ def build_length_model(sub_pdb: str, R_L: np.ndarray, eps_L: np.ndarray,
         *ribosome* scenery value, not the mobile chain's). ``particle_rmin_2`` only feeds
         ``dumpForceFieldData``, so ``None`` is harmless (the radius is left unset).
     idr : dict or None
-        Disorder handle for **this length**: ``{'idx': ndarray, 'eps_ev_kj': float}``
+        Disorder handle for **this length**: ``{'idx': ndarray, 'epsilon_kj': float}``
         with ``idx`` the 0-based indices of the disordered beads among the ``L``
         emerged ones (the caller slices the full-chain mask). ``None`` -- no disordered
         bead has emerged yet, or the domain_def has no ``disordered:`` section -- takes
@@ -566,8 +566,8 @@ def build_length_model(sub_pdb: str, R_L: np.ndarray, eps_L: np.ndarray,
         _vprint(f"  disorder: {len(idr_idx)} IDR bead(s), {len(folded_idx)} folded")
         topo_model.addCustomNonBondedForce(R_L, eps_L, use_pbc=False,
                                            interaction_group=(folded_idx, folded_idx))
-        topo_model.addIDRNonBondedForce(R_L, eps_L / idr['eps_ev_kj'], False,
-                                        idr_idx, folded_idx, idr['eps_ev_kj'])
+        topo_model.addIDRNonBondedForce(R_L, eps_L / idr['epsilon_kj'], False,
+                                        idr_idx, folded_idx, idr['epsilon_kj'])
 
     # Assemble the OpenMM System. Skip the large-force check (native-structure
     # energy is irrelevant; the seeded structure is minimized explicitly later).
@@ -1125,7 +1125,7 @@ def run_length(L: int, *, full_pdb: str, R_full: np.ndarray, eps_full: np.ndarra
         idx = np.asarray(idr_full['idx'], dtype=int)
         idx = idx[idx < L]
         if idx.size:
-            idr_L = {'idx': idx, 'eps_ev_kj': idr_full['eps_ev_kj']}
+            idr_L = {'idx': idx, 'epsilon_kj': idr_full['epsilon_kj']}
     cgModel = build_length_model(sub_pdb, R_L, eps_L, constraints=params.constraints,
                                  nascent_rmin_2=nasc_rm, idr=idr_L)
 

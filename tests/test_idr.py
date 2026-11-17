@@ -91,8 +91,8 @@ def test_format_residue_ranges():
 # Energy path — apply_disorder (§2.3)
 # --------------------------------------------------------------------------- #
 def test_contact_removal_self_avoiding(tmp_path, monkeypatch):
-    """§3 test 2 + 6: idr_scale=0 -> every IDR-involving pair has zero well
-    depth (the Ashbaugh-Hatch core is set by eps_ev_kj); folded-folded pairs and
+    """§3 test 2 + 6: every IDR-involving pair loses its native contact and takes
+    the model's weak well depth; folded-folded pairs and
     folded residues' K-B radius are untouched; IDR
     residues take the per-AA radius."""
     from topo.utils.nonbonded import (
@@ -106,7 +106,6 @@ def test_contact_removal_self_avoiding(tmp_path, monkeypatch):
         n_residues: {N_RES}
         disordered:
           residues: [1-{MASK_END}]
-          idr_scale: 0.0
         """)
     rmin_m, eps_m, r2_m = build_nonbonded_interaction(str(PDB), dm, return_rmin_2=True)
 
@@ -114,8 +113,8 @@ def test_contact_removal_self_avoiding(tmp_path, monkeypatch):
     involves = m[:, None] | m[None, :]
     ff = ~involves
 
-    # Every masked pair -> exactly zero well depth (idr_scale=0).
-    assert np.all(eps_m[involves] == 0.0)
+    # Every masked pair -> the model's well depth, weaker than any native contact.
+    assert eps_m[involves].max() < 1.0
     # Folded-folded well depths are byte-identical to the folded-only run.
     assert np.allclose(eps_m[ff], eps_f[ff])
 
@@ -135,28 +134,42 @@ def test_contact_removal_self_avoiding(tmp_path, monkeypatch):
     keep = ff & ~(changed[:, None] | changed[None, :])
     assert np.array_equal(rmin_m[keep], rmin_f[keep])
 
-    # No native contact survives that touches a masked residue.
-    assert not np.any(eps_m[involves] > 0.01)
 
-
-def test_negative_idr_scale_rejected(tmp_path, monkeypatch):
-    """A negative ``idr_scale`` (a negative well depth) must fail loudly."""
+@pytest.mark.parametrize("line", ["idr_scale: 0.10", "eps_ev_kj: 0.8368"])
+def test_removed_tuning_keys_rejected(tmp_path, monkeypatch, line):
+    """``idr_scale`` and ``eps_ev_kj`` are fixed by the model; a YAML that still sets
+    one fails with an error naming the key and pointing to ``model:``."""
     from topo.utils.nonbonded import build_nonbonded_interaction
 
     monkeypatch.chdir(tmp_path)
-    dm = _write_yaml(tmp_path / "neg.yaml", f"""
+    dm = _write_yaml(tmp_path / "removed.yaml", f"""
         n_residues: {N_RES}
         disordered:
           residues: [1-{MASK_END}]
-          idr_scale: -0.1
+          {line}
         """)
-    with pytest.raises(ValueError, match="idr_scale"):
+    with pytest.raises(ValueError, match=f"{line.split(':')[0]}.*model"):
+        build_nonbonded_interaction(str(PDB), dm)
+
+
+def test_unknown_model_rejected(tmp_path, monkeypatch):
+    """An unsupported ``model:`` fails listing the supported ones."""
+    from topo.utils.nonbonded import build_nonbonded_interaction
+
+    monkeypatch.chdir(tmp_path)
+    dm = _write_yaml(tmp_path / "unknown.yaml", f"""
+        n_residues: {N_RES}
+        disordered:
+          residues: [1-{MASK_END}]
+          model: calvados2
+        """)
+    with pytest.raises(ValueError, match="calvados2.*bt.*hps_urry"):
         build_nonbonded_interaction(str(PDB), dm)
 
 
 def test_legacy_eps_gen_kj(tmp_path, monkeypatch):
     """The removed ``eps_gen_kj``: 0.0 was a no-op and is accepted; a non-zero value
-    is refused with the ``idr_scale`` equivalent in the message."""
+    is refused."""
     from topo.utils.nonbonded import build_nonbonded_interaction
 
     monkeypatch.chdir(tmp_path)
@@ -170,13 +183,13 @@ def test_legacy_eps_gen_kj(tmp_path, monkeypatch):
             """)
 
     build_nonbonded_interaction(str(PDB), yaml_with(0.0))
-    with pytest.raises(ValueError, match="eps_gen_kj.*idr_scale"):
+    with pytest.raises(ValueError, match="eps_gen_kj"):
         build_nonbonded_interaction(str(PDB), yaml_with(2.25))
 
 
 def test_idr_folded_same_depth_rule_as_idr_idr(tmp_path, monkeypatch):
     """IDR-folded pairs (exactly one masked) take the SAME well depth rule as IDR-IDR:
-    ``idr_scale * eps_BT``. The interaction is a property of the two
+    ``lambda_ij * epsilon`` (bt: ``0.10 * eps_BT``). The interaction is a property of the two
     residue types, not of which region each one sits in -- so the folded/disordered
     status of the partner does not enter the depth.
 
@@ -195,7 +208,6 @@ def test_idr_folded_same_depth_rule_as_idr_idr(tmp_path, monkeypatch):
         n_residues: {N_RES}
         disordered:
           residues: [1-{MASK_END}]
-          idr_scale: {IDR_SCALE}
         """)
     rmin_m, eps_m, r2_m = build_nonbonded_interaction(str(PDB), dm, return_rmin_2=True)
 
@@ -220,7 +232,7 @@ def test_idr_folded_same_depth_rule_as_idr_idr(tmp_path, monkeypatch):
 
 
 def test_eps_construction(tmp_path, monkeypatch):
-    """§3 test 5: IDR-IDR eps == idr_scale * ss_interaction_energy,
+    """§3 test 5: IDR-IDR eps == 0.10 * ss_interaction_energy (the bt model),
     with the raw BT identity ss == 4.184*|raw-0.6| and no nscale factor."""
     from topo.utils.nonbonded import (
         build_nonbonded_interaction, get_ss_interaction_energy, load_bt_potential,
@@ -234,7 +246,6 @@ def test_eps_construction(tmp_path, monkeypatch):
         n_residues: {N_RES}
         disordered:
           residues: [1-{MASK_END}]
-          idr_scale: 0.03
         """)
     _, eps_m, _ = build_nonbonded_interaction(str(PDB), dm, return_rmin_2=True)
 
@@ -245,7 +256,7 @@ def test_eps_construction(tmp_path, monkeypatch):
 
     m = _mask()
     dd = m[:, None] & m[None, :]
-    expected = 0.03 * ss
+    expected = 0.10 * ss
     assert np.allclose(eps_m[dd], expected[dd])
 
     # Raw BT identity: the transferable per-pair energy is 4.184*|raw-0.6| from the CSV.
@@ -257,16 +268,10 @@ def test_eps_construction(tmp_path, monkeypatch):
     assert np.allclose(df.values, KCAL_TO_KJ * np.abs(raw.values - BT_SHIFT_KCAL))
 
 
-def test_default_idr_scale(tmp_path, monkeypatch):
-    """§3 test 9: omitting both knobs is identical to spelling out the calibrated
-    defaults (idr_scale = DEFAULT_IDR_SCALE, eps_ev_kj = DEFAULT_EPS_EV_KJ), and a
-    bare `disordered:` block yields exactly that calibrated pair."""
-    from topo.utils.nonbonded import (
-        build_nonbonded_interaction, DEFAULT_IDR_SCALE, DEFAULT_EPS_EV_KJ,
-    )
-
-    # the calibrated pair is what a bare `disordered:` block must produce
-    assert (DEFAULT_IDR_SCALE, DEFAULT_EPS_EV_KJ) == (0.10, 0.8368)
+def test_default_model(tmp_path, monkeypatch):
+    """§3 test 9: a bare `disordered:` block is identical to ``model: bt``, and its
+    handle carries that model's energy scale."""
+    from topo.utils.nonbonded import build_nonbonded_interaction
 
     monkeypatch.chdir(tmp_path)
     dm_default = _write_yaml(tmp_path / "default.yaml", f"""
@@ -278,16 +283,15 @@ def test_default_idr_scale(tmp_path, monkeypatch):
         n_residues: {N_RES}
         disordered:
           residues: [1-{MASK_END}]
-          idr_scale: {DEFAULT_IDR_SCALE}
-          eps_ev_kj: {DEFAULT_EPS_EV_KJ}
+          model: bt
         """)
     r1, e1, x1, i1 = build_nonbonded_interaction(str(PDB), dm_default,
                                                  return_rmin_2=True, return_idr=True)
     r2, e2, x2, i2 = build_nonbonded_interaction(str(PDB), dm_explicit,
                                                  return_rmin_2=True, return_idr=True)
-    assert np.allclose(r1, r2) and np.allclose(e1, e2) and np.allclose(x1, x2)
-    # The bare block's IDR handle carries the calibrated defaults.
-    assert i1["eps_ev_kj"] == DEFAULT_EPS_EV_KJ == i2["eps_ev_kj"]
+    assert np.array_equal(r1, r2) and np.array_equal(e1, e2) and np.array_equal(x1, x2)
+    assert i1["model"] == i2["model"] == "bt"
+    assert i1["epsilon_kj"] == i2["epsilon_kj"] == 0.8368
     assert np.array_equal(i1["idx"], np.arange(MASK_END))
 
 
@@ -305,7 +309,6 @@ def test_overlap_precedence(tmp_path, monkeypatch):
           A: {{ residues: [1-{N_RES}], nscale: 2.0 }}
         disordered:
           residues: [1-{MASK_END}]
-          idr_scale: 0.03
         """)
     # Run 2: domain A only over the folded residues; 1..20 disordered, in no domain.
     dm_disjoint = _write_yaml(tmp_path / "disjoint.yaml", f"""
@@ -314,7 +317,6 @@ def test_overlap_precedence(tmp_path, monkeypatch):
           A: {{ residues: [{MASK_END + 1}-{N_RES}], nscale: 2.0 }}
         disordered:
           residues: [1-{MASK_END}]
-          idr_scale: 0.03
         """)
     r1, e1, _ = build_nonbonded_interaction(str(PDB), dm_overlap, return_rmin_2=True)
     r2, e2, _ = build_nonbonded_interaction(str(PDB), dm_disjoint, return_rmin_2=True)
@@ -405,7 +407,6 @@ def test_fully_idp(tmp_path, monkeypatch):
         n_residues: {N_RES}
         disordered:
           residues: [1-{N_RES}]
-          idr_scale: 0.03
         """)
 
     # (a) energy build finishes: all pairs IDR-IDR, all radii finite (no divide-by-zero).
@@ -416,7 +417,7 @@ def test_fully_idp(tmp_path, monkeypatch):
         warnings.filterwarnings("ignore")
         u = mda.Universe(str(PDB))
     ss = get_ss_interaction_energy(u)
-    assert np.allclose(eps, 0.03 * ss)
+    assert np.allclose(eps, 0.10 * ss)
 
     # (b) analysis: no native contacts -> empty pairs, Q = NaN (not a crash).
     ca, heavy_pos, heavy_res = _heavy_geometry()
@@ -442,7 +443,6 @@ def test_optimizer_nothing_to_optimize(tmp_path, monkeypatch):
         n_residues: {N_RES}
         disordered:
           residues: [1-{N_RES}]
-          idr_scale: 0.03
         """)
     scorer = Scorer(str(PDB), dm)
     assert scorer.unit_keys() == []
