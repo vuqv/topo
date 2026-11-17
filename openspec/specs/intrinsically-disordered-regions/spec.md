@@ -27,9 +27,7 @@ Scope notes and known limitations:
   (not yet implemented).
 - IDR↔folded cross-attraction (`cross_scale`/O'Brien `interact_scale`) is
   deliberately omitted; it is documented as an extension point only.
-
 ## Requirements
-
 ### Requirement: YAML Configuration Parsing
 
 The domain-definition YAML file SHALL accept an optional top-level `disordered:`
@@ -71,132 +69,102 @@ parsed by `read_yaml_config()` in `topo.utils.nonbonded`.
 
 ### Requirement: Three Pair Classes in the Energy Model
 
-The non-bonded energy model SHALL enforce three distinct pair classes with
-different interaction rules: folded–folded, IDR–IDR, and IDR–folded.
-This is implemented by `apply_disorder()`, which runs **after** the folded model
-is fully built.
+Residue pairs SHALL be partitioned across **two** `CustomNonbondedForce` objects
+with **disjoint** interaction groups:
 
-**Design rationale:** Folded proteins have structure; the K-B excluded-volume
-radius is structure-derived and physically meaningful. Disordered regions have
-no fixed structure, so structure-derived radii are meaningless. Using transferable
-per-residue radii (O'Brien's σ-radii per amino acid type) decouples the radii
-from a particular conformation, matching the disorder premise.
+- **folded–folded** (neither residue disordered) — the existing Karanicolas–Brooks
+  12-10-6, restricted to `{folded} × {folded}`. Native contacts, energies and radii
+  SHALL be unchanged from a build with no `disordered:` section.
+- **IDR–IDR** and **IDR–folded** — a second force using an Ashbaugh–Hatch split on a
+  plain 12-6, on groups `{idr} × {idr}` and `{idr} × {folded}`.
+
+The IDR force SHALL implement, with `L(r) = 4[(σ/r)¹² − (σ/r)⁶]` and
+`σ = 2^(−1/6)·R_ij`:
+
+```
+r ≤ R_ij :  U = eps_EV·L(r) + (eps_EV − eps_ij)
+r >  R_ij :  U = eps_ij·L(r)
+```
+
+The potential SHALL have its minimum at `r = R_ij` with depth exactly `−eps_ij` for
+any `eps_EV`, and SHALL be C¹ at `r = R_ij`.
+
+Well depths SHALL be `eps_ij = idr_scale · eps_BT(i,j)` for
+**every** IDR-involving pair — IDR–IDR and IDR–folded alike. The depth is a function
+of the two residue types only; the folded/disordered status of the partner SHALL NOT
+enter it. A negative `idr_scale` SHALL be rejected.
+
+Note that `idr_scale` is calibrated on fully-IDP chains, in which no IDR–folded pair
+occurs, so the cross-pair depth is an extrapolation of that calibration.
+
+A model with **no** `disordered:` section SHALL build only the 12-10-6 force, with
+no interaction group, taking the pre-existing code path unchanged.
 
 #### Scenario: Folded–folded pairs unchanged
+- **WHEN** a model is built with a `disordered:` section
+- **THEN** every folded–folded well depth SHALL equal that from an otherwise identical
+  build without that section, to floating-point equality
+- **AND** every folded residue's `Rmin/2` SHALL be computed from the folded residues
+  alone (disordered residues are not candidates for the nearest non-contact partner),
+  so it is greater than or equal to its folded-only value
+- **AND** every folded–folded well position not involving a residue whose `Rmin/2`
+  changed SHALL equal its folded-only value
 
-- **WHEN** neither residue is marked disordered
-- **THEN** the pair's well depth (`HB + BS + nscale * SS`) and well position
-  (native Cα–Cα distance) are unchanged from the folded build
-- **AND** the folded residues keep their Karanicolas-Brooks Rmin/2 radii
+#### Scenario: The two forces partition the pairs
+- **WHEN** a model with disordered residues is built
+- **THEN** no residue pair SHALL appear in the interaction groups of both forces
+- **AND** the 12-10-6 force's groups SHALL contain no disordered bead
 
 #### Scenario: IDR–IDR pairs with attraction
-
 - **WHEN** both residues in a pair are marked disordered
-- **THEN** the pair's well depth is `max(NON_NATIVE_KJ, eps_gen_kj + idr_scale * SS)`
-  where `SS` is the raw sidechain–sidechain energy from the BT potential
-  (NOT domain-scaled; see Relationship to nscale-Optimization)
-- **AND** the well is positioned at the bare sum of the two residues' per-AA
-  transferable radii (O'Brien convention)
-- **AND** the energy floor is NON_NATIVE_KJ, preventing the chain from passing
-  through itself even at `idr_scale = 0`
+- **THEN** the pair's well depth SHALL equal `idr_scale · eps_BT(i,j)`, where `eps_BT`
+  is the raw sidechain–sidechain BT energy (not domain-scaled)
+- **AND** the well SHALL be positioned at the sum of the two residues' per-AA `Rmin/2`
 
-**Design rationale:** The two-parameter model separates concerns. `idr_scale`
-tunes the sequence-specific well depth (BT potential); `eps_gen_kj` adds a
-sequence-independent attractive baseline that represents generic hydrophobic
-cohesion. The floor prevents unphysical overlap.
+#### Scenario: IDR–folded pairs
+- **WHEN** a pair has exactly one disordered residue and `idr_scale > 0`
+- **THEN** its well depth SHALL equal `idr_scale · eps_BT(i,j)`
+- **AND** SHALL equal the depth an IDR–IDR pair of the same two residue types receives
 
-#### Scenario: IDR–folded pairs (excluded-volume only)
+#### Scenario: Zero attraction is a clean excluded-volume bead
+- **WHEN** `idr_scale = 0`
+- **THEN** the IDR force SHALL be exactly zero for `r > R_ij`
+- **AND** SHALL remain repulsive for `r < R_ij`
 
-- **WHEN** one residue is marked disordered and the other is folded
-- **THEN** the pair has no native contact (no attraction)
-- **AND** the well depth is NON_NATIVE_KJ (repulsive, excluded-volume only)
-- **AND** the well is positioned at the sum of the IDR residue's per-AA radius
-  and the folded residue's K-B Rmin/2
-- **AND** the folded residue retains its native K-B radius (not shrunk)
-
-**Design rationale:** IDR residues should not stabilize the folded core. Lacking
-sequence information about cross-interactions, we use repulsive excluded-volume
-only, keeping the folded bead on its native radius to avoid artificial
-destabilization of core contacts.
-
----
+#### Scenario: The core is set by eps_ev_kj alone
+- **WHEN** `eps_ij` varies from 0 to 2 kJ/mol at fixed `eps_ev_kj`
+- **THEN** the radius at which `U = kT` SHALL change by less than 5 %
 
 ### Requirement: Radii: Structural vs. Transferable
 
-IDR residues SHALL use transferable per-amino-acid excluded-volume radii from
-the model-parameters file, while folded residues keep their Karanicolas-Brooks
-structure-derived radii. The per-residue `rmin_2_nm` array SHALL be overridden
-in place by `apply_disorder()`, so both the energy model and any downstream
-consumers (e.g., CSP ribosome excluded-volume) see consistent radii.
+Disordered residues SHALL take the transferable per-amino-acid `Rmin/2` from the
+parameter table directly. Folded residues SHALL keep their structure-derived
+Karanicolas–Brooks `Rmin/2`. Both populations therefore carry the **same quantity**,
+and every pair SHALL combine by the plain sum rule
+`R_ij = Rmin/2_i + Rmin/2_j`, including IDR–folded cross pairs.
 
-**Design rationale:** The K-B radius is derived from the native structure's
-Cα–Cα contact distances and is meaningless for arbitrary coordinates. Transferable
-σ-radii per amino acid type (O'Brien's values) capture the excluded-volume
-stiffness without requiring a fixed structure.
+No σ-conversion (division by `2^(1/6)`) SHALL be applied when populating the
+per-residue radius array. The conversion belongs inside the IDR force's own
+expression, where `σ = 2^(−1/6)·R_ij` recovers the van der Waals sum.
 
 #### Scenario: IDR radii override
-
-- **WHEN** `apply_disorder()` is called with a `dis_idx` array of disordered residues
-- **THEN** each residue `i` in `dis_idx` has its `rmin_2_nm[i]` set to
-  `IDR_RMIN_2_NM[resname[i]] / 2^(1/6)`, the per-AA transferable σ-radius
-- **AND** folded residues' `rmin_2_nm` remain exactly as before
+- **WHEN** a residue is marked disordered
+- **THEN** its `Rmin/2` SHALL equal the parameter-table value for its residue type
+- **AND** SHALL NOT be divided by `2^(1/6)`
 
 #### Scenario: CSP ribosome excluded-volume consistency
-
-- **WHEN** CSP calls `precompute_contacts()` → `setParticlesRadii()` with the
-  overridden `rmin_2_nm` array
-- **THEN** the ribosome–NC excluded-volume layer sees the same IDR σ-radii
-- **AND** NC–NC and NC–ribosome excluded-volume models are internally consistent
+- **WHEN** CSP passes the overridden per-residue radius array to the ribosome–NC
+  excluded-volume layer
+- **THEN** that layer SHALL see the same IDR radii as the intra-chain model
 
 #### Scenario: No disordered residues → radii unchanged
-
 - **WHEN** the `disordered:` section is absent or empty
-- **THEN** `apply_disorder()` is not called (or called with an empty `dis_idx`)
-- **AND** all residues keep their original radii
+- **THEN** all residues SHALL keep their original radii
 
----
-
-### Requirement: Two Attraction Parameters: idr_scale and eps_gen_kj
-
-The energy model SHALL support two independent attraction tuning parameters for
-IDR–IDR pairs: `idr_scale` (sequence-specific) and `eps_gen_kj` (sequence-independent).
-
-**Design rationale:** Physical decoupling. `idr_scale` scales the BT potential,
-which encodes amino-acid pair specificity. `eps_gen_kj` is a flat hydrophobic
-baseline, independent of sequence, representing non-specific attractive interactions
-(e.g., hydrophobic effect in an aqueous environment). Together they allow
-independent tuning of compaction (excluded-volume stiffness via `idr_scale`) and
-cohesion (baseline attraction via `eps_gen_kj`).
-
-#### Scenario: idr_scale tunes sequence-specific attraction
-
-- **WHEN** `idr_scale = 0`
-- **THEN** IDR–IDR pairs have only the NON_NATIVE_KJ floor (pure self-avoiding chain)
-- **WHEN** `idr_scale = 1.0` (default)
-- **THEN** IDR–IDR pairs use the full BT sequence-specific well depth, plus eps_gen_kj
-- **WHEN** `idr_scale > 1.0`
-- **THEN** IDR–IDR wells are deepened, favoring compaction
-
-**Note:** The name "idr_scale" is historical. Its effect on compaction is
-counterintuitive: raising `idr_scale` *stiffens* excluded-volume, not softens it,
-because the BT well is shallow (~0.2 kJ/mol at default; raising α strengthens
-excluded-volume repulsion relative to attraction).
-
-#### Scenario: eps_gen_kj provides sequence-independent cohesion
-
-- **WHEN** `eps_gen_kj = 0` and `idr_scale = 1.0`
-- **THEN** IDR–IDR pairs use only the sequence-specific BT term
-- **WHEN** `eps_gen_kj = 2.25` (default)
-- **THEN** IDR–IDR pairs gain a flat 2.25 kJ/mol baseline attractive energy
-- **AND** this baseline is added before the `idr_scale * SS` term, so both
-  contribute to the total well depth
-
-**Calibration note:** Default values (`idr_scale = 1.0`, `eps_gen_kj = 2.25`)
-were determined by comparing simulated Rg to SAXS measurements on 24 fully-disordered
-proteins (see `docs/usage/disordered_regions.rst`). At these defaults, the RMS
-fractional Rg error is ~33% with a slope of 0.71 (Pearson r ≈ 0.79).
-
----
+#### Scenario: Sigma matches published HPS values
+- **WHEN** `σ = (Rmin/2_i + Rmin/2_j)/2^(1/6)` is computed for `i = j`
+- **THEN** it SHALL agree with the published HPS per-residue σ to within 2 % for all
+  20 amino acids
 
 ### Requirement: Native Contact Masking in the Energy Path
 
@@ -392,6 +360,77 @@ distinguish the folded and disordered regions.
 validated by comparing to experimental SAXS or NMR data.
 
 ---
+
+### Requirement: Interaction-Group Ownership
+
+A force's interaction groups SHALL be set exactly once, by the code that creates the
+force. No other code SHALL add interaction groups to a force it did not create.
+
+OpenMM takes the **union** of interaction groups, so a later broader assertion
+silently re-admits pairs the force no longer owns and causes them to be evaluated by
+two forces at once, with no error raised.
+
+Code that must restrict a force it did not create SHALL do so **only when that force
+has no interaction groups**, i.e. only when no other component has claimed ownership.
+
+#### Scenario: Ribosome append does not widen the contact force
+- **WHEN** a ribosome is appended to a nascent model that has disordered residues
+- **THEN** the 12-10-6 force's interaction groups SHALL still contain no disordered bead
+- **AND** no pair SHALL be present in both nascent-side forces
+
+#### Scenario: Ribosome append still restricts an unclaimed force
+- **WHEN** a ribosome is appended to a model with no disordered residues
+- **THEN** the 12-10-6 force SHALL be restricted to `{nascent} × {nascent}`
+
+#### Scenario: Replication preserves the partition
+- **WHEN** a model with disordered residues is replicated into N non-interacting copies
+- **THEN** each force's template groups SHALL be reproduced per copy with an index offset
+- **AND** no pair SHALL be present in both forces
+- **AND** no interaction group SHALL span two copies
+
+#### Scenario: Replicated energy is exactly N times one copy
+- **WHEN** a model is replicated into N non-interacting copies
+- **THEN** the potential energy SHALL equal N × the single-copy energy to within
+  floating-point tolerance
+
+### Requirement: Excluded-Volume Strength Parameter
+
+The `disordered:` section SHALL accept an optional `eps_ev_kj` (kJ/mol) setting the
+repulsive-core strength of the IDR force, independent of the well depth. It SHALL
+default to `0.8368` (0.2 kcal/mol, the HPS value).
+
+#### Scenario: Default applied when omitted
+- **WHEN** a `disordered:` section omits `eps_ev_kj`
+- **THEN** the IDR force SHALL use `0.8368` kJ/mol
+
+#### Scenario: Explicit value honoured
+- **WHEN** `eps_ev_kj` is given
+- **THEN** the IDR force's `epsEV` global parameter SHALL equal it
+
+### Requirement: Continuous Synthesis with a Disordered Nascent Chain
+
+The CSP path SHALL support a `disordered:` section in the nascent chain's domain
+definition. The disorder mask SHALL be sliced to the emerged chain at each length,
+using the existing correspondence that particle `i` (`0..L-1`) is native residue
+`i+1` and the contact subset is the top-left `L × L` block.
+
+The nascent↔ribosome interaction SHALL remain a 12-10-6 with `RIBO_NC_EPS_KJ` for
+**every** nascent bead, disordered or not. It is a separate force and SHALL NOT be
+switched by disorder.
+
+#### Scenario: Fully disordered emerged chain
+- **WHEN** the emerged chain length is within the disordered prefix
+- **THEN** the 12-10-6 force's interaction group SHALL be empty and contribute zero
+- **AND** the build SHALL succeed and produce finite energies
+
+#### Scenario: Mixed chain
+- **WHEN** the emerged chain contains both folded and disordered residues
+- **THEN** the IDR force SHALL carry both `{idr}×{idr}` and `{idr}×{folded}` groups
+
+#### Scenario: Every force sees every particle
+- **WHEN** the ribosome is appended
+- **THEN** every `CustomNonbondedForce` SHALL hold one parameter entry per system
+  particle, and all SHALL have identical exclusion lists
 
 ## Scenarios for Testing
 

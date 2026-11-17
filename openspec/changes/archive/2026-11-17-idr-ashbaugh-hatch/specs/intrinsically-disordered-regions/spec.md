@@ -33,7 +33,7 @@ occurs, so the cross-pair depth is an extrapolation of that calibration.
 A model with **no** `disordered:` section SHALL build only the 12-10-6 force, with
 no interaction group, taking the pre-existing code path unchanged.
 
-#### Scenario: Folded–folded pairs are bit-identical
+#### Scenario: Folded–folded pairs unchanged
 - **WHEN** a model is built with a `disordered:` section
 - **THEN** every folded–folded well depth SHALL equal that from an otherwise identical
   build without that section, to floating-point equality
@@ -48,7 +48,13 @@ no interaction group, taking the pre-existing code path unchanged.
 - **THEN** no residue pair SHALL appear in the interaction groups of both forces
 - **AND** the 12-10-6 force's groups SHALL contain no disordered bead
 
-#### Scenario: A cross pair is attracted like an IDR–IDR pair
+#### Scenario: IDR–IDR pairs with attraction
+- **WHEN** both residues in a pair are marked disordered
+- **THEN** the pair's well depth SHALL equal `idr_scale · eps_BT(i,j)`, where `eps_BT`
+  is the raw sidechain–sidechain BT energy (not domain-scaled)
+- **AND** the well SHALL be positioned at the sum of the two residues' per-AA `Rmin/2`
+
+#### Scenario: IDR–folded pairs
 - **WHEN** a pair has exactly one disordered residue and `idr_scale > 0`
 - **THEN** its well depth SHALL equal `idr_scale · eps_BT(i,j)`
 - **AND** SHALL equal the depth an IDR–IDR pair of the same two residue types receives
@@ -74,10 +80,19 @@ No σ-conversion (division by `2^(1/6)`) SHALL be applied when populating the
 per-residue radius array. The conversion belongs inside the IDR force's own
 expression, where `σ = 2^(−1/6)·R_ij` recovers the van der Waals sum.
 
-#### Scenario: IDR radii are table Rmin/2 values
+#### Scenario: IDR radii override
 - **WHEN** a residue is marked disordered
 - **THEN** its `Rmin/2` SHALL equal the parameter-table value for its residue type
 - **AND** SHALL NOT be divided by `2^(1/6)`
+
+#### Scenario: CSP ribosome excluded-volume consistency
+- **WHEN** CSP passes the overridden per-residue radius array to the ribosome–NC
+  excluded-volume layer
+- **THEN** that layer SHALL see the same IDR radii as the intra-chain model
+
+#### Scenario: No disordered residues → radii unchanged
+- **WHEN** the `disordered:` section is absent or empty
+- **THEN** all residues SHALL keep their original radii
 
 #### Scenario: Sigma matches published HPS values
 - **WHEN** `σ = (Rmin/2_i + Rmin/2_j)/2^(1/6)` is computed for `i = j`
