@@ -835,7 +835,7 @@ class system:
         energy_matrix : numpy.ndarray
             The same (n_atoms x n_atoms) well-depth matrix (kJ/mol). Every
             IDR-involving entry -- IDR-IDR and IDR-folded alike -- is
-            ``max(NON_NATIVE_KJ, idr_scale * eps_BT)``.
+            ``idr_scale * eps_BT``.
         use_pbc : bool
             If True, use ``CutoffPeriodic``; otherwise ``CutoffNonPeriodic``.
         idr_idx : sequence of int

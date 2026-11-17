@@ -91,11 +91,12 @@ def test_format_residue_ranges():
 # Energy path — apply_disorder (§2.3)
 # --------------------------------------------------------------------------- #
 def test_contact_removal_self_avoiding(tmp_path, monkeypatch):
-    """§3 test 2 + 6: idr_scale=0 -> every IDR-involving pair is the excluded-volume
-    floor; folded-folded pairs and folded residues' K-B radius are untouched; IDR
+    """§3 test 2 + 6: idr_scale=0 -> every IDR-involving pair has zero well
+    depth (the Ashbaugh-Hatch core is set by eps_ev_kj); folded-folded pairs and
+    folded residues' K-B radius are untouched; IDR
     residues take the per-AA radius."""
     from topo.utils.nonbonded import (
-        build_nonbonded_interaction, NON_NATIVE_KJ, IDR_RMIN_2_NM,
+        build_nonbonded_interaction, IDR_RMIN_2_NM,
     )
 
     monkeypatch.chdir(tmp_path)
@@ -113,8 +114,8 @@ def test_contact_removal_self_avoiding(tmp_path, monkeypatch):
     involves = m[:, None] | m[None, :]
     ff = ~involves
 
-    # Every masked pair -> exactly the excluded-volume floor (idr_scale=0, floor guard).
-    assert np.allclose(eps_m[involves], NON_NATIVE_KJ)
+    # Every masked pair -> exactly zero well depth (idr_scale=0).
+    assert np.all(eps_m[involves] == 0.0)
     # Folded-folded well depths are byte-identical to the folded-only run.
     assert np.allclose(eps_m[ff], eps_f[ff])
 
@@ -133,13 +134,29 @@ def test_contact_removal_self_avoiding(tmp_path, monkeypatch):
     assert r2_m[~m].max() <= r2_f[~m].max()            # no radius inflated past the fold's own range
     keep = ff & ~(changed[:, None] | changed[None, :])
     assert np.array_equal(rmin_m[keep], rmin_f[keep])
+
     # No native contact survives that touches a masked residue.
     assert not np.any(eps_m[involves] > 0.01)
 
 
+def test_negative_idr_scale_rejected(tmp_path, monkeypatch):
+    """A negative ``idr_scale`` (a negative well depth) must fail loudly."""
+    from topo.utils.nonbonded import build_nonbonded_interaction
+
+    monkeypatch.chdir(tmp_path)
+    dm = _write_yaml(tmp_path / "neg.yaml", f"""
+        n_residues: {N_RES}
+        disordered:
+          residues: [1-{MASK_END}]
+          idr_scale: -0.1
+        """)
+    with pytest.raises(ValueError, match="idr_scale"):
+        build_nonbonded_interaction(str(PDB), dm)
+
+
 def test_idr_folded_same_depth_rule_as_idr_idr(tmp_path, monkeypatch):
     """IDR-folded pairs (exactly one masked) take the SAME well depth rule as IDR-IDR:
-    ``max(NON_NATIVE_KJ, idr_scale * eps_BT)``. The interaction is a property of the two
+    ``idr_scale * eps_BT``. The interaction is a property of the two
     residue types, not of which region each one sits in -- so the folded/disordered
     status of the partner does not enter the depth.
 
@@ -171,7 +188,7 @@ def test_idr_folded_same_depth_rule_as_idr_idr(tmp_path, monkeypatch):
     dd = m[:, None] & m[None, :]
     cross = (m[:, None] | m[None, :]) & ~dd     # exactly one masked
 
-    expected = np.maximum(NON_NATIVE_KJ, IDR_SCALE * ss)
+    expected = IDR_SCALE * ss
     assert np.allclose(eps_m[cross], expected[cross])
     # ...the identical rule the IDR-IDR pairs get -- one formula, no branch on region.
     assert np.allclose(eps_m[dd], expected[dd])
@@ -183,11 +200,11 @@ def test_idr_folded_same_depth_rule_as_idr_idr(tmp_path, monkeypatch):
 
 
 def test_eps_construction(tmp_path, monkeypatch):
-    """§3 test 5: IDR-IDR eps == max(NON_NATIVE, idr_scale * ss_interaction_energy),
+    """§3 test 5: IDR-IDR eps == idr_scale * ss_interaction_energy,
     with the raw BT identity ss == 4.184*|raw-0.6| and no nscale factor."""
     from topo.utils.nonbonded import (
         build_nonbonded_interaction, get_ss_interaction_energy, load_bt_potential,
-        NON_NATIVE_KJ, KCAL_TO_KJ, BT_SHIFT_KCAL,
+        KCAL_TO_KJ, BT_SHIFT_KCAL,
     )
     import MDAnalysis as mda
     import warnings
@@ -208,7 +225,7 @@ def test_eps_construction(tmp_path, monkeypatch):
 
     m = _mask()
     dd = m[:, None] & m[None, :]
-    expected = np.maximum(NON_NATIVE_KJ, 0.03 * ss)
+    expected = 0.03 * ss
     assert np.allclose(eps_m[dd], expected[dd])
 
     # Raw BT identity: the transferable per-pair energy is 4.184*|raw-0.6| from the CSV.
@@ -356,7 +373,7 @@ def test_native_contacts_no_disorder_regression():
 # --------------------------------------------------------------------------- #
 def test_fully_idp(tmp_path, monkeypatch):
     """§3 test 11: every residue disordered."""
-    from topo.utils.nonbonded import build_nonbonded_interaction, NON_NATIVE_KJ, get_ss_interaction_energy
+    from topo.utils.nonbonded import build_nonbonded_interaction, get_ss_interaction_energy
     from topo.analysis.native_contacts import (
         build_native_contacts, fraction_native_contacts, load_domains,
     )
@@ -379,7 +396,7 @@ def test_fully_idp(tmp_path, monkeypatch):
         warnings.filterwarnings("ignore")
         u = mda.Universe(str(PDB))
     ss = get_ss_interaction_energy(u)
-    assert np.allclose(eps, np.maximum(NON_NATIVE_KJ, 0.03 * ss))
+    assert np.allclose(eps, 0.03 * ss)
 
     # (b) analysis: no native contacts -> empty pairs, Q = NaN (not a crash).
     ca, heavy_pos, heavy_res = _heavy_geometry()

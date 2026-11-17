@@ -22,10 +22,10 @@ r >  R_ij :  U = eps_ij·L(r)
 The potential SHALL have its minimum at `r = R_ij` with depth exactly `−eps_ij` for
 any `eps_EV`, and SHALL be C¹ at `r = R_ij`.
 
-Well depths SHALL be `eps_ij = max(NON_NATIVE_KJ, idr_scale · eps_BT(i,j))` for
+Well depths SHALL be `eps_ij = idr_scale · eps_BT(i,j)` for
 **every** IDR-involving pair — IDR–IDR and IDR–folded alike. The depth is a function
 of the two residue types only; the folded/disordered status of the partner SHALL NOT
-enter it. IDR–folded pairs SHALL NOT be restricted to the excluded-volume floor.
+enter it. A negative `idr_scale` SHALL be rejected.
 
 Note that `idr_scale` is calibrated on fully-IDP chains, in which no IDR–folded pair
 occurs, so the cross-pair depth is an extrapolation of that calibration.
@@ -50,7 +50,7 @@ no interaction group, taking the pre-existing code path unchanged.
 
 #### Scenario: A cross pair is attracted like an IDR–IDR pair
 - **WHEN** a pair has exactly one disordered residue and `idr_scale > 0`
-- **THEN** its well depth SHALL equal `max(NON_NATIVE_KJ, idr_scale · eps_BT(i,j))`
+- **THEN** its well depth SHALL equal `idr_scale · eps_BT(i,j)`
 - **AND** SHALL equal the depth an IDR–IDR pair of the same two residue types receives
 
 #### Scenario: Zero attraction is a clean excluded-volume bead

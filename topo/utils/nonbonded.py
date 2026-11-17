@@ -833,6 +833,10 @@ def read_yaml_config(filepath: str) -> Tuple[Dict, Dict, Dict, Optional[Dict]]:
     if dis_cfg is not None:
         dis_residues = parse_residue_list(dis_cfg['residues'])
         idr_scale = float(dis_cfg.get('idr_scale', DEFAULT_IDR_SCALE))
+        # idr_scale is a well depth (x eps_BT); a negative one would turn the
+        # Ashbaugh-Hatch tail repulsive, which is not a supported model.
+        if idr_scale < 0:
+            raise ValueError(f"disordered: idr_scale must be >= 0, got {idr_scale}")
         # Repulsive-core strength of the Ashbaugh-Hatch IDR force (kJ/mol), independent
         # of the well depth.
         eps_ev_kj = float(dis_cfg.get('eps_ev_kj', DEFAULT_EPS_EV_KJ))
@@ -990,7 +994,7 @@ def apply_disorder(rmin_matrix: np.ndarray, eps_ij: np.ndarray, rmin_2_nm: np.nd
     Two pair classes result: folded-folded (untouched, Go) and IDR-involving. Every
     pair touching a disordered residue -- IDR-IDR and IDR-folded alike -- loses its
     native contact and takes the well depth
-    ``max(NON_NATIVE_KJ, idr_scale * eps_BT(i, j))``; the folded/disordered status of
+    ``idr_scale * eps_BT(i, j)``; the folded/disordered status of
     the *partner* does not enter. Each IDR residue's radius is switched to the transferable
     per-AA ``Rmin/2`` from :data:`IDR_RMIN_2_NM` (folded residues keep their K-B
     ``Rmin/2``), and every IDR-involving well is placed at the plain sum rule
@@ -1059,8 +1063,8 @@ def apply_disorder(rmin_matrix: np.ndarray, eps_ij: np.ndarray, rmin_2_nm: np.nd
     rmin_matrix[involves_dis] = (
         rmin_2_nm[:, None] + rmin_2_nm[None, :])[involves_dis]
 
-    # 3. ...and the same well depth: the sequence-specific BT attraction, never below
-    #    the excluded-volume floor. A disordered residue therefore interacts with a
+    # 3. ...and the same well depth: the sequence-specific BT attraction. A
+    #    disordered residue therefore interacts with a
     #    folded one exactly as it does with another disordered one. The chemistry is
     #    the residue's, not the region's -- a hydrophobic IDR bead near a hydrophobic
     #    surface bead attracts for the same reason it would in the IDR interior -- and
@@ -1074,8 +1078,7 @@ def apply_disorder(rmin_matrix: np.ndarray, eps_ij: np.ndarray, rmin_2_nm: np.nd
     #    NOTE: idr_scale was calibrated on fully-IDP chains, where every pair is
     #    IDR-IDR, so the benchmark says nothing about the cross-pair depth. Treat a
     #    strongly adsorbing tail as a modelling question, not a settled result.
-    eps_ij[involves_dis] = np.maximum(
-        NON_NATIVE_KJ, idr_scale * ss_interaction_energy[involves_dis])
+    eps_ij[involves_dis] = idr_scale * ss_interaction_energy[involves_dis]
     return rmin_matrix, eps_ij, rmin_2_nm
 
 

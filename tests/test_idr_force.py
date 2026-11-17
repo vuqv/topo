@@ -433,7 +433,7 @@ def test_fully_idr_build_pinned(tmp_path, monkeypatch):
     """
     from topo.utils.nonbonded import (
         build_nonbonded_interaction, IDR_RMIN_2_NM, DEFAULT_IDR_SCALE,
-        DEFAULT_EPS_EV_KJ, NON_NATIVE_KJ, get_residue_mapping,
+        DEFAULT_EPS_EV_KJ, get_residue_mapping,
     )
     import MDAnalysis as mda
     import warnings
@@ -460,7 +460,7 @@ def test_fully_idr_build_pinned(tmp_path, monkeypatch):
 
     # No native contact survives; every well is the IDR-IDR depth at the calibrated scale.
     assert eps.max() < 1.0
-    assert eps.min() >= NON_NATIVE_KJ
+    assert eps.min() > 0.0
 
     # Aggregate fingerprints (nm, kJ/mol).
     assert r2.sum() == pytest.approx(34.942243, rel=1e-6)

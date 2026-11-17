@@ -116,7 +116,7 @@ Every nonlocal residue pair belongs to one of three classes:
 |               |                |             | floor                       | Karanicolas–Brooks |
 |               |                |             |                             | sum rule           |
 +---------------+----------------+-------------+-----------------------------+--------------------+
-| IDR–IDR       | Ashbaugh–Hatch | Removed     | ``max(εNN, sIDR εBT(i,j))`` | Sum of the two     |
+| IDR–IDR       | Ashbaugh–Hatch | Removed     | ``sIDR εBT(i,j)``           | Sum of the two     |
 |               | 12–6           |             |                             | residue radii      |
 +---------------+----------------+-------------+-----------------------------+--------------------+
 | Folded–IDR    | Ashbaugh–Hatch | Removed     | Same rule as IDR–IDR        | Sum of the folded  |
@@ -240,11 +240,8 @@ Two useful limits follow:
 - If :math:`\varepsilon_{ij}=\varepsilon_{\mathrm{EV}}`, it becomes ordinary LJ
   12–6.
 
-In the actual TOPO parameterization, the non-native energy floor means that
-``idr_scale: 0`` leaves a very small residual well rather than producing the exact
-:math:`\varepsilon_{ij}=0` mathematical limit. It is therefore best described as an
-approximately self-avoiding or WCA-like reference, not a strictly pure WCA
-chain.
+``idr_scale: 0`` gives exactly this :math:`\varepsilon_{ij}=0` limit for every
+IDR-involving pair. A negative ``idr_scale`` is rejected.
 
 Under this split, varying :math:`\varepsilon_{ij}` from 0 to 2 kJ/mol moves the
 :math:`U(r)=k_BT` core only from approximately :math:`0.846R` to :math:`0.819R`. The attraction
@@ -493,10 +490,7 @@ calculation is the already defined pair well depth :math:`\varepsilon_{ij}`:
 
    \varepsilon_{ij}
    =
-   \max\left(
-   \varepsilon_{\mathrm{NN}},
-   s_{\mathrm{IDR}}\varepsilon_{\mathrm{BT}}(i,j)
-   \right).
+   s_{\mathrm{IDR}}\varepsilon_{\mathrm{BT}}(i,j).
 
 It is the depth of the AH minimum,
 :math:`U_{ij}(R_{ij})=-\varepsilon_{ij}`; it is not an additional model parameter.
@@ -558,8 +552,7 @@ and therefore
    Pairwise behavior at the current default parameters.
 
    With
-   :math:`\varepsilon_{ij}=\max(\varepsilon_{\mathrm{NN}},
-   0.10\,\varepsilon_{\mathrm{BT}}(i,j))` and
+   :math:`\varepsilon_{ij}=0.10\,\varepsilon_{\mathrm{BT}}(i,j)` and
    :math:`\varepsilon_{\mathrm{EV}}=0.8368` kJ/mol, 209 of the 210 unique amino-acid
    pair types have positive second virial coefficients. Their values range from
    :math:`+0.09878` nm³ for PHE–MET to :math:`+0.49337` nm³ for ARG–LYS. CYS–CYS is the only
@@ -588,15 +581,11 @@ Every nonlocal pair touching a disordered residue receives
 
    \varepsilon_{ij}^{\mathrm{IDR}}
    =
-   \max\left(
-   \varepsilon_{\mathrm{NN}},
-   s_{\mathrm{IDR}}\varepsilon_{\mathrm{BT}}(i,j)
-   \right),
+   s_{\mathrm{IDR}}\varepsilon_{\mathrm{BT}}(i,j),
 
 where:
 
 - :math:`s_{\mathrm{IDR}}` is ``idr_scale``;
-- :math:`\varepsilon_{\mathrm{NN}}` is the very small non-native floor;
 - :math:`\varepsilon_{\mathrm{BT}}(i,j)` is the sidechain–sidechain BT energy for
   residue types :math:`i` and :math:`j`.
 
@@ -772,9 +761,9 @@ Use it unless system-specific experimental data support another value.
 - Increasing ``idr_scale`` strengthens the sequence-dependent attractive well and
   generally lowers :math:`\nu`, favoring compaction.
 - Decreasing ``idr_scale`` favors expansion.
-- ``idr_scale: 0`` removes the BT-scaled attraction but retains the tiny
-  non-native floor and the excluded-volume core. It is an approximately
-  self-avoiding reference, not a noninteracting ghost chain.
+- ``idr_scale: 0`` removes the attraction entirely and retains the
+  excluded-volume core. It is a self-avoiding (WCA) reference, not a
+  noninteracting ghost chain.
 - ``eps_ev_kj`` is primarily a repulsive-core parameter, not the preferred solvent-
   quality dial.
 
@@ -995,7 +984,7 @@ Common pitfalls
 ---------------
 
 - ``idr_scale: 0`` does not remove excluded volume. It retains the core set by
-  ``eps_ev_kj`` and also retains TOPO’s minute non-native attraction floor.
+  ``eps_ev_kj``; only the attractive well is removed.
 - ``eps_ev_kj: 0`` removes the intended repulsive core. Do not use it to define
   a self-avoiding reference.
 - Numbering must match the input structure. Residue numbering is one-based;
