@@ -460,8 +460,8 @@ def test_fully_idr_build_pinned(tmp_path, monkeypatch):
     assert eps.min() > 0.0
 
     # Aggregate fingerprints (nm, kJ/mol).
-    assert r2.sum() == pytest.approx(34.942243, rel=1e-6)
-    assert rmin.sum() == pytest.approx(7407.7555, rel=1e-6)
+    assert r2.sum() == pytest.approx(35.019857, rel=1e-6)
+    assert rmin.sum() == pytest.approx(7424.2097, rel=1e-6)
     assert eps.sum() == pytest.approx(2724.9555, rel=1e-6)
 
 

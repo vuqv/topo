@@ -69,8 +69,8 @@ BT_SHIFT_KCAL = 0.6
 # Per-AA transferable Rmin/2 (nm), the excluded-volume radius used for disordered
 # (IDR) residues, whose structure-derived Karanicolas-Brooks radius is meaningless
 # for arbitrary/disordered coordinates (spec review/DISORDER_IDR_SPEC.md §2.5). Only
-# the "topo" model is defined; these are O'Brien's per-AA S<aa> radii
-# (= rvdw*2^(1/6) to ~1%), so no new parameter file is shipped.
+# the "topo" model is defined; these are the transferable per-AA radii
+# rvdw*2^(1/6) (O'Brien's S<aa> radii to ~1.5%), so no new parameter file is shipped.
 IDR_RMIN_2_NM = {aa: _MODEL_PARAMETERS["topo"][aa]["Rmin_2"] for aa in _PROTEIN_LIST}
 
 # IDR parameter sets. Each is a shipped, precomputed residue-pair table lambda_ij with

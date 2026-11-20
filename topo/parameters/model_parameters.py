@@ -21,8 +21,10 @@ from ``build_nonbonded_interaction``), so the same residue name (e.g. ``ALA``) h
 K-B value in a nascent chain but this fixed table value in a ribosomal protein. This
 mirrors O'Brien, who separates the two by atom type (nascent ``A_i`` vs ribosomal
 ``S<aa>``) while keeping standard residue names. The protein ``Rmin_2`` below are
-O'Brien's per-AA sidechain values (his ribosome .prm ``S<aa>`` types == the topo
-``OBRIEN_SC_RMIN_2_NM`` table).
+the transferable per-AA sizes: Rmin_2 = rvdw * 2^(1/6), with rvdw the residue vdW
+radius (sigma = 2*rvdw, Rmin = 2^(1/6)*sigma). O'Brien's ribosome .prm ``S<aa>``
+values are these same radii rounded (within ~1.5%); they feed the topo
+``OBRIEN_SC_RMIN_2_NM`` and ``IDR_RMIN_2_NM`` tables.
 
 Attributes
 ----------
@@ -47,102 +49,102 @@ parameters = {
         "bonded_exclusions_index": 2,
         "ALA": {
             "mass": 71.08,
-            "Rmin_2": 0.2862278,
+            "Rmin_2": 0.2828137,
             "charge": 0.0,
         },
         "ARG": {
             "mass": 156.19,
-            "Rmin_2": 0.3704125,
+            "Rmin_2": 0.3683236,
             "charge": 1.0,
         },
         "ASN": {
             "mass": 114.10,
-            "Rmin_2": 0.3199017,
+            "Rmin_2": 0.3188350,
             "charge": 0.0,
         },
         "ASP": {
             "mass": 115.09,
-            "Rmin_2": 0.3142894,
+            "Rmin_2": 0.3132007,
             "charge": -1.0,
         },
         "CYS": {
             "mass": 103.14,
-            "Rmin_2": 0.3030648,
+            "Rmin_2": 0.3073560,
             "charge": 0.0,
         },
         "GLU": {
             "mass": 129.12,
-            "Rmin_2": 0.3367386,
+            "Rmin_2": 0.3326221,
             "charge": -1.0,
         },
         "GLN": {
             "mass": 128.13,
-            "Rmin_2": 0.3423509,
+            "Rmin_2": 0.3376322,
             "charge": 0.0,
         },
         "GLY": {
             "mass": 57.05,
-            "Rmin_2": 0.252554,
+            "Rmin_2": 0.2530595,
             "charge": 0.0,
         },
         "HIS": {
             "mass": 137.14,
-            "Rmin_2": 0.3423509,
+            "Rmin_2": 0.3415358,
             "charge": 0.0,
         },
         "ILE": {
             "mass": 113.16,
-            "Rmin_2": 0.3423509,
+            "Rmin_2": 0.3472291,
             "charge": 0.0,
         },
         "LEU": {
             "mass": 113.16,
-            "Rmin_2": 0.3423509,
+            "Rmin_2": 0.3472291,
             "charge": 0.0,
         },
         "LYS": {
             "mass": 128.17,
-            "Rmin_2": 0.3535755,
+            "Rmin_2": 0.3572072,
             "charge": 1.0,
         },
         "MET": {
             "mass": 131.19,
-            "Rmin_2": 0.3423509,
+            "Rmin_2": 0.3472291,
             "charge": 0.0,
         },
         "PHE": {
             "mass": 147.18,
-            "Rmin_2": 0.3535755,
+            "Rmin_2": 0.3572072,
             "charge": 0.0,
         },
         "PRO": {
             "mass": 97.12,
-            "Rmin_2": 0.3086771,
+            "Rmin_2": 0.3120492,
             "charge": 0.0,
         },
         "SER": {
             "mass": 87.08,
-            "Rmin_2": 0.2918401,
+            "Rmin_2": 0.2910158,
             "charge": 0.0,
         },
         "THR": {
             "mass": 101.10,
-            "Rmin_2": 0.3142894,
+            "Rmin_2": 0.3154786,
             "charge": 0.0,
         },
         "TRP": {
             "mass": 186.21,
-            "Rmin_2": 0.3816371,
+            "Rmin_2": 0.3803687,
             "charge": 0.0,
         },
         "TYR": {
             "mass": 163.18,
-            "Rmin_2": 0.3591879,
+            "Rmin_2": 0.3624226,
             "charge": 0.0,
         },
         "VAL": {
             "mass": 99.13,
-            "Rmin_2": 0.3311263,
+            "Rmin_2": 0.3285025,
             "charge": 0.0,
         },
         # Parameters for RNA.
