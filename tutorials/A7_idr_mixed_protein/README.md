@@ -67,12 +67,13 @@ disordered:
   - `hps_urry`: λ<sub>ij</sub> is the mean of the two residues' HPS-Urry
     hydropathy values (Regy *et al.*, Protein Sci. 2021). Only λ is taken from
     HPS-Urry. Bead sizes, bonds, angles, torsions, exclusions, electrostatics and
-    the cutoff remain TOPO's, so this is not the published HPS-Urry force field,
-    and it has not been benchmarked against radii of gyration in TOPO.
+    the cutoff remain TOPO's, so this is not the published HPS-Urry force field.
+    In TOPO's SAXS benchmark it gives chains that are about 15% too compact.
   - `calvados2`: λ<sub>ij</sub> is the mean of the two residues' CALVADOS 2
     stickiness values (Tesei & Lindorff-Larsen, Open Res. Europe 2022). As with
     `hps_urry`, only λ is taken; everything else remains TOPO's, so this is not
-    the published CALVADOS 2 force field, and it has not been benchmarked in TOPO.
+    the published CALVADOS 2 force field. In TOPO's SAXS benchmark it is as
+    accurate as `bt` overall.
 
   The well depths and ε are fixed by the model. The former `idr_scale` and
   `eps_ev_kj` keys were removed; a `domain.yaml` that still contains either one
@@ -133,11 +134,12 @@ vmd traj/traj.psf traj/traj.dcd
 
 ## Try next
 
-- Compare the two parameter sets. Set `model: hps_urry` in `domain.yaml` and
+- Compare the parameter sets. Set `model: calvados2` or `model: hps_urry` in `domain.yaml` and
   rerun into a different output directory. Compare the radius of gyration and the
   RMSF of each disordered region against the `bt` run. The difference shows how
-  sensitive the result is to the choice of λ table; `hps_urry` has not been
-  validated in TOPO, so it does not tell you which run is closer to experiment.
+  sensitive the result is to the choice of λ table. It does not tell you which run
+  is closer to experiment for this protein: the benchmark covers fully disordered
+  chains, not tails attached to a folded domain.
 - A fully disordered protein. Drop `intra_domains` and list every residue under
   `disordered:` for a whole-IDP run (see the *fully-IDP* note in the
   [Disordered / IDR regions](../usage/disordered_regions.rst) page).

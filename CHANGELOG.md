@@ -11,8 +11,7 @@ All notable changes to TOPO are documented here. The format is loosely based on
   stickiness of Tesei & Lindorff-Larsen, Open Res. Europe 2, 94 (2022), with
   `eps = 0.8368` kJ/mol. Only lambda is taken from CALVADOS 2: bead sizes,
   charges, bond length, bonded terms, exclusions, electrostatics and the cutoff
-  remain TOPO's, so this is not the published CALVADOS 2 force field, and its
-  radii of gyration have not been benchmarked in TOPO.
+  remain TOPO's, so this is not the published CALVADOS 2 force field.
 
 ### Changed
 - **BREAKING: the per-amino-acid `Rmin_2` table is now `rvdw * 2^(1/6)` from the
@@ -44,8 +43,7 @@ All notable changes to TOPO are documented here. The format is loosely based on
     scale of Regy, Thompson, Kim & Mittal, Protein Sci. 30, 1371 (2021). GLU–GLU
     has `lambda_ij = -0.08` and is purely repulsive. Only lambda is taken from
     HPS-Urry: bead sizes, bonded terms, exclusions, electrostatics and the cutoff
-    remain TOPO's, so this is not the published HPS-Urry force field, and its
-    radii of gyration have not been benchmarked in TOPO.
+    remain TOPO's, so this is not the published HPS-Urry force field.
 - **The non-native energy floor is no longer applied to IDR pairs.** The well depth
   of an IDR–IDR or IDR–folded pair is exactly `lambda_ij * eps`.
 - **The IDR force's OpenMM global parameter is renamed `epsEV` → `epsilon`.**
@@ -59,6 +57,14 @@ All notable changes to TOPO are documented here. The format is loosely based on
 - `usage/disordered_regions` has a section on the `calvados2` model, with the same
   "not the published force field" warning as `hps_urry`, and cites Tesei &
   Lindorff-Larsen (2022).
+- The IDR validation in `usage/disordered_regions` is replaced by a benchmark of
+  the three models against SAXS radii of gyration for 22 disordered proteins
+  (Tesei et al. 2021, Table S1; 5 copies × 500 ns at the experimental
+  temperature). RMS relative error: `bt` 9.9%, `calvados2` 10.2%, `hps_urry`
+  17.5%. `bt` and `calvados2` are not distinguishable on this set; `hps_urry` is
+  too compact. The page gains two figures (`img/idr_benchmark_comparison.png`,
+  `img/idr_benchmark_correlation.png`) and a per-protein table; the previous
+  18-protein table and figure are removed from the page.
 - New "Start here" tutorial (`tutorials/A0_start_here`): one page that takes a
   globular protein from an all-atom structure to Q curves after a temperature
   quench. It covers structure and domain assignment, `nscale` optimization with

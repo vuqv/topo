@@ -622,11 +622,13 @@ hand. All three models use :math:`\varepsilon=0.8368` kJ/mol (0.2 kcal/mol).
 |               |                                           | gyration for 18 IDPs (see |
 |               |                                           | :ref:`idr-validation`).   |
 +---------------+-------------------------------------------+---------------------------+
-| ``hps_urry``  | ``(λi + λj) / 2`` from the per-residue    | Not benchmarked in TOPO.  |
-|               | Urry hydropathy scale [2]                 |                           |
+| ``hps_urry``  | ``(λi + λj) / 2`` from the per-residue    | Too compact in the SAXS   |
+|               | Urry hydropathy scale [2]                 | benchmark (see            |
+|               |                                           | :ref:`idr-validation`).   |
 +---------------+-------------------------------------------+---------------------------+
-| ``calvados2`` | ``(λi + λj) / 2`` from the per-residue    | Not benchmarked in TOPO.  |
-|               | CALVADOS 2 stickiness scale [3]           |                           |
+| ``calvados2`` | ``(λi + λj) / 2`` from the per-residue    | As accurate as ``bt`` in  |
+|               | CALVADOS 2 stickiness scale [3]           | the SAXS benchmark (see   |
+|               |                                           | :ref:`idr-validation`).   |
 +---------------+-------------------------------------------+---------------------------+
 
 A model supplies only :math:`\lambda_{ij}` and :math:`\varepsilon`. Under every
@@ -652,7 +654,7 @@ For ``bt``,
 where :math:`\varepsilon_{\mathrm{BT}}(i,j)` is the sidechain–sidechain BT energy
 for residue types :math:`i` and :math:`j`. This is numerically the model that
 earlier versions selected with ``idr_scale: 0.10`` and ``eps_ev_kj: 0.8368``, so
-the calibration and benchmark results on this page apply to ``bt`` unchanged.
+the calibration behind it applies to ``bt`` unchanged.
 The table values range from 0.01 (LEU–ASP, MET–ASP) to 0.97 (CYS–CYS).
 
 The BT energy is
@@ -708,10 +710,10 @@ repulsive. This is intended; it follows from the published scale.
    exclusion of 1–2 and 1–3 pairs, its Yukawa electrostatics and its
    1.8–2.0 nm switched cutoff.
 
-   No :math:`R_g` benchmark of ``hps_urry`` in TOPO has been run. The validation
-   on this page applies to ``bt`` only, and the “HPS-Urry reference” in
-   :ref:`idr-validation` is the published force field, not this model. Results
-   from ``model: hps_urry`` should not be reported as HPS-Urry results.
+   In TOPO's SAXS benchmark, ``hps_urry`` gives chains that are about 15% too
+   compact on average (see :ref:`idr-validation`). That result describes this
+   model and not the published force field. Results from ``model: hps_urry``
+   should not be reported as HPS-Urry results.
 
 The ``calvados2`` model
 ~~~~~~~~~~~~~~~~~~~~~~~
@@ -745,14 +747,15 @@ purely repulsive, although GLU–GLU has almost no well.
    torsion terms, exclusion of 1–2 and 1–3 pairs, Yukawa electrostatics and
    1.8–2.0 nm switched cutoff.
 
-   No :math:`R_g` benchmark of ``calvados2`` in TOPO has been run. The
-   validation on this page applies to ``bt`` only. Results from
-   ``model: calvados2`` should not be reported as CALVADOS 2 results.
+   In TOPO's SAXS benchmark, ``calvados2`` is as accurate as ``bt`` overall,
+   with chains about 8% too compact on average (see :ref:`idr-validation`).
+   That result describes this model and not the published force field. Results
+   from ``model: calvados2`` should not be reported as CALVADOS 2 results.
 
 Folded–IDR cross interactions
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The same depth rule is used for IDR–IDR and folded–IDR pairs, under both models:
+The same depth rule is used for IDR–IDR and folded–IDR pairs, under every model:
 a folded residue facing an IDR residue takes :math:`\lambda` by its residue type
 from the same table. A disordered tail
 can therefore form transient, sequence-weighted contacts with its folded domain
@@ -904,26 +907,28 @@ The calibrated default is
 
    model: bt
 
-Use it unless you have a specific reason to compare against the HPS-Urry
-:math:`\lambda` scale.
+Use it unless you have a specific reason to compare against another
+:math:`\lambda` scale. All three models were benchmarked against SAXS radii of
+gyration for 22 disordered proteins (see :ref:`idr-validation`).
 
-- ``bt`` is the only model whose chain dimensions have been validated in TOPO
-  (see :ref:`idr-validation`).
-- ``hps_urry`` changes only the :math:`\lambda` table. It is useful for testing
-  how sensitive a result is to the choice of residue-pair attraction. It has not
-  been benchmarked in TOPO and is not the published HPS-Urry force field (see
+- ``bt`` has the smallest RMS error (9.9%) and no systematic bias in chain
+  dimensions, but it can be far off for an individual protein.
+- ``calvados2`` is equally accurate overall (10.2%). Its chains are about 8% too
+  compact on average, and it has no large outlier. It is a reasonable
+  alternative and a useful check on how sensitive a result is to the choice of
+  residue-pair attraction. It is not the published CALVADOS 2 force field (see
   :ref:`idr-models`).
-- ``calvados2`` likewise changes only the :math:`\lambda` table. It has not been
-  benchmarked in TOPO and is not the published CALVADOS 2 force field (see
-  :ref:`idr-models`).
+- ``hps_urry`` gives chains that are about 15% too compact, more so for long
+  chains (RMS error 17.5%). Use it only for comparison. It is not the published
+  HPS-Urry force field (see :ref:`idr-models`).
 - The well depths and the energy scale cannot be adjusted in the YAML file. There
   is no scale factor to sweep, and no setting that removes the attraction to give
   a pure self-avoiding (WCA) reference chain.
 
 For reference, the calibration sweep behind ``bt`` placed the theta point near a
 BT factor of 0.32, about three times the shipped factor of 0.10. The ``bt``
-model is therefore on the good-solvent side of the theta point for the benchmark
-set.
+model is therefore on the good-solvent side of the theta point for the
+calibration set.
 
 If SAXS, smFRET, or other ensemble measurements are available for the system of
 interest, compare the simulated ensemble with them rather than assuming that the
@@ -939,54 +944,59 @@ patterning; it is not universally repulsive.
 Validation against SAXS radii of gyration
 -----------------------------------------
 
-The default ``bt`` model was evaluated on 24 proteins of 24–273 residues with published SAXS
-radii of gyration. Eighteen IDPs were used for calibration, and six foldable
-globular proteins were reported separately as controls.
+The three models were compared on 22 disordered proteins of 24–334 residues with
+published SAXS radii of gyration, taken from Table S1 of Tesei *et al.* [4]. The
+set includes two unfolded proteins (reduced RNase A and the FhuA plug domain)
+and several tau constructs.
 
-The excluded control proteins were CspTm, R15, R17, hCyp, Protein-L, and sNase.
-Their published :math:`R_g` values describe folded states, so comparing those values
-with fully disordered simulations does not test the IDR model. This
-classification was made from protein identity rather than a label stored in the
-benchmark dataset and should remain visible as a judgment call.
-
-Each protein was simulated as a fully disordered chain for 90 ns of Langevin
-dynamics at 300 K, starting from an expanded coil. The first 15 ns were
-discarded. The reported value was the mass-weighted ensemble average
+Each protein was simulated as a fully disordered chain under ``bt``,
+``hps_urry`` and ``calvados2``, with everything except ``model:`` identical.
+Each run held five non-interacting copies of the chain, each followed for 500 ns
+of Langevin dynamics at the temperature of the experiment (277–298 K), starting
+from an extended chain. The first 100 ns were discarded. The reported value is
+the mass-weighted ensemble average
 
 .. math::
 
 
    \sqrt{\left\langle R_g^2\right\rangle}
 
-over the remaining 75 ns.
+over the remaining 400 ns, pooled over the five copies.
 
-.. figure:: img/idr_validation.png
+.. figure:: img/idr_benchmark_comparison.png
    :width: 100%
-   :alt: TOPO and HPS-Urry radii of gyration versus SAXS measurements for 18 intrinsically disordered proteins
+   :alt: Deviation of the simulated radius of gyration from SAXS for 22 disordered proteins under the bt, hps_urry and calvados2 models, and the RMS error of each model
 
-   Left: TOPO's Cα IDR model with the default ``bt`` parameter set. Right: the
-   published HPS-Urry force field evaluated for the same 18 proteins as an
-   external reference; it is not TOPO's ``model: hps_urry``. The dashed line is :math:`y=x`, the green line is the
-   ordinary-least-squares fit, and point color represents fractional deviation.
-   TOPO follows :math:`y=x` more closely across the measured range; its fitted
-   slope is 0.81, compared with 0.68 for HPS-Urry.
+   Left: simulated :math:`R_g` relative to experiment for each protein, ordered by
+   chain length. The shaded band marks ±10%. An asterisk marks a protein that
+   overlaps the ``bt`` calibration set. Right: RMS relative error of each model
+   for all 22 proteins and for the 11 that do not overlap the ``bt`` calibration
+   set.
 
-For the 18-IDP calibration set:
+.. figure:: img/idr_benchmark_correlation.png
+   :width: 100%
+   :alt: Simulated versus experimental radius of gyration for 22 disordered proteins, one panel per IDR model
 
-+------------+-------------+-------------+------------+-----------+-----------+
-| Model      | :math:`\nu` | :math:`R_0` | RMS        | Pearson   | OLS slope |
-|            |             |             | fractional | :math:`r` |           |
-|            |             |             | error      |           |           |
-+============+=============+=============+============+===========+===========+
-| **TOPO Cα  | 0.566       | 0.223       | 12.0%      | 0.89      | 0.81      |
-| IDR**      |             |             |            |           |           |
-| (``bt``)   |             |             |            |           |           |
-+------------+-------------+-------------+------------+-----------+-----------+
-| HPS-Urry   | 0.490       | 0.301       | 19.7%      | 0.70      | 0.68      |
-| reference  |             |             |            |           |           |
-+------------+-------------+-------------+------------+-----------+-----------+
-| Experiment | 0.551       | 0.244       | —          | —         | —         |
-+------------+-------------+-------------+------------+-----------+-----------+
+   Simulated against experimental :math:`R_g`, one panel per model. The dashed
+   line is :math:`y=x` and the solid line is the ordinary-least-squares fit.
+   Horizontal bars are the experimental errors; vertical bars are the standard
+   deviation across the five copies.
+
+For the 22 proteins:
+
++---------------+-------------+-------------+------------+-------------+-----------+-----------+-----------+
+| Model         | :math:`\nu` | :math:`R_0` | RMS        | Mean signed | Pearson   | OLS slope | Within    |
+|               |             | (nm)        | fractional | deviation   | :math:`r` |           | ±10%      |
+|               |             |             | error      |             |           |           |           |
++===============+=============+=============+============+=============+===========+===========+===========+
+| ``bt``        | 0.568       | 0.215       | 9.9%       | +3.2%       | 0.94      | 0.97      | 16        |
++---------------+-------------+-------------+------------+-------------+-----------+-----------+-----------+
+| ``hps_urry``  | 0.455       | 0.307       | 17.5%      | −15.0%      | 0.92      | 0.62      | 6         |
++---------------+-------------+-------------+------------+-------------+-----------+-----------+-----------+
+| ``calvados2`` | 0.530       | 0.232       | 10.2%      | −7.6%       | 0.96      | 0.84      | 12        |
++---------------+-------------+-------------+------------+-------------+-----------+-----------+-----------+
+| Experiment    | 0.535       | 0.246       | —          | —           | —         | —         | —         |
++---------------+-------------+-------------+------------+-------------+-----------+-----------+-----------+
 
 The scaling relation was
 
@@ -1009,28 +1019,95 @@ The RMS value is the root-mean-square fractional deviation:
    \right)^2
    }.
 
-The ``bt`` model (BT factor 0.10) gave :math:`\nu=0.566`. A three-seed check
-during calibration at a BT factor of 0.12 gave :math:`\nu=0.559\pm0.009`.
+What the comparison shows:
 
-The “HPS-Urry reference” row is the published HPS-Urry force field. It is not
-TOPO's ``model: hps_urry``, which keeps TOPO's bonded terms, exclusions, bead
-sizes, electrostatics and cutoff, and for which no :math:`R_g` benchmark has been
-run.
+- ``bt`` and ``calvados2`` reproduce the measured :math:`R_g` equally well. Their
+  RMS errors differ by 0.3 percentage points, and a paired bootstrap over the
+  proteins gives a 95% interval of −4.4 to +4.3 points for that difference, so
+  the benchmark does not rank one above the other.
+- ``hps_urry`` is clearly worse than both. It is too compact for nearly every
+  protein, and increasingly so for long chains: its scaling exponent is 0.455,
+  against 0.535 from experiment.
+- ``bt`` is centred on experiment (slope 0.97) and is the closest of the three
+  for 12 of the 22 proteins. It also has the largest single error, +29% for the
+  A1 low-complexity domain. Without that protein its RMS error is 7.8%.
+- ``calvados2`` is too compact for 17 of the 22 proteins, typically by 5–15%,
+  but has no error larger than 23% (osteopontin). Its scaling exponent, 0.530, is
+  the closest to experiment.
 
-Important limitation
-~~~~~~~~~~~~~~~~~~~~
+These results describe ``hps_urry`` and ``calvados2`` as implemented in TOPO, and
+differences from the published HPS-Urry and CALVADOS 2 results are expected. The
+published models connect the beads by bonds only. In TOPO, disordered residues
+also carry the angle and dihedral terms of the chain model, 1–3 pairs are
+excluded from the nonbonded interaction, and the bead sizes, electrostatics and
+cutoff are TOPO's (see :ref:`idr-models`). The :math:`\lambda` values were
+optimized without those terms, so the chain dimensions they give in TOPO need
+not match the ones they give in their original force fields.
 
-The 12.0% RMS deviation does not demonstrate that the model captures detailed
+The comparison is not independent of how the models were parameterized:
+
+- The ``bt`` factor of 0.10 was calibrated on 18 disordered proteins. Eleven of
+  the 22 benchmark proteins overlap that set (the same protein or a construct of
+  it). On the other 11, the RMS errors are 12.4% for ``bt``, 16.7% for
+  ``hps_urry`` and 10.4% for ``calvados2``.
+- The CALVADOS :math:`\lambda` values were optimized against SAXS data that
+  include these 22 proteins [3, 4], although within the CALVADOS chain model and
+  not within TOPO's.
+
+Per protein, simulated :math:`R_g` in nm with the deviation from experiment in
+brackets (\* overlaps the ``bt`` calibration set):
+
+.. csv-table::
+   :header: "Protein", "N", "T (K)", "Experiment (nm)", "bt", "hps_urry", "calvados2"
+   :widths: 16, 6, 7, 16, 16, 16, 16
+
+   "Hst5 \*", 24, 293, "1.38 ± 0.07", "1.24 (-10%)", "1.18 (-14%)", "1.20 (-13%)"
+   "(Hst5)2 \*", 48, 298, "1.87 ± 0.07", "1.99 (+6%)", "1.84 (-2%)", "1.87 (0%)"
+   "ACTR \*", 71, 278, "2.63 ± 0.10", "2.46 (-6%)", "2.21 (-16%)", "2.27 (-14%)"
+   "Sic1 \*", 92, 293, "3.00 ± 0.40", "2.91 (-3%)", "2.48 (-17%)", "2.67 (-11%)"
+   "SH4UD \*", 95, 293, "2.71 ± 0.10", "2.88 (+6%)", "2.46 (-9%)", "2.61 (-4%)"
+   "ColNT", 98, 277, "2.83 ± 0.10", "2.91 (+3%)", "2.36 (-17%)", "2.49 (-12%)"
+   "p15PAF", 111, 298, "2.81 ± 0.10", "3.10 (+10%)", "2.70 (-4%)", "2.88 (+2%)"
+   "hNL3cyt", 119, 293, "3.15 ± 0.20", "3.17 (+1%)", "2.51 (-20%)", "2.75 (-13%)"
+   "RNaseA", 124, 298, "3.36 ± 0.10", "3.34 (-1%)", "2.74 (-18%)", "3.00 (-11%)"
+   "A1 LCD (WT)", 137, 298, "2.76 ± 0.05", "3.57 (+29%)", "2.93 (+6%)", "2.59 (-6%)"
+   "aSyn \*", 140, 293, "3.55 ± 0.10", "3.56 (0%)", "3.12 (-12%)", "3.46 (-2%)"
+   "FhuA", 144, 298, "3.34 ± 0.10", "3.57 (+7%)", "2.88 (-14%)", "3.14 (-6%)"
+   "K17", 145, 288, "3.60 ± 0.20", "3.78 (+5%)", "3.20 (-11%)", "3.56 (-1%)"
+   "K27", 167, 288, "3.70 ± 0.20", "4.11 (+11%)", "3.42 (-8%)", "3.81 (+3%)"
+   "K10", 168, 288, "4.00 ± 0.10", "4.02 (0%)", "3.20 (-20%)", "3.62 (-10%)"
+   "K16 \*", 176, 288, "3.90 ± 0.30", "4.28 (+10%)", "3.54 (-9%)", "3.98 (+2%)"
+   "K25 \*", 185, 288, "4.10 ± 0.20", "3.91 (-5%)", "2.96 (-28%)", "3.48 (-15%)"
+   "K32 \*", 198, 288, "4.20 ± 0.30", "4.60 (+9%)", "3.76 (-10%)", "4.21 (0%)"
+   "OPN", 220, 298, "5.13 ± 0.20", "4.18 (-18%)", "3.72 (-28%)", "3.94 (-23%)"
+   "K23 \*", 254, 288, "4.90 ± 0.20", "4.82 (-2%)", "3.41 (-30%)", "4.16 (-15%)"
+   "K44 \*", 283, 288, "5.20 ± 0.20", "5.31 (+2%)", "3.71 (-29%)", "4.56 (-12%)"
+   "PNt", 334, 298, "5.11 ± 0.20", "5.81 (+14%)", "4.03 (-21%)", "4.78 (-7%)"
+
+Important limitations
+~~~~~~~~~~~~~~~~~~~~~
+
+An RMS deviation near 10% does not demonstrate that a model captures detailed
 sequence-specific differences. A power law fitted directly to the same
-experimental data already leaves a 9.5% residual. In addition, three chains of
-length 185 span 36% in experimental :math:`R_g` but only 7% in the model, in the wrong
-rank order.
+experimental data already leaves a 7.3% residual, so most of the agreement
+reflects the dependence on chain length. The individual errors show this: under
+``bt`` the A1 low-complexity domain is 29% too expanded, and all three models
+make osteopontin 18–28% too compact.
 
-The model is therefore supported for approximate ensemble dimensions across
-different chain lengths. It should not currently be used to confidently rank
+The models are therefore supported for approximate ensemble dimensions across
+different chain lengths. They should not currently be used to confidently rank
 the dimensions of two IDPs of similar length. The remaining discrepancy may
 involve bonded terms, charge patterning, or other omitted interactions rather
 than only the contact potential.
+
+Two further points limit the comparison:
+
+- TOPO's electrostatics use a fixed Debye length of 1.0 nm, about 100 mM salt.
+  The experiments span ionic strengths of 0.15–0.4 M, and this was not matched
+  for any model.
+- The longest chains are not fully converged in 500 ns. For the 334-residue
+  pertactin N-terminal domain, the :math:`R_g` of the first and second halves
+  of the analysed window differ by about 0.2 nm under every model.
 
 Effect on native-contact analysis and stability optimization
 ------------------------------------------------------------
@@ -1137,12 +1214,11 @@ Common pitfalls
 - The IDR attraction cannot be scaled or switched off. It is fixed by the
   model's :math:`\lambda` table.
 - ``model: hps_urry`` is not the published HPS-Urry force field. Only the
-  :math:`\lambda` scale is taken from it, and it has not been benchmarked in
-  TOPO.
+  :math:`\lambda` scale is taken from it, and in TOPO it gives chains that are
+  too compact.
 - Under ``hps_urry``, GLU–GLU pairs are purely repulsive. This is intended.
 - ``model: calvados2`` is not the published CALVADOS 2 force field. Only the
-  :math:`\lambda` scale is taken from it, and it has not been benchmarked in
-  TOPO.
+  :math:`\lambda` scale is taken from it.
 - Numbering must match the input structure. Residue numbering is one-based;
   an incorrect number disorders the wrong residue.
 - Domain overlap is legal. If a residue appears in both a domain and the
@@ -1169,3 +1245,8 @@ Reference
    intrinsically disordered proteins by tuning the interaction range.
    *Open Res. Europe*. 2022;2:94.
    https://doi.org/10.12688/openreseurope.14967.2
+4. Tesei G., Schulze T. K., Crehuet R., Lindorff-Larsen K. Accurate model of
+   liquid–liquid phase behavior of intrinsically disordered proteins from
+   optimization of single-chain properties. *Proc. Natl. Acad. Sci. USA*.
+   2021;118:e2111696118.
+   https://doi.org/10.1073/pnas.2111696118
