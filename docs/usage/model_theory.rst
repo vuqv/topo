@@ -592,7 +592,7 @@ every bead uses unconditionally: it sets the particle dynamics.
 
 The ``Rmin_2`` column is a transferable, per-type parameter (O'Brien's
 per-amino-acid sidechain Rmin/2 values, plus his per-type RNA values below).
-"Transferable" is the key point: unlike everything else in a structure-based
+Unlike everything else in a structure-based
 model, these numbers depend only on the residue *type*, never on your input
 structure, and consequently they are not what a folded protein or a nascent
 chain uses. See :ref:`theory-rmin2-transferable` immediately after the table.

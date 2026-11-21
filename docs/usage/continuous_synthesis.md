@@ -3,9 +3,9 @@
 The Continuous Synthesis Protocol (CSP) is the codon-resolved, kinetic runner
 for protein synthesis on an explicit coarse-grained ribosome. It times
 every residue from its mRNA codon and splits each elongation cycle into three
-kinetic sub-stages: the published continuous-synthesis protocol, in
-topo style. (Codon-resolved kinetics are what make the model physically meaningful; a
-fixed per-residue step count is not.) For the analytic-tunnel variant (the same codon
+kinetic sub-stages, following the published continuous-synthesis protocol.
+Codon-resolved kinetics are what make the model physically meaningful; a
+fixed per-residue step count is not. For the analytic-tunnel variant (the same codon
 kinetics with the explicit ribosome replaced by a cylindrical bore) see
 {doc}`cylinder_synthesis`.
 
@@ -21,8 +21,6 @@ kinetics with the explicit ribosome replaced by a cylindrical bore) see
   tunnel wall live in `topo.csp.ribosome`; the timing lives in `topo.csp.kinetics`.
   CSP adds only the kinetics and the three-`run_length`-calls-per-residue loop. The
   force field and ribosome representation are described in the Theory section below.
-
----
 
 ## Quick start
 
@@ -42,8 +40,6 @@ topo-csp-movie -o synth_out_debug --ribosome ribosome_trunc.pdb
 plus a per-stage trajectory `traj_s<s>.dcd`), optional `stall/` and `ejection/` phases, and a
 per-residue dwell-time log `<outdir>/dwell_times.dat`.
 
----
-
 ## Theory
 
 ### 1. What is being modeled: protein synthesis
@@ -51,12 +47,12 @@ per-residue dwell-time log `<outdir>/dwell_times.dat`.
 In a living cell a protein is synthesized vectorially, N-terminus first, by the
 ribosome, one amino acid at a time, while the growing ("nascent") chain threads out
 through the ribosomal exit tunnel (~80 Å long, ~10–20 Å wide) and begins to fold
-as it emerges. The kinetics of synthesis matter: how long the
+as it emerges. How long the
 ribosome dwells on each codon sets how much time each segment of the chain has to sample
 conformations before the next residue is added. Rare codons (decoded slowly) act as
 "translational pauses" that can change folding outcomes.
 
-CSP reproduces this: it grows a coarse-grained protein bead-by-bead out of a
+CSP grows a coarse-grained protein bead-by-bead out of a
 coarse-grained ribosome, timing each residue from its mRNA codon, so the nascent
 chain folds under realistic, codon-resolved kinetics.
 
@@ -66,8 +62,8 @@ Bacterial translation elongation repeats a three-step biochemical cycle per codo
 
 1. Aminoacyl-tRNA selection / decoding. A ternary complex
    (EF-Tu·GTP·aminoacyl-tRNA) delivers an aa-tRNA to the ribosomal A site. Correct
-   codon–anticodon pairing triggers GTP hydrolysis and accommodation. This is the
-   codon-dependent, highly variable, usually rate-limiting step: its duration
+   codon–anticodon pairing triggers GTP hydrolysis and accommodation. This step is
+   codon dependent, highly variable, and usually rate limiting. Its duration
    depends on cognate-tRNA abundance (codon-usage bias).
 2. Peptidyl transfer (peptide-bond formation). The peptidyl-transferase center (PTC)
    transfers the nascent peptide from the P-site tRNA onto the A-site aminoacyl-tRNA.
@@ -76,7 +72,7 @@ Bacterial translation elongation repeats a three-step biochemical cycle per codo
    A→P and P→E, the deacylated tRNA leaves via the E site, and the A site is freed
    for the next aa-tRNA. ~few ms.
 
-CSP partitions the per-codon dwell time into exactly these three pieces and reproduces
+CSP partitions the per-codon dwell time into these three pieces and reproduces
 them as three MD sub-stages per residue.
 
 ### 2. The simulation model (one elongation step)
@@ -86,7 +82,7 @@ them as three MD sub-stages per residue.
   structure) get attractive wells; everything else is repulsive, so the native
   structure is the energy minimum and the growing chain folds *toward* its native fold.
   Bonds default to rigid `AllBonds` constraints (stable because each residue is seeded
-  at its equilibrium bond length: see §6); set `constraints = None` for flexible harmonic
+  at its equilibrium bond length; see §6). Set `constraints = None` for flexible harmonic
   bonds instead.
 - Ribosome: rigid scenery. The truncated CG 50S + tRNAs (~4,600 mass-0 beads) is
   fixed in space, but its excluded-volume and electrostatic interactions with the
@@ -104,36 +100,38 @@ them as three MD sub-stages per residue.
     (= 200 kcal/mol/Å²).
   - *O'Brien tRNA tether* (`trna_tether = yes`): the full covalent attachment to the
     tRNA, a bond + two orienting angles + an improper + a backbone angle to the
-    actual A-/P-site tRNA beads, which also fixes the chain's orientation in the
-    tRNA frame (aiming it down the tunnel), not just its position.
+    actual A-/P-site tRNA beads, which fixes the chain's orientation in the
+    tRNA frame (aiming it down the tunnel) as well as its position.
 - Tunnel wall: a one-sided plane on the nascent beads. The rigid ribosome we
   supply is truncated to a shell around the exit tunnel (§8), so the model has no
   density on the −x (synthesis-interface) side of the PTC. In the real ribosome that
-  side is *not* empty (it is occupied by the small subunit, the mRNA and the A-/P-site
-  tRNAs, so the nascent chain can never move there) but truncation leaves an unreal
-  void that the flexible nascent chain could drift *backward* (−x) into and tangle. A
-  single one-sided half-harmonic restraint on every nascent bead,
-  `U = k·min(x − x₀, 0)²` (`k = 8368 kJ/mol/nm²` = 20 kcal/mol/Å², a fixed model
-  constant), supplies the missing barrier: it pushes any bead at `x < x₀` back to
-  `x ≥ x₀`, so the chain can only extrude forward (+x, toward the cytosolic exit) and
-  cannot slip below the synthesis point into the truncated region. The plane `x₀` is
-  auto-derived from the ribosome structure, not a config knob: it sits at the lower
-  (smaller-x) C-terminus hold plane, `x₀ = min(A-target.x, P-target.x)`
-  (the P-site, where the C-terminus is tethered) so the held C-terminus sits on the plane
-  and the chain grows away from it. It is recomputed for whatever ribosome PDB you supply,
-  so it never goes stale; for Tutorial B.2's `ribosome_trunc.pdb` it is x₀ ≈ 1.05 nm.
+  side is occupied by the small subunit, the mRNA and the A-/P-site tRNAs, so the
+  nascent chain can never move there. Truncation leaves a void that the flexible
+  nascent chain could drift *backward* (−x) into and tangle. A single one-sided
+  half-harmonic restraint on every nascent bead, `U = k·min(x − x₀, 0)²`
+  (`k = 8368 kJ/mol/nm²` = 20 kcal/mol/Å², a fixed model constant), supplies the
+  missing barrier. It pushes any bead at `x < x₀` back to `x ≥ x₀`, so the chain can
+  only extrude forward (+x, toward the cytosolic exit) and cannot slip below the
+  synthesis point into the truncated region.
+
+  The plane `x₀` is derived from the ribosome structure and has no config key. It
+  sits at the lower (smaller-x) C-terminus hold plane,
+  `x₀ = min(A-target.x, P-target.x)`, which is the P-site where the C-terminus is
+  tethered, so the held C-terminus sits on the plane and the chain grows away from it.
+  It is recomputed for whatever ribosome PDB you supply; for Tutorial B.2's
+  `ribosome_trunc.pdb` it is x₀ ≈ 1.05 nm.
 - Thermostat. Langevin dynamics at `ref_t = 310 K`, friction `tau_t = 0.05 /ps`,
   timestep `dt = 0.015 ps`.
 - Optional flexible exit-tunnel loop. The ribosome is rigid by default, but
   `ribo_free_mask` can free a portion of the exit-tunnel protein (E. coli L24 /
-  eukaryotic L26) as a mobile structure-based Go loop: the β-hairpin lining the tunnel
-  can then breathe and contact the nascent chain. See
+  eukaryotic L26) as a mobile structure-based Go loop, so the β-hairpin lining the
+  tunnel can move and contact the nascent chain. See
   {ref}`the flexible-loop notes <flexible-loop>`.
 
 Build-once-subset contacts. The contact map is computed once on the full native
 structure (`R_full`, `eps_full`, `N×N`). For nascent length `L`, the model uses the
-top-left `L×L` block: STRIDE and the heavy-atom contact analysis are never re-run per
-length. So residues `1..L` carry exactly the native contacts they will have in the final
+top-left `L×L` block, so STRIDE and the heavy-atom contact analysis are not re-run per
+length. Residues `1..L` therefore carry the native contacts they will have in the final
 fold, and the chain can form native structure as soon as the relevant residues exist.
 
 ### 3. The three stages: biology ↔ simulation
@@ -164,14 +162,14 @@ per-stage mechanics are a reduced model.
 
 The C-terminus must be held at the PTC and translocated A→P each residue. topo offers two
 mechanisms, chosen by the `trna_tether` key (see {doc}`synthesis_control`); both drive the
-*same* A→P schedule across the three stages, but the tether additionally controls the
+*same* A→P schedule across the three stages, but the tether also controls the
 chain's orientation.
 
 Position restraint (`trna_tether = no`, default). A single harmonic spring pins the
 C-terminal bead to the A/P target *point* (the equilibrium-optimized A- or P-site location),
 `U = k·|r − r₀|²`. Stages 1–2 target the A-point, stage 3 targets the P-point; the A→P
-switch only changes `r₀`. This is the validated default: simplest, and it needs no
-particular tRNA beads.
+switch only changes `r₀`. This is the validated default. It is the simplest option
+and needs no particular tRNA beads.
 
 ```{figure} img/csp_restraint_position.svg
 :alt: A single harmonic spring holds the C-terminus at the A- or P-site target point; sites read E, P, A left to right.
@@ -184,15 +182,15 @@ the A-point (stages 1–2) to the P-point (stage 3), right→left in the E–P�
 ```
 
 O'Brien tRNA tether (`trna_tether = yes`). Reproduces the covalent attachment of the
-nascent C-terminus to the tRNA with the full bonded geometry, not a point restraint but a
-set of bonded terms to the tRNA's 3′-terminal nucleotide, residue 76 (A76).
+nascent C-terminus to the tRNA with a set of bonded terms to the tRNA's
+3′-terminal nucleotide, residue 76 (A76).
 
 *Which residue?* The truncated ribosome keeps only the acceptor-stem 3′ end of each tRNA
 (a handful of residues: `AtR` 73–76, `PtR` 72–76), each nucleotide represented by a few CG
 beads, `P` (phosphate), `R` (ribose), `BR1`/`BR2` (base). The tether attaches to residue
-76 only: the 3′-terminal adenosine A76, which is exactly the CCA-3′ site where the amino
-acid esterifies to the tRNA. The other tRNA residues are rigid excluded-volume scenery,
-*not* part of the tether. It uses three beads *of A76*:
+76 only, the 3′-terminal adenosine A76, which is the CCA-3′ site where the amino
+acid esterifies to the tRNA. The other tRNA residues are rigid excluded-volume scenery
+and are not part of the tether. It uses three beads *of A76*:
 
 - `R`: the ribose of A76; the C-terminus bonds to it.
 - `P`: the phosphate of A76, used in the orienting angle `N–R–P`.
@@ -210,8 +208,8 @@ For the current C-terminus `N` (the newest residue) it adds:
 | backbone | double-Gaussian angle | `prev–N–R` | the backbone-angle potential (bistable, θ ≈ 92°/130°) applied across the peptide–tRNA junction |
 
 (bond/angle stiffness = 200 kcal/mol/Å²; angle/improper = 25 kcal/mol/rad².) The two
-orienting angles + the improper fix the residue's bearing in the A76 frame: this is
-what the plain point restraint cannot do.
+orienting angles + the improper fix the residue's bearing in the A76 frame, which
+the plain point restraint cannot do.
 
 ```{figure} img/csp_restraint_tether_geom.svg
 :alt: The C-terminus bonds to the ribose R of tRNA A76, with orienting angles to the phosphate P and base BR2, plus an improper dihedral.
@@ -226,9 +224,9 @@ in the table above. Only A76 is tethered; the rest of the tRNA is rigid scenery.
 ```
 
 Per-stage tethering (tRNA-tether mode). Each stage rebuilds the length-`L` system and
-re-attaches the tether to the appropriate site: there is no sliding spring; the A→P
-"switch" is realized by the tether referencing the P-site beads (`PtR`) instead of the
-A-site beads (`AtR`):
+re-attaches the tether to the appropriate site. There is no sliding spring: the A→P
+"switch" is the tether referencing the P-site beads (`PtR`) instead of the
+A-site beads (`AtR`).
 
 | stage | C-terminus (residue `L`) | previous residue (`L−1`) |
 |-------|--------------------------|--------------------------|
@@ -241,8 +239,8 @@ A-site beads (`AtR`):
   geometry the instant the residue appears.
 - Stage 2 keeps the new residue at A; the previous residue is released (held only by
   the nascent-chain backbone + the tunnel wall).
-- Stage 3 re-tethers the new residue A→P: starting from stage 2's coordinates, the
-  minimize + MD carries it from the A-site to the P-site: this is the translocation.
+- Stage 3 re-tethers the new residue A→P. Starting from stage 2's coordinates, the
+  minimize + MD carries it from the A-site to the P-site, which is the translocation.
 - Cold start (the first residue `L0`, no previous residue): tethered to the P-site in
   all three stages.
 
@@ -273,7 +271,7 @@ The timing core is `topo.csp.kinetics` (pure Python, no OpenMM). For every resid
 answers: *how many integration steps does each sub-stage run?*
 
 (a) Per-codon mean translation time. The mRNA is split into codons; a lookup table
-maps each codon to its mean in-vivo translation time in seconds: the codon's
+maps each codon to its mean in-vivo translation time in seconds, the codon's
 intrinsic mean first-passage time (mFPT). Call it `τ(codon)`.
 
 ```{note}
@@ -286,7 +284,7 @@ after the codon-*independent* peptidyl transfer and translocation, effectively t
 decoding/tRNA wait.
 
 The table is an organism + temperature property (not of the protein). A per-codon run
-therefore needs an explicit `codon_times` table path -- there is no bundled default. The
+therefore needs an explicit `codon_times` table path, since there is no bundled default. The
 shared library under `assets/csp/codon_dwell_times/` holds tables per organism, including
 the Fluitt *E. coli* table at 310 K (Fluitt, Pienaar & Viljoen, *Comput. Biol. Chem.*
 2007; 61 sense + 3 stop codons, mean ≈ 0.068 s ≈ 15 aa/s) at
@@ -298,7 +296,7 @@ protein-specific sequence) and `codon_times` (the table) are mandatory for per-c
 #### Fastest / slowest / median (synonymous-codon) mRNA
 
 Instead of supplying an mRNA file, you can have TOPO build one that keeps the protein
-sequence fixed but reassigns each residue's codon: a controlled walk along the
+sequence fixed but reassigns each residue's codon, moving along the
 synonymous-mutation (codon-optimization) axis. Because the protein, its native structure,
 and its contacts are identical across these mRNAs and only the elongation *timing* changes,
 any difference in the co-translational folding they produce is attributable to codon
@@ -315,12 +313,12 @@ kinetics alone. Set `mrna` to a keyword instead of a filename:
   central codons; the pick is deterministic.
 
 Here `τ` is the codon's mean per-codon dwell time (introduced above), read from the
-`codon_times` table: whose third column also supplies the codon→amino-acid map. The
+`codon_times` table, whose third column also supplies the codon→amino-acid map. The
 runner reads the amino-acid sequence from `pdb_file`, picks one codon per residue as above,
 appends the matching stop codon, and writes the raw-nucleotide mRNA next to the PDB as
 `mrna_fastest.txt` / `mrna_slowest.txt` / `mrna_median.txt`; that file then feeds the normal
 per-codon path. Because the pick is made per amino acid, the mode needs a codon-time
-table: a single uniform `codon_times` number carries no synonymous choices and is
+table. A single uniform `codon_times` number carries no synonymous choices and is
 rejected. To pre-generate the file standalone (e.g. to inspect or version it):
 
 ```bash
@@ -384,9 +382,9 @@ n_steps     =  t_sim (ns) / dt(ns) ,   dt(ns) = dt_ps · 1e-3
 
 A larger `scale_factor` ⇒ fewer steps per residue ⇒ a faster run, while preserving the
 *relative* timing of fast vs. slow codons (the physics that matters for folding during
-synthesis). Step counts may additionally be clamped to
-`[min_steps_per_stage, max_steps_per_stage]` for tractability: a clamp on MD steps
-only; the sampled dwell times in seconds are recorded untouched in `dwell_times.dat`.
+synthesis). Step counts may also be clamped to
+`[min_steps_per_stage, max_steps_per_stage]` for tractability. The clamp applies to MD
+steps only; the sampled dwell times in seconds are recorded untouched in `dwell_times.dat`.
 
 (e) Worked example (real 4c5c mRNA, Tutorial B.2). The first residues of
 `4c5c_mrna.txt` and their `τ` from the default E. coli 310 K table:
@@ -426,7 +424,7 @@ stage 3's mean swings with the next codon's `τ` (e.g. L = 5 → next codon GCU 
 Once the final residue is added, the protein is complete. The simulation then runs up to
 two post-synthesis phases in order. First, an optional stall phase (`stall_steps`)
 keeps the finished chain at the PTC with the C-terminus restraint / tRNA tether still
-on: a ribosome-stalling hold before release. Then the ejection phase
+on, as a ribosome-stalling hold before release. Then the ejection phase
 (`ejection_steps`) releases the restraint (the tether is cut), while the rigid ribosome
 and one-sided tunnel wall remain. Biologically this is termination: release factors
 free the finished protein. With the tether gone, the chain diffuses out of the tunnel
@@ -438,7 +436,7 @@ The ejection is extendable, but extension is opt-in via `restart` (default `no`)
 `ejection_steps` is the *cumulative* free-run length. If the chain has not fully left the
 ribosome, set `restart = yes`, raise `ejection_steps`, and re-run on the existing `outdir`
 (with `resume = auto`): the ejection continues from its checkpoint (positions, velocities
-and step count) and appends only the additional steps, exactly like resuming a simulation
+and step count) and appends only the additional steps, as when resuming a simulation
 (if the checkpoint already reached the target it reports "already met" and does nothing).
 With the default `restart = no`, a completed ejection is instead skipped on resume
 (like the `stall` phase): raising `ejection_steps` does not re-run or extend it; use
@@ -456,30 +454,28 @@ peptide bond apart (`0.381 nm`, which is the `AllBonds` constraint length)
 and each new residue is seeded *at* the A-target, one equilibrium bond from the previous
 C-terminus (which rests at the P-target). So the always-present peptide bond starts at
 its rest length, and a rigid `AllBonds` build seeds and minimizes cleanly at 15 fs.
-(Removing the fast bond-stretch mode is exactly how the reference protocol stays stable:
-topo gets the same benefit by default.)
+(The reference protocol stays stable the same way, by removing the fast bond-stretch
+mode.)
 
 ```{note}
 This is a change from an earlier design in which the new residue was seeded far (~1 nm)
 from its bond partner and *flexible* bonds were required to absorb the stretch. That is no
 longer the case: the equilibrium-PTC seeding means the bond is never stretched, so rigid
 `AllBonds` is the stable default. Flexible bonds (`constraints = None`) remain an
-option: the equilibrium seeding keeps either treatment stable.
+option, since the equilibrium seeding keeps either treatment stable.
 ```
 
-The stability guard is a safety net, not the primary mechanism. It mainly matters if
+The stability guard mainly matters if
 you switch to flexible bonds (`constraints = None`), where a newly-formed stiff native
 (Gō) contact can drive a 15 fs step past stability and the dynamics diverge (potential
 energy → ~10¹³ kJ/mol), corrupting that stage's frames. The guard
 (`topo.csp.core.run_length`) runs each stage in chunks while tracking the maximum
 |PotE|; if a stage diverges (max |PotE| > 10⁹ kJ/mol) it is transparently re-run with
 the timestep halved and the step count doubled, and because the dwell time is
-`n_steps · dt`, halving `dt` and doubling `n_steps` leaves the dwell time exactly
+`n_steps · dt`, halving `dt` and doubling `n_steps` leaves the dwell time
 unchanged (up to 6 halvings). Watch for `[stability] …` lines in the log. With the
 default `AllBonds` seeding the guard essentially never fires: Tutorial B.2's full-length run
 (`csp_val.ini`, L = 1 → 306, `AllBonds`) completes all 919 stages with zero blow-ups.
-
----
 
 ## Configuration
 
@@ -490,7 +486,7 @@ CSP reads a single INI control file: a flat `key = value` list, parsed by
 defaults). Units are OpenMM defaults (nm, ps, kJ/mol, K, kJ/mol/nm²) and dwell times are
 in seconds.
 
-A few CSP-specific behaviors worth calling out here (the physics behind the keys):
+Two CSP-specific behaviors explain the physics behind the keys:
 
 - PTC geometry is always optimized. Each new residue is seeded at the optimal A-site
   target, one equilibrium peptide bond (0.381 nm) from the previous C-terminus, clear of
@@ -509,8 +505,6 @@ PDB with no tRNA, or with differently-named tRNA segments, currently fails with 
 generic "expected exactly one bead" error. Handling missing/renamed tRNA is a tracked TODO
 (`review/TODO.md`).
 ```
-
----
 
 ## Outputs
 
@@ -533,18 +527,18 @@ Each residue's three kinetic sub-stages share one `L_<L>/` directory: `traj.psf`
 `native_1_<L>.pdb` depend only on `L` (the A/P differences are *forces*, not atoms) and are
 written once; the trajectories stay split per stage (`traj_s{1,2,3}.dcd`) to preserve the
 kinetic-dwell boundaries; and only stage 3 writes `traj_final.pdb`. There is no per-stage
-`.chk`: per-residue resume reloads `traj_final.pdb`, never a checkpoint.
+`.chk`; per-residue resume reloads `traj_final.pdb`.
 
 `dwell_times.dat` records, per residue, the codon, the three sampled dwell times in
-seconds (`t1`/`t2`/`t3`), their nanosecond equivalents, and the integer MD step counts:
-the physical schedule, independent of any step clamp. This is the file to compare against a
-reference run for quantitative validation (Tutorial B.2). It is drawn once before the run
+seconds (`t1`/`t2`/`t3`), their nanosecond equivalents, and the integer MD step counts.
+The sampled times are the physical schedule and are independent of any step clamp.
+Compare this file against a reference run for quantitative validation (Tutorial B.2). It is drawn once before the run
 and doubles as the immutable plan for resume (its `#PTC` header pins the restraint
 geometry); see {doc}`synthesis_resume`.
 
 Resuming an interrupted run. A production synthesis is hours to days of wall time.
 Re-invoking `topo-csp` on an interrupted `outdir` continues from the last completed
-residue rather than restarting: the schedule and PTC geometry are re-read from
+residue instead of restarting. The schedule and PTC geometry are re-read from
 `dwell_times.dat` and the seed is reloaded from the last residue's `traj_final.pdb`, tracked
 by `progress.log`. Resume is on by default (`resume = auto`). See {doc}`synthesis_resume`
 for the full mechanism, guarantees, and an HPC requeue pattern.
@@ -564,20 +558,20 @@ L=  1    AUG  dwell   0.02757 s  steps  400/1136/2000
 ```
 
 The residue line's `steps` field and the per-stage `steps` are the configured step
-counts; a stage that trips the stability guard silently reruns at a halved timestep with
+counts; a stage that trips the stability guard reruns at a halved timestep with
 double the steps (the `[stability] ...` lines above), and always prints its concise summary
 line afterwards. The post-synthesis `ejection` phase prints the same summary line.
 
 Set `TOPO_CSP_VERBOSE=1` to restore the full per-stage banners (build block, seeded-
-structure minimization, run-metadata path, elapsed time): useful when debugging a single
-length:
+structure minimization, run-metadata path, elapsed time), which is useful when
+debugging a single length:
 
 ```bash
 TOPO_CSP_VERBOSE=1 topo-csp -f csp.ini
 ```
 
 MDAnalysis emits cosmetic `UserWarning`s (missing `CRYST1` unit cell, absent
-`formalcharges`) each time topo slices and writes a CA-only PDB: once per stage. `topo-csp`
+`formalcharges`) each time topo slices and writes a CA-only PDB, once per stage. `topo-csp`
 (like `topo-mdrun` and `topo-optimize`) silences all MDAnalysis warnings for the run via a
 process-local filter, so they never reach the console; other warnings are unaffected.
 
@@ -594,8 +588,6 @@ cd <outdir> && vmd -e movie.tcl        # movie.tcl loads its files by basename
 
 For the headless GIF/hero-image path and the cylinder-tunnel equivalent, see
 {doc}`synthesis_visualization`.
-
----
 
 ## Python API
 
@@ -625,13 +617,11 @@ run_continuous_synthesis("4c5c_model_clean.pdb", "ribosome_trunc.pdb",
 See the {doc}`API reference <../topo>` for the autodocumented `topo.csp.protocol` and
 `topo.csp.kinetics` modules.
 
----
-
 ## See also
 
-- {doc}`cylinder_synthesis`: the analytic-tunnel variant (`topo-cylinder`): the same
-  codon kinetics with a nascent-only system and a single MD segment per residue, with the
-  explicit-bead ribosome replaced by a cylindrical bore through an infinite wall.
+- {doc}`cylinder_synthesis`: the analytic-tunnel variant (`topo-cylinder`). It uses the
+  same codon kinetics with a nascent-only system and a single MD segment per residue, and
+  replaces the explicit-bead ribosome with a cylindrical bore through an infinite wall.
 - {doc}`synthesis_control`: the concise `csp.ini` control-options reference.
 - {doc}`../usage/model_theory`: the TOPO Gō-model force field in full (the RNC
   Hamiltonian CSP uses, restricted to the synthesized residues).

@@ -3,21 +3,20 @@ What TOPO does
 
 TOPO builds a single one-bead-per-residue, structure-based (Gō-like) model
 from a protein structure and runs Langevin dynamics on
-`OpenMM <https://openmm.org/>`_. One force field spans the whole spectrum:
-globular (folded) proteins, multi-domain proteins with intrinsically
-disordered regions (IDRs), and fully disordered proteins (IDPs): residues
-you declare disordered lose their native contacts and switch to a transferable,
-sequence-dependent potential, so ordered and disordered parts coexist in one
-chain (:doc:`usage/disordered_regions`).
+`OpenMM <https://openmm.org/>`_. One force field covers globular (folded)
+proteins, multi-domain proteins with intrinsically disordered regions (IDRs),
+and fully disordered proteins (IDPs). Residues you declare disordered lose
+their native contacts and switch to a transferable, sequence-dependent
+potential, so ordered and disordered parts coexist in one chain
+(:doc:`usage/disordered_regions`).
 
-That one model powers two complementary workflows, each with its own set of
-tutorials:
+The model supports two workflows, each with its own set of tutorials:
 
-* :ref:`A. Coarse-grained simulation of folded proteins <overview-simulation>`:
+* :ref:`A. Coarse-grained simulation of folded and disordered proteins <overview-simulation>`:
   take a fully-formed structure and study how it moves, unfolds, and comes
   apart.
 * :ref:`B. Protein synthesis <overview-synthesis>`: grow the chain residue by
-  residue on the ribosome and watch it fold *as it is made*.
+  residue on the ribosome so that it folds as it is synthesized.
 
 Part B builds directly on the Part A model, so start with A if you are new here.
 
@@ -27,12 +26,13 @@ Part B builds directly on the Part A model, so start with A if you are new here.
 A. Coarse-grained simulation of folded and disordered proteins
 ---------------------------------------------------------------
 
-Start from a complete structure and run structure-based MD: folding and
+Start from a complete structure and run structure-based MD to study folding and
 unfolding, thermal and mechanical stability, and multidomain motions. Contact
 energies can be scaled per domain and per interface, so different parts of a
-protein can be made more or less stable. Disorder is declared in the same file:
-mark tails, linkers, or whole chains as disordered to simulate a multi-domain
-protein with IDRs, or, with every residue marked, an IDP.
+protein can be made more or less stable. Disorder is declared in the same
+``domain.yaml`` file. Mark tails, linkers, or whole chains as disordered to
+simulate a multi-domain protein with IDRs, or mark every residue to simulate an
+IDP.
 
 .. rubric:: Tutorials
 
@@ -83,8 +83,8 @@ coarse-grained ribosome).
   the exit tunnel is a cylindrical bore through a wall (no explicit ribosome
   beads); fast, never jams, and the chain folds co-translationally on egress.
 * :doc:`B.2 · Synthesis on a coarse-grained ribosome <tutorials/B2_ribosome_synthesis>`:
-  the ribosome-based counterpart: grow the chain through TOPO's own truncated
-  CG ribosome, then eject the completed protein (worked on 4c5c and P0CX28).
+  grow the chain through TOPO's own truncated CG ribosome, then eject the
+  completed protein (worked on 4c5c and P0CX28).
 
 .. rubric:: Reference
 

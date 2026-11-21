@@ -188,7 +188,7 @@ the OpenMM-checkpoint machinery that continues a *single MD run* step-for-step.
 
 When to use which:
 
-- Resume: you don't really *choose* it: leave `resume = auto`, and re-running a
+- Resume: leave `resume = auto`, and re-running a
   requeued or interrupted job continues the synthesis. It is residue-granular and reseeds
   each stage from `traj_final.pdb`, so it needs no OpenMM checkpoint.
 - Restart: reach for it when the finished chain has not fully left the ribosome by

@@ -1,11 +1,11 @@
 Introduction
 ============
 
-TOPO is a unified coarse-grained model for globular and disordered
-proteins, built on the `OpenMM <https://openmm.org/>`_ engine: a Python
-library and command-line toolkit covering globular (folded) proteins,
-multi-domain proteins with disordered regions, and fully disordered proteins in
-one force field.
+TOPO is a coarse-grained model for globular and disordered proteins, built on
+the `OpenMM <https://openmm.org/>`_ engine. It is a Python library and
+command-line toolkit that covers globular (folded) proteins, multi-domain
+proteins with disordered regions, and fully disordered proteins in one force
+field.
 
 Given only a protein structure (a PDB or CIF file), TOPO automatically
 builds a one-bead-per-residue (alpha-carbon) structure-based model (bonds,

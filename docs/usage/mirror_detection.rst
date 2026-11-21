@@ -11,7 +11,7 @@ frame-by-frame and returns a per-trajectory verdict.
 
 .. important::
 
-   Why this matters for CG simulations: do not overestimate misfolding. A
+   Mirror folds make it easy to misestimate misfolding in CG simulations. A
    mirror image preserves almost all native contacts, so the *Q* score
    (:doc:`native_contacts`) reads it as folded (:math:`Q \to 1`). Judged on
    *Q* alone the run looks native. But if you inspect the structure by eye (or
@@ -19,8 +19,8 @@ frame-by-frame and returns a per-trajectory verdict.
    can look badly misfolded, and you may discard a run that actually folded
    correctly in every way except handedness, or conversely accept a mirror as
    native. Either way the misfolded fraction of an ensemble is estimated wrong.
-   *Q* cannot tell the two apart; the metrics here can, and are meant to be
-   reported alongside *Q*, not instead of it.
+   *Q* cannot tell the two apart. The metrics here can, and should be
+   reported alongside *Q*.
 
 
 The physical picture
@@ -35,8 +35,8 @@ opposite handedness. It is a different, non-superimposable molecule (you cannot
 rotate a left hand onto a right hand), yet every *distance-based* observable is
 unchanged.
 
-That is exactly why a Cα Gō model is prone to it. The forcefield rewards native
-distances; it has essentially no term that rewards native handedness. The
+A Cα Gō model is prone to this because the forcefield rewards native
+distances and has essentially no term that rewards native handedness. The
 mirror fold satisfies the distance restraints just as well as the native fold, so
 during folding the chain can commit to the wrong enantiomer and stay there. The
 two analyses below supply the missing handedness information.
@@ -57,9 +57,8 @@ reflected native.
 Technical meaning: why an ordinary RMSD is not enough. RMSD is computed after
 an optimal superposition. If that superposition is allowed an improper
 transformation (a rotation *with* a reflection, determinant :math:`-1`), it will
-happily reflect a mirror structure onto the native and report a deceptively
-small RMSD: the reflection is silently absorbed by the fit and the mirror
-becomes invisible. Mirror detection therefore requires two things:
+reflect a mirror structure onto the native and report a small RMSD, because the
+fit absorbs the reflection. Mirror detection therefore requires two things:
 
 1. A proper-rotation-only Kabsch fit (determinant fixed to :math:`+1`). Given
    centered frame :math:`X` and target :math:`T`,
@@ -71,8 +70,8 @@ becomes invisible. Mirror detection therefore requires two things:
       R = U\,\operatorname{diag}(1,1,d)\,V^\top,\qquad X_\mathrm{fit} = X R .
 
    The :math:`\operatorname{diag}(1,1,d)` correction forces
-   :math:`\det R = +1`, so the fit can rotate but never reflect. This correction
-   is the crux of the whole method: omit it and the test breaks.
+   :math:`\det R = +1`, so the fit can rotate but never reflect. Without this
+   correction the test does not work.
 
 2. An explicitly reflected reference. Reflection is introduced *only* by
    negating one Cartesian axis of the centered native (a valid
@@ -86,24 +85,23 @@ The metric then reports, per frame,
    \mathrm{RMSD}_\mathrm{reflected} = \mathrm{RMSD}(X, R_\text{ref}^\text{refl}),
 
 and their ratio :math:`\mathrm{RMSD}_\mathrm{reflected}/\mathrm{RMSD}_\mathrm{native}`.
-A ratio well below 1 means the frame fits the reflected reference much better:
-a mirror fold.
+A ratio well below 1 means the frame fits the reflected reference much better,
+which indicates a mirror fold.
 
 
 Metric 2: chirality fraction-agreement *K*
 -------------------------------------------
 
-Physical meaning. Handedness is intrinsically a *local* quantity too: walk
-along the chain's secondary-structure scaffold and each turn is either
-left-handed or right-handed. *K* measures the fraction of those local turns whose
+Physical meaning. Handedness is also a *local* quantity: each turn of the
+chain's secondary-structure scaffold is either left-handed or right-handed. *K* measures the fraction of those local turns whose
 handedness agrees with the native structure. :math:`K \to 1` is fully
 native-handed; :math:`K \to 0` is fully inverted (a mirror).
 
 Technical meaning. The metric is computed on a coarse polyline of
 secondary-structure segment endpoints: the start and end Cα of each helix and
 strand (length :math:`\ge 4`), flattened and sorted into an ordered point
-sequence :math:`P` (this deliberately includes the linker vectors between
-segments, so the handedness of the whole SS scaffold is captured). For bond
+sequence :math:`P` (the linker vectors between segments are included, so the
+handedness of the whole SS scaffold is captured). For bond
 vectors :math:`v_k = P_{k+1} - P_k`, each window has a normalized signed triple
 product
 
@@ -112,8 +110,8 @@ product
    \chi_i = \frac{(v_i \times v_{i+1}) \cdot v_{i+2}}
                  {|v_i|\,|v_{i+1}|\,|v_{i+2}|} \in [-1, 1],
 
-a pseudo-scalar that measures local handedness. It has the two properties that
-make it the right tool:
+a pseudo-scalar that measures local handedness. It has the two properties the
+test needs:
 
 * it is invariant under proper rotation and translation (it depends only on
   shape, not orientation), and
@@ -126,7 +124,7 @@ Comparing signs to the native reference gives
    K = \frac{1}{M-3}\sum_i \big[\, \operatorname{sign}(\chi_i^\text{frame})
        = \operatorname{sign}(\chi_i^\text{ref}) \,\big] .
 
-*K* is completely orthogonal to *Q*: *Q* counts contacts (unchanged by
+*K* is independent of *Q*: *Q* counts contacts (unchanged by
 reflection), *K* reads handedness (reversed by reflection).
 
 The segment endpoints are taken from TOPO's own STRIDE output (the same STRIDE
@@ -138,9 +136,9 @@ also accepted.
 The combined per-frame classifier
 ----------------------------------
 
-The two signals are complementary, so the per-frame ``is_mirror`` flag is true only
-when all three conditions agree: folded, chirally inverted, and a clearly better
-fit to the reflected reference:
+The two signals are complementary. The per-frame ``is_mirror`` flag is true only
+when the frame is folded, is chirally inverted, and fits the reflected reference
+clearly better than the native one:
 
 .. math::
 
@@ -149,8 +147,8 @@ fit to the reflected reference:
    \underbrace{\left(\tfrac{\mathrm{RMSD}_\mathrm{reflected}}
                           {\mathrm{RMSD}_\mathrm{native}} < 0.9\right)}_{\text{reflected fits better}}
 
-* The ``Q > 0.5`` gate ensures we are discriminating a *wrong-handed collapse*
-  from an unfolded coil: an unfolded frame is not a "mirror", just disordered.
+* ``Q > 0.5`` restricts the test to folded frames, so an unfolded coil is never
+  flagged as a mirror.
 * ``K < 0.3`` requires the majority of local turns to disagree with native.
 * The RMSD ratio (rather than the bare inequality
   :math:`\mathrm{RMSD}_\mathrm{reflected} < \mathrm{RMSD}_\mathrm{native}`)
@@ -174,7 +172,7 @@ Worked example: a mirror from a CG run
    contacts, yet pack with opposite handedness: the red fold cannot be
    rotated onto the blue one, only reflected onto it.
 
-The mirror metrics turn that visual impression into numbers. For this frame:
+For this frame the metrics are:
 
 .. list-table::
    :header-rows: 1
@@ -202,11 +200,9 @@ The mirror metrics turn that visual impression into numbers. For this frame:
      - ``True``
      - All three conditions met.
 
-This is exactly the failure mode the analysis guards against: judged by *Q*
-(0.68) the conformation looks like a folded protein, but :math:`K = 0` and
-``RMSD_ratio = 0.77`` show it is a mirror image; folded by contacts, wrong by
-handedness. Counting it as a genuine (mis)fold would misstate the outcome of the
-run.
+Judged by *Q* (0.68) the conformation looks like a folded protein, but
+:math:`K = 0` and ``RMSD_ratio = 0.77`` show it is a mirror image. Counting it
+as a genuine (mis)fold would misstate the outcome of the run.
 
 
 Per-trajectory verdict
@@ -214,7 +210,7 @@ Per-trajectory verdict
 
 ``is_mirror`` is emitted per frame. The tool also prints a single
 per-trajectory verdict, ``TRAJECTORY_MIRROR``, taken over the last
-``--summary-last-frames`` frames (default **133**):
+``--summary-last-frames`` frames (default ``133``):
 
 .. math::
 
@@ -226,15 +222,12 @@ i.e. the tail means of each signal thresholded by the same cutoffs.
 
 .. note::
 
-   The window is deliberately taken over a trailing block of frames, not the
-   whole trajectory: the early trajectory is typically unfolded, and judging
-   a chain's handedness while it is still a coil would wrongly dilute the verdict.
-   Only once the chain has committed to a fold does the mirror question make
-   sense.
+   The verdict uses a trailing block of frames because the early trajectory is
+   typically unfolded, and judging a chain's handedness while it is still a coil
+   would dilute the verdict.
 
-   The window is specified in frames, not nanoseconds, on purpose: the time
-   step written into a CG ``.dcd`` is often a placeholder and should not be
-   trusted. Choose the window from the number of saved frames you consider
+   The window is specified in frames because the time step written into a CG
+   ``.dcd`` is often a placeholder and should not be trusted. Choose the window from the number of saved frames you consider
    "converged".
 
 
@@ -271,7 +264,7 @@ Arguments:
      - Output CSV path (parent dirs created if needed).
    * - ``-p``, ``--psf``
      - str (*optional*)
-     - CG topology. If omitted, a Cα-only topology is derived from the reference PDB and the DCD attached to it: handy when the PSF flavor differs from the reference.
+     - CG topology. If omitted, a Cα-only topology is derived from the reference PDB and the DCD attached to it, which is useful when the PSF flavor differs from the reference.
    * - ``-s``, ``--stride``
      - str (*optional*)
      - Precomputed STRIDE output (``LOC`` records). If neither this nor ``--segments`` is given, STRIDE is run on the reference.
@@ -308,7 +301,7 @@ Arguments:
    By default *Q* here is restricted to secondary-structure elements: only
    native contacts whose both residues lie in a STRIDE helix/strand (the same
    elements that define *K*) are counted. This focuses *Q* on the folded SS core
-   (exactly the part of the chain whose handedness the mirror question is about) and
+   (the part of the chain whose handedness is being tested) and
    makes the ``is_mirror`` gate report on the packed scaffold rather than on
    flexible loops. Pass ``--q-ss-only False`` to recover the whole-molecule
    definition (every heavy-atom contact with :math:`|i-j| >` ``local-separation``),
@@ -394,8 +387,7 @@ Typical workflow
 3. Interpret. A genuinely native run has :math:`K \to 1` and
    :math:`\mathrm{RMSD}_\mathrm{native} < \mathrm{RMSD}_\mathrm{reflected}`
    (``is_mirror = False``). A mirror run has high *Q* but :math:`K \to 0`,
-   ``RMSD_ratio < 0.9``, and ``TRAJECTORY_MIRROR = True``: folded by contacts,
-   wrong by handedness.
+   ``RMSD_ratio < 0.9``, and ``TRAJECTORY_MIRROR = True``.
 4. Use the verdict to clean your statistics. When estimating a folded/misfolded
    fraction over an ensemble, exclude or separately account for mirror trajectories
    so that (a) mirror artifacts are not counted as native successes, and (b)

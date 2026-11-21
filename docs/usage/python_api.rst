@@ -163,7 +163,7 @@ copy behaves exactly like the console command except where you change it:
    * - :func:`topo.engine.attach_reporters`
      - Attach the DCD / TOPO-log / checkpoint reporters.
    * - :func:`topo.mdrun.protocol.run_protocol`
-     - Step the simulation through a schedule -- a list of ``(temperature, n_steps)`` stages you define.
+     - Step the simulation through a schedule, a list of ``(temperature, n_steps)`` stages you define.
    * - :func:`topo.engine.finalize_simulation`
      - Save the final checkpoint and structure and close out run metadata.
 
