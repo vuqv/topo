@@ -78,7 +78,7 @@ IDR_RMIN_2_NM = {aa: _MODEL_PARAMETERS["topo"][aa]["Rmin_2"] for aa in _PROTEIN_
 # scripts/make_idr_lambda_tables.py -- the calibration notes live there). The well
 # depth of an IDR-involving pair is lambda_ij * epsilon; bead sizes are NOT part of a
 # model (IDR residues use IDR_RMIN_2_NM, folded residues their K-B Rmin/2).
-IDR_MODELS = ("bt", "hps_urry")
+IDR_MODELS = ("bt", "hps_urry", "calvados2")
 DEFAULT_IDR_MODEL = "bt"
 # Keys that used to tune the IDR force and are now fixed by the model.
 _REMOVED_IDR_KEYS = ("idr_scale", "eps_ev_kj")
@@ -773,7 +773,7 @@ def read_yaml_config(filepath: str) -> Tuple[Dict, Dict, Dict, Optional[Dict]]:
           A-B: 0.5
         disordered:            # optional; None when absent
           residues: [1-24]
-          model: bt             # bt (default) | hps_urry
+          model: bt             # bt (default) | hps_urry | calvados2
 
     >>> dom, intra, inter, disorder = read_yaml_config("domain.yaml")
     >>> dom["A"][:3]

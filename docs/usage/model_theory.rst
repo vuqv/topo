@@ -34,7 +34,8 @@ regime is decided entirely by the *parameter values* it receives:
   :math:`\lambda` form, which decouples the attraction from the excluded volume.
   The residue-pair table :math:`\lambda_{ij}` comes from the parameter set named by
   ``model:`` (``bt``, the default, is a scaled Betancourt–Thirumalai term;
-  ``hps_urry`` uses the HPS-Urry hydropathy scale).
+  ``hps_urry`` uses the HPS-Urry hydropathy scale; ``calvados2`` uses the
+  CALVADOS 2 stickiness scale).
   The folded domains keep their structure-based 12-10-6 energetics untouched.
   Folded–IDR pairs take the same sequence-dependent well as IDR–IDR pairs (the
   depth is a property of the two residue types, not of the regions they sit in) so

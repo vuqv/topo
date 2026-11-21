@@ -50,7 +50,7 @@ intra_domains:
     nscale: 2.5044
 disordered:
   residues: [1-18, 218-281]     # N-terminal tail + long intracellular loop
-  model: bt                     # IDR parameter set: bt (default) | hps_urry
+  model: bt                     # IDR parameter set: bt (default) | hps_urry | calvados2
 ```
 
 - `residues`: the residues to treat as disordered. Their native contacts
@@ -69,6 +69,10 @@ disordered:
     HPS-Urry. Bead sizes, bonds, angles, torsions, exclusions, electrostatics and
     the cutoff remain TOPO's, so this is not the published HPS-Urry force field,
     and it has not been benchmarked against radii of gyration in TOPO.
+  - `calvados2`: λ<sub>ij</sub> is the mean of the two residues' CALVADOS 2
+    stickiness values (Tesei & Lindorff-Larsen, Open Res. Europe 2022). As with
+    `hps_urry`, only λ is taken; everything else remains TOPO's, so this is not
+    the published CALVADOS 2 force field, and it has not been benchmarked in TOPO.
 
   The well depths and ε are fixed by the model. The former `idr_scale` and
   `eps_ev_kj` keys were removed; a `domain.yaml` that still contains either one

@@ -30,4 +30,4 @@ intra_domains:
     nscale: 2.5044
 disordered:
   residues: [1-18, 218-281]     # N-terminal tail + long intracellular loop
-  model: bt                     # IDR parameter set: bt (default) | hps_urry
+  model: bt                     # IDR parameter set: bt (default) | hps_urry | calvados2

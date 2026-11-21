@@ -25,7 +25,7 @@ def _generator():
     return mod
 
 
-@pytest.mark.parametrize("model", ["bt", "hps_urry"])
+@pytest.mark.parametrize("model", ["bt", "hps_urry", "calvados2"])
 def test_shipped_table_matches_its_generator(model):
     """The shipped file is exactly what the generator produces from the sources."""
     from topo.utils.nonbonded import load_idr_model
@@ -62,6 +62,21 @@ def test_hps_urry_pairs_match_the_publication():
     assert int((lam.to_numpy() <= 0).sum()) == 1
 
 
+def test_calvados2_pairs_match_the_publication():
+    """``lambda_ij = (lambda_i + lambda_j) / 2`` from the CALVADOS 2 per-residue values
+    (Tesei & Lindorff-Larsen 2022): ALA 0.274330, GLU 0.000694, ARG 0.730762,
+    TRP 0.989376, TYR 0.977461."""
+    from topo.utils.nonbonded import load_idr_model
+
+    lam, eps = load_idr_model("calvados2")
+    assert eps == 0.8368
+    assert lam.loc["ALA", "ALA"] == 0.2743
+    assert lam.loc["TRP", "TYR"] == lam.loc["TYR", "TRP"] == 0.9834
+    assert lam.loc["ARG", "GLU"] == 0.3657
+    # Every pair is attractive; GLU-GLU is the weakest.
+    assert lam.to_numpy().min() == lam.loc["GLU", "GLU"] == 0.0007
+
+
 def test_negative_lambda_pair_is_purely_repulsive():
     """GLU-GLU under hps_urry has no well: U >= 0 and never increases with r."""
     from test_idr_force import _shipped_idr_expression, _u_pair
@@ -78,8 +93,8 @@ def test_negative_lambda_pair_is_purely_repulsive():
 def test_unknown_model_is_refused():
     from topo.utils.nonbonded import load_idr_model
 
-    with pytest.raises(ValueError, match="bt, hps_urry"):
-        load_idr_model("calvados2")
+    with pytest.raises(ValueError, match="bt, hps_urry, calvados2"):
+        load_idr_model("mpipi")
 
 
 def test_bead_sizes_do_not_depend_on_the_model(tmp_path, monkeypatch):

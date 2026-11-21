@@ -165,7 +165,7 @@ C-terminal tail as intrinsically disordered:
     # every domain pair (A-B, A-C, B-C) on the shared interface ladder.
     disordered:
       residues: [385-400]      # C-terminal tail: native contacts removed
-      # model: bt              # OPTIONAL, IDR parameter set: bt (default) | hps_urry
+      # model: bt              # OPTIONAL, IDR parameter set: bt (default) | hps_urry | calvados2
 
 The ``disordered:`` block is honored exactly as in the runner. Its residues are
 subtracted from every domain before scoring (here residues 385–400 leave

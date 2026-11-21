@@ -286,7 +286,7 @@ def test_forces_share_particles_and_exclusions(tmp_path, monkeypatch):
     assert _exclusions(cf) == _exclusions(idf)
 
 
-@pytest.mark.parametrize("model", ["bt", "hps_urry"])
+@pytest.mark.parametrize("model", ["bt", "hps_urry", "calvados2"])
 def test_model_epsilon_reaches_the_force(tmp_path, monkeypatch, model):
     """The force's ``epsilon`` global is the selected model's energy scale."""
     from topo.utils.nonbonded import load_idr_model
@@ -483,7 +483,7 @@ def _toy_ribosome(m_beads=6, x0=5.0):
                     segids=["RB"] * m_beads)
 
 
-@pytest.mark.parametrize("model", ["bt", "hps_urry"])
+@pytest.mark.parametrize("model", ["bt", "hps_urry", "calvados2"])
 @pytest.mark.parametrize("regime,idr_end", [("fully-disordered", 12), ("mixed", 6)])
 def test_append_ribosome_preserves_the_partition(tmp_path, monkeypatch, regime, idr_end,
                                                  model):

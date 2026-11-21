@@ -161,9 +161,9 @@ def test_unknown_model_rejected(tmp_path, monkeypatch):
         n_residues: {N_RES}
         disordered:
           residues: [1-{MASK_END}]
-          model: calvados2
+          model: mpipi
         """)
-    with pytest.raises(ValueError, match="calvados2.*bt.*hps_urry"):
+    with pytest.raises(ValueError, match="mpipi.*bt.*hps_urry.*calvados2"):
         build_nonbonded_interaction(str(PDB), dm)
 
 
